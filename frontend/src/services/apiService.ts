@@ -5,7 +5,12 @@ import { API_BASE_URL } from '../config/api';
 export const api = {
   search: async (query: string): Promise<VideoResult[]> => {
     // Use GET for search (faster)
-    const res = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(query)}`);
+    const res = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(query)}`, {
+      method: 'GET',
+      mode: 'cors',
+      credentials: 'omit',
+      headers: { 'Content-Type': 'application/json' }
+    });
     if (!res.ok) throw new Error('Search failed');
     return res.json();
   },
@@ -21,6 +26,8 @@ export const api = {
     
     const res = await fetch(`${API_BASE_URL}/api/batch-download`, {
       method: 'POST',
+      mode: 'cors',
+      credentials: 'omit',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ items: payload })
     });
@@ -32,7 +39,12 @@ export const api = {
   },
 
   getBatchProgress: async (jobId: string): Promise<BatchProgressResponse> => {
-    const res = await fetch(`${API_BASE_URL}/api/batch-progress/${jobId}`);
+    const res = await fetch(`${API_BASE_URL}/api/batch-progress/${jobId}`, {
+      method: 'GET',
+      mode: 'cors',
+      credentials: 'omit',
+      headers: { 'Content-Type': 'application/json' }
+    });
     if (!res.ok) throw new Error('Progress check failed');
     return res.json();
   },

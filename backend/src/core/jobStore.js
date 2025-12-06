@@ -104,7 +104,8 @@ class JobStore {
 
   async cleanupOldJobs() {
     const now = Date.now();
-    const maxAge = 3600000;
+    // Clean up jobs older than 10 minutes (600000ms) for production
+    const maxAge = 10 * 60 * 1000;
 
     for (const [id, job] of this.jobs.entries()) {
       if (now - job.createdAt > maxAge) {
@@ -115,7 +116,10 @@ class JobStore {
             console.error(`[Cleanup] Error removing ${jobDir}:`, err);
           });
         }
-        console.log(`[Cleanup] Removed job ${id}`);
+        // Only log in development
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`[Cleanup] Removed job ${id}`);
+        }
       }
     }
   }

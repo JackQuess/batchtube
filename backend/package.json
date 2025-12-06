@@ -5,7 +5,8 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/server.js",
-    "dev": "nodemon --watch src --exec npx tsx src/server.ts"
+    "dev": "nodemon --watch src --exec npx tsx src/server.ts",
+    "postinstall": "tsc"
   },
   "dependencies": {
     "archiver": "^7.0.0",

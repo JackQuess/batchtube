@@ -8,28 +8,14 @@ import { handleRefreshCookies, handleCookiesStatus } from './routes/cookies.js';
 import { startCookieCron } from './jobs/cookieCron.js';
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3000;
 
-// CORS configuration
-const allowedOrigins = [
-  'https://batchtube.net',
-  'https://www.batchtube.net',
-  'http://localhost:5173',
-  'http://localhost:3000',
-];
-
+// CORS configuration for production
 app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(null, true);
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  origin: "*",
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type"],
+  credentials: false
 }));
 
 app.use(express.json());
