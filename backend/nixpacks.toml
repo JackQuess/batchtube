@@ -1,9 +1,12 @@
 [phases.setup]
-nixPkgs = ["nodejs_20"]
+nixPkgs = ["nodejs_20", "yt-dlp"]
 
 [phases.install]
 cmds = ["npm install", "npm run build"]
 
 [start]
 cmd = "npm start"
+
+[variables]
+NODE_ENV = "production"
 
