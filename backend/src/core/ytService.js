@@ -36,16 +36,17 @@ function buildMp4Command(url, output, quality) {
       "--merge-output-format", "mp4",
       "-o", output
     ];
-  } else if (quality === "1080p") {
-    // 1080p: Universal command (yt-dlp auto-detects best 1080p)
+  } else if (quality === "720p") {
+    // 720p: Use height selector
     args = [
       url,
-      "-f", "bv*[ext=mp4]+ba[ext=m4a]/mp4",
+      "-f", "bv*[height<=720]+ba",
       "--merge-output-format", "mp4",
       "-o", output
     ];
   } else {
-    // Default: Universal MP4 command (works for all qualities)
+    // Default (1080p or any other): Universal MP4 command
+    // This is the stable working command that never fails
     args = [
       url,
       "-f", "bv*[ext=mp4]+ba[ext=m4a]/mp4",
@@ -87,7 +88,11 @@ function execDownload(args, outputPath, retryOnCookieError = true) {
     // Add cookies if available
     const finalArgs = withCookies(args);
 
-    console.log(`[YTService] Executing: ${ytdlp} ${finalArgs.join(" ")}`);
+    // Dev-only logging: log full command args
+    const isDev = process.env.NODE_ENV !== 'production';
+    if (isDev) {
+      console.log(`[YTService] Executing: ${ytdlp} ${finalArgs.join(" ")}`);
+    }
 
     const child = spawn(ytdlp, finalArgs);
 
@@ -109,8 +114,16 @@ function execDownload(args, outputPath, retryOnCookieError = true) {
     });
 
     child.on("close", async (code) => {
+      const isDev = process.env.NODE_ENV !== 'production';
+      
       if (code !== 0) {
         const errorMsg = stderr.trim() || stdout.trim();
+        
+        // Dev-only: log full stderr and exit code
+        if (isDev) {
+          console.error(`[YTService] Exit code: ${code}`);
+          console.error(`[YTService] stderr:`, stderr.substring(0, 1000));
+        }
         
         // Check if error is due to expired cookies
         if (retryOnCookieError && cookiesManager.isCookieError(stderr)) {
@@ -131,7 +144,12 @@ function execDownload(args, outputPath, retryOnCookieError = true) {
           }
         }
 
-        console.error(`[YTService] Download failed (exit code ${code}):`, errorMsg.substring(0, 500));
+        // Production: minimal error log, Dev: detailed
+        if (isDev) {
+          console.error(`[YTService] Download failed (exit code ${code}):`, errorMsg.substring(0, 500));
+        } else {
+          console.error(`[YTService] Download failed (exit code ${code})`);
+        }
         reject(new Error(`Download failed: ${errorMsg.substring(0, 200)}`));
         return;
       }
@@ -151,8 +169,10 @@ function execDownload(args, outputPath, retryOnCookieError = true) {
         return;
       }
 
-      // Success
-      console.log(`[YTService] Download successful: ${outputPath} (${stats.size} bytes)`);
+      // Success - minimal logging in production
+      if (isDev) {
+        console.log(`[YTService] Download successful: ${outputPath} (${stats.size} bytes)`);
+      }
       resolve(outputPath);
     });
 

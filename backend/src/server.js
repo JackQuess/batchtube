@@ -4,16 +4,17 @@ import routes from './routes/index.js';
 import { startCookieCron } from './jobs/cookieCron.js';
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 
 // CORS configuration for Railway production
 const allowedOrigins = [
   "https://batchtube.net",
   "https://www.batchtube.net",
   "http://localhost:5173",
-  "http://localhost:3000"
+  "http://localhost:3001"
 ];
 
+// Single CORS middleware
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (mobile apps, curl, etc.)
@@ -29,6 +30,11 @@ app.use(cors({
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: false
 }));
+
+// Handle OPTIONS preflight requests
+app.options('*', (req, res) => {
+  res.status(204).end();
+});
 
 app.use(express.json());
 
