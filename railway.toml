@@ -1,6 +1,9 @@
 [build]
-builder = "nixpacks"
+builder = "NIXPACKS"
+
+[phases.setup]
+nixPkgs = ["nodejs_20", "yt-dlp"]
 
 [deploy]
-startCommand = "cd backend && npm start"
+startCommand = "npm start"
 
