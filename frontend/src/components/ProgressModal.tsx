@@ -437,4 +437,3 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
     </div>
   );
 };
-

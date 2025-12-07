@@ -13,6 +13,8 @@ import { ProgressModal } from './components/ProgressModal';
 import { LegalModal } from './components/LegalModal';
 import { Footer } from './components/Footer';
 import { CookieConsent } from './components/CookieConsent';
+import { AdSlotSearch } from './components/AdSlotSearch';
+import { AdSlotGrid } from './components/AdSlotGrid';
 import { loadAdSense } from './lib/adLoader';
 import { batchAPI } from './services/batchAPI';
 
@@ -125,16 +127,24 @@ const App: React.FC = () => {
       
       <main className="flex-grow pt-8 sm:pt-12 md:pt-16 pb-16 sm:pb-20 w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <Hero onSearch={handleSearch} loading={isSearching} t={t} />
+        
+        {/* Ad Slot: Below Search Bar */}
+        {results.length > 0 && <AdSlotSearch />}
 
         <div className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 animate-fadeIn">
-          {results.map(video => (
-            <VideoCard
-              key={video.id}
-              video={video}
-              isSelected={!!selectedItems.find(i => i.video.id === video.id)}
-              onSelect={(format, quality) => toggleSelection(video, format, quality)}
-              t={t}
-            />
+          {results.map((video, index) => (
+            <React.Fragment key={video.id}>
+              <VideoCard
+                video={video}
+                isSelected={!!selectedItems.find(i => i.video.id === video.id)}
+                onSelect={(format, quality) => toggleSelection(video, format, quality)}
+                t={t}
+              />
+              {/* Ad Slot: After every 8th video card */}
+              {(index + 1) % 8 === 0 && (
+                <AdSlotGrid index={Math.floor((index + 1) / 8)} />
+              )}
+            </React.Fragment>
           ))}
         </div>
       </main>
