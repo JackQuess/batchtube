@@ -7,7 +7,7 @@
 const { Worker } = require('bullmq');
 const redisConnection = require('./utils/redis');
 const { downloadWithYtDlp } = require('./utils/ytService');
-const { createZip } = require('./utils/zip');
+const { createChunkedZips } = require('./utils/zip');
 const { sanitizeFilename } = require('./utils/helpers');
 const path = require('path');
 const fs = require('fs-extra');
@@ -19,37 +19,36 @@ const axios = require('axios');
 const limit = pLimit(3);
 
 /**
- * Send ZIP file to API as base64
+ * Upload ZIP part to API as binary
  * @param {string} jobId - Job ID
- * @param {string} zipPath - Local ZIP file path
+ * @param {Object} part - Part object with {index, path, size}
  */
-async function sendZipToApi(jobId, zipPath) {
+async function uploadZipPart(jobId, part) {
+  const zipBuffer = fs.readFileSync(part.path);
+  
   try {
     const apiUrl = process.env.API_URL || 'http://localhost:3001';
     
-    // Read ZIP file and convert to base64
-    const zipBuffer = fs.readFileSync(zipPath);
-    const base64 = zipBuffer.toString('base64');
+    await axios.post(
+      `${apiUrl}/api/batch/upload-part`,
+      zipBuffer,
+      {
+        headers: {
+          'Content-Type': 'application/zip',
+          'X-Job-Id': jobId,
+          'X-Part-Index': part.index.toString(),
+          'X-Part-Size': part.size.toString(),
+        },
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+      }
+    );
     
-    console.log(`[Worker] Sending ZIP to API: ${zipPath} (${zipBuffer.length} bytes)`);
-    
-    // Send to API
-    const response = await axios.post(`${apiUrl}/internal/upload-zip`, {
-      jobId,
-      zipData: base64
-    }, {
-      headers: { 'Content-Type': 'application/json' },
-      timeout: 30000 // 30 second timeout
-    });
-    
-    if (response.data.success) {
-      console.log(`[Worker] ZIP successfully sent to API`);
-    } else {
-      throw new Error('API did not confirm success');
-    }
-  } catch (error) {
-    console.error(`[Worker] Failed to send ZIP to API:`, error.message);
-    throw error;
+    console.log(`[Worker] Uploaded ZIP part ${part.index} → API (${zipBuffer.length} bytes)`);
+    return true;
+  } catch (err) {
+    console.error(`[Worker] ZIP part ${part.index} upload error:`, err.message);
+    return false;
   }
 }
 
@@ -237,25 +236,40 @@ const worker = new Worker(
       throw new Error('No items downloaded successfully');
     }
 
-    // Create ZIP
-    const zipPath = path.join(tempDir, `${jobId}.zip`);
-    await createZip(zipPath, successful);
+    // Create chunked ZIP parts
+    const baseZipPath = path.join(tempDir, jobId);
+    const zipParts = await createChunkedZips(baseZipPath, successful);
 
-    // Send ZIP to API container
-    try {
-      await sendZipToApi(jobId, zipPath);
-      console.log(`[Worker] ZIP uploaded to API successfully`);
-    } catch (uploadError) {
-      console.error(`[Worker] Failed to upload ZIP to API:`, uploadError.message);
-      // Continue anyway - API might handle it differently
+    // Upload each ZIP part to API
+    for (const part of zipParts) {
+      await uploadZipPart(jobId, part);
     }
 
-    // Clean up local ZIP after sending to API
+    // Save part metadata to Redis
     try {
-      fs.unlinkSync(zipPath);
-      console.log(`[Worker] Cleaned up local ZIP: ${zipPath}`);
-    } catch (cleanupError) {
-      console.warn(`[Worker] Failed to cleanup local ZIP: ${cleanupError.message}`);
+      const partMetadata = zipParts.map(p => ({
+        index: p.index,
+        size: p.size
+      }));
+      await redisConnection.set(
+        `batch:${jobId}:parts`,
+        JSON.stringify(partMetadata),
+        'EX',
+        3600 // 1 hour TTL
+      );
+      console.log(`[Worker] Saved part metadata to Redis (${zipParts.length} parts)`);
+    } catch (redisError) {
+      console.error(`[Worker] Failed to save part metadata:`, redisError.message);
+    }
+
+    // Clean up local ZIP parts after sending to API
+    for (const part of zipParts) {
+      try {
+        fs.unlinkSync(part.path);
+        console.log(`[Worker] Cleaned up local ZIP part: ${part.path}`);
+      } catch (cleanupError) {
+        console.warn(`[Worker] Failed to cleanup ZIP part ${part.index}: ${cleanupError.message}`);
+      }
     }
 
     // Return job result (no zipPath needed, API has it)

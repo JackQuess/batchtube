@@ -6,7 +6,6 @@ const express = require('express');
 const cors = require('cors');
 const batchRoutes = require('./routes/batch');
 const { handleSearch } = require('./routes/search');
-const internalRoutes = require('./routes/internalRoutes');
 
 // Initialize queue (will fail gracefully if Redis is not available)
 // Queue is initialized in queue.js, just require it here
@@ -41,7 +40,7 @@ app.use(cors({
     }
   },
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Job-Id'],
   credentials: false
 }));
 
@@ -60,9 +59,6 @@ app.get('/health', (req, res) => {
 // Search routes
 app.get('/api/search', handleSearch);
 app.post('/api/search', handleSearch);
-
-// Internal routes (worker-to-API communication)
-app.use('/internal', internalRoutes);
 
 // Batch routes
 app.use('/api', batchRoutes);
