@@ -263,15 +263,13 @@ router.post(
         return res.status(400).json({ error: 'Empty ZIP part' });
       }
 
-      const tempDir = `/tmp/batchtube/${jobId}`;
-      if (!fs.existsSync(tempDir)) {
-        fs.mkdirSync(tempDir, { recursive: true });
-      }
+      const dir = `/tmp/batchtube/${jobId}`;
+      fs.mkdirSync(dir, { recursive: true });
 
-      const filePath = `${tempDir}/${jobId}.part${index}.zip`;
-      fs.writeFileSync(filePath, zipBuffer);
+      const file = `${dir}/${jobId}.part${index}.zip`;
+      fs.writeFileSync(file, zipBuffer);
 
-      console.log(`[API] Saved ZIP part #${index} (${size || zipBuffer.length} bytes)`);
+      console.log(`[API] Stored part #${index} (${size || zipBuffer.length} bytes)`);
 
       return res.json({ success: true });
     } catch (err) {
@@ -285,7 +283,7 @@ router.post(
  * GET /api/batch/:jobId/download
  * Combine all ZIP parts and stream to user
  */
-router.get('/batch/:jobId/download', async (req, res) => {
+router.get('/batch/:jobId/download', (req, res) => {
   try {
     const { jobId } = req.params;
     const dir = `/tmp/batchtube/${jobId}`;
@@ -294,12 +292,11 @@ router.get('/batch/:jobId/download', async (req, res) => {
       return res.status(404).json({ error: 'ZIP not ready yet' });
     }
 
-    const parts = fs
-      .readdirSync(dir)
-      .filter(f => f.endsWith('.zip'))
+    const parts = fs.readdirSync(dir)
+      .filter(f => f.includes('.zip'))
       .sort((a, b) => {
-        const ai = Number(a.match(/part(\d+)/)?.[1] || 0);
-        const bi = Number(b.match(/part(\d+)/)?.[1] || 0);
+        const ai = parseInt(a.match(/part(\d+)/)?.[1] || 0);
+        const bi = parseInt(b.match(/part(\d+)/)?.[1] || 0);
         return ai - bi;
       });
 
@@ -308,17 +305,15 @@ router.get('/batch/:jobId/download', async (req, res) => {
     }
 
     res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="batch-${jobId}.zip"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${jobId}.zip"`);
 
     for (const p of parts) {
-      const full = `${dir}/${p}`;
-      const data = fs.readFileSync(full);
+      const data = fs.readFileSync(`${dir}/${p}`);
       res.write(data);
     }
 
     res.end();
 
-    // Clean up after a delay
     setTimeout(() => {
       try {
         fs.rmSync(dir, { recursive: true, force: true });

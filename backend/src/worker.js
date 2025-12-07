@@ -7,7 +7,7 @@
 const { Worker } = require('bullmq');
 const redisConnection = require('./utils/redis');
 const { downloadWithYtDlp } = require('./utils/ytService');
-const { createChunkedZip } = require('./utils/zip');
+const { createZipParts } = require('./utils/zip');
 const { sanitizeFilename } = require('./utils/helpers');
 const path = require('path');
 const fs = require('fs-extra');
@@ -21,7 +21,7 @@ const limit = pLimit(3);
 /**
  * Upload ZIP part to API as binary
  * @param {string} jobId - Job ID
- * @param {Object} part - Part object with {index, path, size}
+ * @param {Object} part - Part object with {part, path, size}
  */
 async function uploadZipPart(jobId, part) {
   const zipBuffer = fs.readFileSync(part.path);
@@ -36,7 +36,7 @@ async function uploadZipPart(jobId, part) {
         headers: {
           'Content-Type': 'application/zip',
           'X-Job-Id': jobId,
-          'X-Part-Index': part.index.toString(),
+          'X-Part-Index': part.part.toString(),
           'X-Part-Size': part.size.toString(),
         },
         maxBodyLength: Infinity,
@@ -44,10 +44,10 @@ async function uploadZipPart(jobId, part) {
       }
     );
     
-    console.log(`[Worker] Uploaded ZIP part ${part.index}`);
+    console.log(`[Worker] Uploaded ZIP part ${part.part}`);
     return true;
   } catch (err) {
-    console.error(`[Worker] ZIP part ${part.index} upload error:`, err.message);
+    console.error(`[Worker] ZIP part ${part.part} upload error:`, err.message);
     throw err; // Throw to fail the job if upload fails
   }
 }
@@ -236,34 +236,34 @@ const worker = new Worker(
       throw new Error('No items downloaded successfully');
     }
 
-    // Prepare files for ZIP creation (map to {filePath, fileName})
+    // Prepare files for ZIP creation (map to {path, filename})
     const downloadedFiles = successful.map(r => ({
       path: r.filePath,
       filename: r.fileName
     }));
 
-    console.log(`[Worker] Creating chunked ZIP for ${downloadedFiles.length} files...`);
+    console.log(`[Worker] Creating ZIP parts for ${downloadedFiles.length} files...`);
 
-    // Create chunked ZIP parts
-    const zipParts = await createChunkedZip(jobId, downloadedFiles);
+    // Create ZIP parts
+    const parts = await createZipParts(jobId, downloadedFiles);
 
-    console.log(`[Worker] Created ${zipParts.length} ZIP part(s), uploading to API...`);
+    console.log(`[Worker] Created ${parts.length} ZIP part(s), uploading to API...`);
 
     // Upload each ZIP part to API
-    for (const part of zipParts) {
-      console.log(`[Worker] Uploading ZIP part ${part.index}...`);
+    for (const part of parts) {
+      console.log(`[Worker] Uploading ZIP part ${part.part}...`);
       await uploadZipPart(jobId, part);
     }
 
     console.log(`[Worker] All ZIP parts uploaded successfully`);
 
     // Clean up local ZIP parts after sending to API
-    for (const part of zipParts) {
+    for (const part of parts) {
       try {
         fs.unlinkSync(part.path);
         console.log(`[Worker] Cleaned up local ZIP part: ${part.path}`);
       } catch (cleanupError) {
-        console.warn(`[Worker] Failed to cleanup ZIP part ${part.index}: ${cleanupError.message}`);
+        console.warn(`[Worker] Failed to cleanup ZIP part ${part.part}: ${cleanupError.message}`);
       }
     }
 
