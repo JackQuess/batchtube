@@ -19,21 +19,44 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({ jobId, onClose, t,
   const totalItems = data?.totalItems || initialItemCount || 0;
   const completedItems = data?.completedItems || 0;
 
-  const handleDownloadFile = () => {
+  const handleDownloadFile = async () => {
     if (!data?.downloadUrl) {
       console.error('[DownloadModal] No downloadUrl available. Status:', data?.status);
       return;
     }
 
-    // Build full URL - downloadUrl is already a path like /api/download-file/:jobId
+    // Build full URL
     const downloadUrl = data.downloadUrl.startsWith('http') 
       ? data.downloadUrl 
       : `${API_BASE_URL}${data.downloadUrl}`;
     
     console.log('[DownloadModal] Downloading ZIP from:', downloadUrl);
 
-    // Use window.location.href for direct download (no fetch+blob)
-    window.location.href = downloadUrl;
+    try {
+      // Use fetch + blob for Safari compatibility
+      const response = await fetch(downloadUrl, {
+        mode: 'cors',
+        credentials: 'omit'
+      });
+      
+      if (!response.ok) {
+        throw new Error('Download failed');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `BatchTube_${jobId}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('[DownloadModal] Download error:', error);
+      // Fallback to direct link
+      window.location.href = downloadUrl;
+    }
   };
 
   if (!data && !error) {

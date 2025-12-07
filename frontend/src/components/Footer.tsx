@@ -14,15 +14,18 @@ export const Footer: React.FC<FooterProps> = ({ onOpenLegal, t }) => {
       <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-gray-500">
         {/* Left: Copyright */}
         <div>
-          © {new Date().getFullYear()} BatchTube. All rights reserved.
+          © {new Date().getFullYear()} BatchTube — All rights reserved.
         </div>
         
         {/* Right: Legal Links */}
-        <div className="flex items-center gap-6 flex-wrap justify-center">
-          <button onClick={() => onOpenLegal('terms')} className="hover:text-primary transition-colors">{t.terms}</button>
-          <button onClick={() => onOpenLegal('privacy')} className="hover:text-primary transition-colors">{t.privacy}</button>
-          <button onClick={() => onOpenLegal('cookies')} className="hover:text-primary transition-colors">{t.cookies}</button>
-          <button onClick={() => onOpenLegal('legal')} className="hover:text-primary transition-colors">{t.legal}</button>
+        <div className="flex items-center gap-4 flex-wrap justify-center">
+          <button onClick={() => onOpenLegal('legal')} className="hover:text-primary transition-colors">Legal</button>
+          <span className="text-gray-600">·</span>
+          <button onClick={() => onOpenLegal('terms')} className="hover:text-primary transition-colors">Terms</button>
+          <span className="text-gray-600">·</span>
+          <button onClick={() => onOpenLegal('privacy')} className="hover:text-primary transition-colors">Privacy</button>
+          <span className="text-gray-600">·</span>
+          <button onClick={() => onOpenLegal('cookies')} className="hover:text-primary transition-colors">Cookies</button>
         </div>
       </div>
     </footer>

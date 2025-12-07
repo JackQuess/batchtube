@@ -5,7 +5,7 @@ import fs from 'fs-extra';
 import archiver from 'archiver';
 import pLimit from 'p-limit';
 
-const limit = pLimit(3);
+const limit = pLimit(4);
 
 class BatchEngine {
   async processJob(jobId) {

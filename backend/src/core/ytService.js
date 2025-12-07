@@ -25,7 +25,6 @@ function updateYTDLP() {
     }
 
     console.log("[YTService] Updating yt-dlp...");
-    // Use the binary path directly, no shell needed for local binary
     const updateProcess = spawn(ytdlp, ["-U"], { shell: false });
     
     updateProcess.on("close", (code) => {
@@ -67,20 +66,22 @@ function withCookies(args) {
 }
 
 /**
- * Build MP4 download command arguments with fallback formats
+ * Build MP4 download command arguments
  */
-function buildMp4Command(url, output, formatIndex = 0) {
-  const baseFormats = [
-    "bv*[ext=mp4]+ba[ext=m4a]/mp4",
-    "bv*+ba/bestvideo+bestaudio",
-    "best"
-  ];
-
-  const format = baseFormats[formatIndex] || baseFormats[baseFormats.length - 1];
-
+function buildMp4Command(url, output, quality) {
+  if (quality === "4K" || quality === "2160p" || quality === "4k") {
+    return [
+      url,
+      "-f", "bv*[height>=2160]+ba/bv*+ba",
+      "--merge-output-format", "mp4",
+      "-o", output
+    ];
+  }
+  
+  // Default: Stable MP4 command
   return [
     url,
-    "-f", format,
+    "-f", "bv*[ext=mp4]+ba[ext=m4a]/mp4",
     "--merge-output-format", "mp4",
     "-o", output
   ];
@@ -100,9 +101,9 @@ function buildMp3Command(url, output) {
 }
 
 /**
- * Execute yt-dlp download command with retry logic for MP4
+ * Execute yt-dlp download command
  */
-function execDownload(args, outputPath, retryOnCookieError = true, formatIndex = 0) {
+function execDownload(args, outputPath, retryOnCookieError = true) {
   return new Promise((resolve, reject) => {
     // Ensure output directory exists
     const outputDir = path.dirname(outputPath);
@@ -116,13 +117,12 @@ function execDownload(args, outputPath, retryOnCookieError = true, formatIndex =
     // Add cookies if available
     const finalArgs = withCookies(args);
 
-    // Dev-only logging: log full command args
+    // Dev-only logging
     const isDev = process.env.NODE_ENV !== 'production';
     if (isDev) {
       console.log(`[YTService] Executing: ${ytdlp} ${finalArgs.join(" ")}`);
     }
 
-    // Use shell:false for local binary (more secure, no deprecation warning)
     const child = spawn(ytdlp, finalArgs, { shell: false });
 
     let stdout = "";
@@ -142,7 +142,6 @@ function execDownload(args, outputPath, retryOnCookieError = true, formatIndex =
       if (code !== 0) {
         const errorMsg = stderr.trim() || stdout.trim();
         
-        // Dev-only: log full stderr and exit code
         if (isDev) {
           console.error(`[YTService] Exit code: ${code}`);
           console.error(`[YTService] stderr:`, stderr.substring(0, 1000));
@@ -155,9 +154,8 @@ function execDownload(args, outputPath, retryOnCookieError = true, formatIndex =
           
           try {
             await cookiesManager.refresh();
-            // Retry once after refresh
             console.log("[YTService] Retrying download after cookie refresh...");
-            const retryResult = await execDownload(args, outputPath, false, formatIndex);
+            const retryResult = await execDownload(args, outputPath, false);
             resolve(retryResult);
             return;
           } catch (retryErr) {
@@ -167,7 +165,6 @@ function execDownload(args, outputPath, retryOnCookieError = true, formatIndex =
           }
         }
 
-        // Production: minimal error log, Dev: detailed
         if (isDev) {
           console.error(`[YTService] Download failed (exit code ${code}):`, errorMsg.substring(0, 500));
         } else {
@@ -188,7 +185,6 @@ function execDownload(args, outputPath, retryOnCookieError = true, formatIndex =
       const stats = fs.statSync(outputPath);
       if (stats.size < MIN_FILE_SIZE) {
         console.error(`[YTService] Output file is too small: ${outputPath} (${stats.size} bytes, minimum ${MIN_FILE_SIZE})`);
-        // Try to delete the empty file
         try {
           fs.unlinkSync(outputPath);
         } catch (e) {
@@ -198,7 +194,7 @@ function execDownload(args, outputPath, retryOnCookieError = true, formatIndex =
         return;
       }
 
-      // Success - minimal logging in production
+      // Success
       if (isDev) {
         console.log(`[YTService] Download successful: ${outputPath} (${stats.size} bytes)`);
       }
@@ -213,7 +209,7 @@ function execDownload(args, outputPath, retryOnCookieError = true, formatIndex =
       }
     });
 
-    // Timeout after 10 minutes (for long videos)
+    // Timeout after 10 minutes
     const timeout = setTimeout(() => {
       if (!child.killed) {
         child.kill("SIGTERM");
@@ -225,47 +221,6 @@ function execDownload(args, outputPath, retryOnCookieError = true, formatIndex =
       clearTimeout(timeout);
     });
   });
-}
-
-/**
- * Download MP4 with fallback format retry
- */
-async function downloadVideoWithFallback(url, output) {
-  const baseFormats = [
-    "bv*[ext=mp4]+ba[ext=m4a]/mp4",
-    "bv*+ba/bestvideo+bestaudio",
-    "best"
-  ];
-
-  let lastError = null;
-
-  for (let i = 0; i < baseFormats.length; i++) {
-    try {
-      const args = buildMp4Command(url, output, i);
-      const result = await execDownload(args, output, true, i);
-      return result;
-    } catch (error) {
-      lastError = error;
-      console.warn(`[YTService] Format ${i + 1} failed, trying next...`);
-      
-      // If file exists but is too small, delete it before retry
-      if (fs.existsSync(output)) {
-        try {
-          fs.unlinkSync(output);
-        } catch (e) {
-          // Ignore deletion errors
-        }
-      }
-      
-      // Continue to next format
-      if (i < baseFormats.length - 1) {
-        continue;
-      }
-    }
-  }
-
-  // All formats failed
-  throw lastError || new Error("All format fallbacks failed");
 }
 
 /**
@@ -285,14 +240,15 @@ async function downloadAudio(url, output) {
 /**
  * Download MP4
  */
-async function downloadVideoFile(url, output) {
+async function downloadVideoFile(url, output, quality = "1080p") {
   // Ensure output is in /tmp for Railway
   if (!output.startsWith('/tmp')) {
     const filename = path.basename(output);
     output = `/tmp/${filename}`;
   }
 
-  return await downloadVideoWithFallback(url, output);
+  const args = buildMp4Command(url, output, quality);
+  return await execDownload(args, output);
 }
 
 /**
@@ -300,11 +256,11 @@ async function downloadVideoFile(url, output) {
  * @param {Object} params - Download parameters
  * @param {string} params.url - YouTube URL
  * @param {string} params.format - "mp4" or "mp3"
- * @param {string} params.quality - Ignored (for compatibility)
+ * @param {string} params.quality - "1080p", "720p", "4K", etc. (only for MP4)
  * @param {string} params.output - Output file path
  * @returns {Promise<string>} Resolves with output path
  */
-export async function downloadVideo({ url, format, quality, output }) {
+export async function downloadVideo({ url, format, quality = "1080p", output }) {
   if (!url || !output) {
     throw new Error("URL and output path are required");
   }
@@ -315,7 +271,7 @@ export async function downloadVideo({ url, format, quality, output }) {
   if (format === "mp3") {
     return await downloadAudio(url, output);
   } else {
-    return await downloadVideoFile(url, output);
+    return await downloadVideoFile(url, output, quality);
   }
 }
 
@@ -326,25 +282,21 @@ export class YTService {
   static async downloadVideo(url, outputPath, format, onProgress) {
     return new Promise(async (resolve, reject) => {
       try {
-        // Ensure yt-dlp is updated
         await updateYTDLP();
 
-        // Call the new downloadVideo function
         const resultPath = await downloadVideo({
           url,
           format: format === "mp3" ? "mp3" : "mp4",
-          quality: undefined, // Ignored
+          quality: format === "mp4" ? "1080p" : undefined,
           output: outputPath
         });
 
-        // Simulate progress callback for compatibility
         if (onProgress) {
           onProgress({ percent: 100 });
         }
 
         resolve({ success: true, filePath: resultPath });
       } catch (error) {
-        // Report error via progress callback if available
         if (onProgress) {
           onProgress({ percent: 0, error: error.message });
         }

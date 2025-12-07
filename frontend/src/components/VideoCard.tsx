@@ -16,10 +16,9 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   onSelect, 
   t 
 }) => {
-  // Try multiple thumbnail fallbacks
+  // Use simple YT static image
   const getThumbnailUrl = () => {
-    if (video.thumbnail) return video.thumbnail;
-    return `https://img.youtube.com/vi/${video.id}/maxresdefault.jpg`;
+    return `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`;
   };
 
   const handleThumbnailError = (e: React.SyntheticEvent<HTMLImageElement>) => {
