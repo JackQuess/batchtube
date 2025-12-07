@@ -1,10 +1,12 @@
 import { generateId } from '../utils/id.js';
-import path from 'path';
-import fs from 'fs-extra';
 
-// Railway requires /tmp for file operations
-const TEMP_DIR = '/tmp/batchtube-downloads';
-fs.ensureDirSync(TEMP_DIR);
+/**
+ * JobStore - In-memory store for download jobs
+ */
+
+// Types (for reference, JS doesn't enforce these)
+// type JobStatus = "pending" | "running" | "zipping" | "completed" | "error";
+// type JobType = "single" | "batch";
 
 class JobStore {
   constructor() {
@@ -12,120 +14,177 @@ class JobStore {
     this.startCleanupInterval();
   }
 
-  createJob(items, type = 'batch') {
+  /**
+   * Create a single download job
+   * @param {Object} params
+   * @param {string} params.url - YouTube URL
+   * @param {string} params.format - "mp3" | "mp4"
+   * @param {string} params.quality - "1080p" | "4k"
+   * @returns {Object} SingleJob
+   */
+  createSingleJob({ url, format, quality = "1080p" }) {
     const id = generateId();
-    const jobDir = path.join(TEMP_DIR, id);
-    fs.ensureDirSync(jobDir);
-
+    const now = Date.now();
+    
     const job = {
       id,
-      type,
-      status: 'queued',
-      totalItems: items.length,
-      completedItems: 0,
-      overallPercent: 0,
-      createdAt: Date.now(),
-      items: items.map((item, index) => ({
-        index,
-        url: item.url,
-        title: item.title || 'Unknown',
-        format: item.format,
-        quality: item.quality,
-        status: 'queued',
-        percent: 0,
-        speed: '0 B/s',
-        eta: '--',
-        fileName: null,
-        error: null,
-        filePath: null
-      })),
-      downloadUrl: null,
-      error: null
+      type: "single",
+      status: "pending",
+      createdAt: now,
+      updatedAt: now,
+      url,
+      format,
+      quality,
+      progress: 0,
+      message: "Starting download...",
+      fileId: null,
+      errorMessage: null
     };
 
     this.jobs.set(id, job);
     return job;
   }
 
-  getJob(id) {
-    return this.jobs.get(id);
+  /**
+   * Update single job
+   * @param {string} jobId
+   * @param {Object} patch - Partial job update
+   */
+  updateSingleJob(jobId, patch) {
+    const job = this.jobs.get(jobId);
+    if (!job || job.type !== "single") return;
+
+    Object.assign(job, patch, { updatedAt: Date.now() });
   }
 
-  updateItemProgress(jobId, itemIndex, progress) {
+  /**
+   * Create a batch download job
+   * @param {Object} params
+   * @param {Array} params.items - Array of { url, title? }
+   * @param {string} params.format - "mp3" | "mp4"
+   * @param {string} params.quality - "1080p" | "4k"
+   * @returns {Object} BatchJob
+   */
+  createBatchJob({ items, format, quality = "1080p" }) {
+    const id = generateId();
+    const now = Date.now();
+
+    const job = {
+      id,
+      type: "batch",
+      status: "pending",
+      createdAt: now,
+      updatedAt: now,
+      format,
+      quality,
+      items: items.map((item, index) => ({
+        index,
+        title: item.title || `Item ${index + 1}`,
+        percent: 0,
+        status: "pending"
+      })),
+      zipFileId: null,
+      errorMessage: null
+    };
+
+    this.jobs.set(id, job);
+    return job;
+  }
+
+  /**
+   * Update batch item progress
+   * @param {string} jobId
+   * @param {number} index
+   * @param {Object} patch - Partial item update
+   */
+  updateBatchItem(jobId, index, patch) {
+    const job = this.jobs.get(jobId);
+    if (!job || job.type !== "batch") return;
+
+    const item = job.items[index];
+    if (!item) return;
+
+    Object.assign(item, patch);
+    job.updatedAt = Date.now();
+  }
+
+  /**
+   * Mark job as error
+   * @param {string} jobId
+   * @param {string} errorMessage
+   */
+  markJobError(jobId, errorMessage) {
     const job = this.jobs.get(jobId);
     if (!job) return;
 
-    const item = job.items[itemIndex];
-    if (!item) return;
-
-    Object.assign(item, progress);
-    
-    // Update overall progress
-    const totalPercent = job.items.reduce((sum, i) => sum + i.percent, 0);
-    job.overallPercent = Math.round(totalPercent / job.items.length);
-    job.completedItems = job.items.filter(i => i.status === 'completed').length;
-
-    // Update job status
-    if (job.completedItems === job.totalItems && job.items.every(i => i.status === 'completed' || i.status === 'failed')) {
-      job.status = 'processing';
-    } else if (job.items.some(i => i.status === 'failed')) {
-      if (job.items.every(i => i.status === 'failed')) {
-        job.status = 'failed';
-      } else {
-        job.status = 'downloading';
-      }
-    } else {
-      job.status = 'downloading';
-    }
+    job.status = "error";
+    job.errorMessage = errorMessage;
+    job.updatedAt = Date.now();
   }
 
-  setJobDownloadUrl(jobId, downloadUrl) {
+  /**
+   * Update job status
+   * @param {string} jobId
+   * @param {string} status
+   */
+  updateJobStatus(jobId, status) {
     const job = this.jobs.get(jobId);
-    if (job) {
-      job.downloadUrl = downloadUrl;
-      job.status = 'completed';
-      job.overallPercent = 100;
-    }
+    if (!job) return;
+
+    job.status = status;
+    job.updatedAt = Date.now();
   }
 
-  setJobError(jobId, error) {
+  /**
+   * Mark job as completed
+   * @param {string} jobId
+   * @param {string} fileId - fileId or zipFileId
+   */
+  markJobCompleted(jobId, fileId) {
     const job = this.jobs.get(jobId);
-    if (job) {
-      job.error = error;
-      job.status = 'failed';
+    if (!job) return;
+
+    job.status = "completed";
+    job.updatedAt = Date.now();
+
+    if (job.type === "single") {
+      job.fileId = fileId;
+      job.progress = 100;
+    } else if (job.type === "batch") {
+      job.zipFileId = fileId;
     }
   }
 
-  startCleanupInterval() {
-    setInterval(() => {
-      this.cleanupOldJobs();
-    }, 60 * 60 * 1000);
+  /**
+   * Get job by ID
+   * @param {string} jobId
+   * @returns {Object|null}
+   */
+  getJob(jobId) {
+    return this.jobs.get(jobId) || null;
   }
 
-  async cleanupOldJobs() {
+  /**
+   * Cleanup old jobs (older than 10 minutes)
+   */
+  cleanupOldJobs() {
     const now = Date.now();
-    // Clean up jobs older than 10 minutes (600000ms) for production
-    const maxAge = 10 * 60 * 1000;
+    const maxAge = 10 * 60 * 1000; // 10 minutes
 
     for (const [id, job] of this.jobs.entries()) {
       if (now - job.createdAt > maxAge) {
         this.jobs.delete(id);
-        const jobDir = path.join(TEMP_DIR, id);
-        if (fs.existsSync(jobDir)) {
-          await fs.remove(jobDir).catch(err => {
-            console.error(`[Cleanup] Error removing ${jobDir}:`, err);
-          });
-        }
-        // Only log in development
-        if (process.env.NODE_ENV !== 'production') {
-          console.log(`[Cleanup] Removed job ${id}`);
-        }
       }
     }
   }
 
-  getTempDir() {
-    return TEMP_DIR;
+  /**
+   * Start periodic cleanup
+   */
+  startCleanupInterval() {
+    setInterval(() => {
+      this.cleanupOldJobs();
+    }, 60 * 1000); // Every minute
   }
 }
 

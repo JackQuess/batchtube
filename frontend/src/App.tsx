@@ -9,11 +9,12 @@ import { Hero } from './components/Hero';
 import { VideoCard } from './components/VideoCard';
 import { SelectionBar } from './components/SelectionBar';
 import { SelectionModal } from './components/SelectionModal';
-import { DownloadModal } from './components/DownloadModal';
+import { ProgressModal } from './components/ProgressModal';
 import { LegalModal } from './components/LegalModal';
 import { Footer } from './components/Footer';
 import { CookieConsent } from './components/CookieConsent';
 import { loadAdSense } from './lib/adLoader';
+import { batchAPI } from './services/batchAPI';
 
 const App: React.FC = () => {
   // Global State
@@ -92,10 +93,27 @@ const App: React.FC = () => {
   const handleBatchDownload = async () => {
     if (selectedItems.length === 0) return;
     try {
-      const { jobId } = await api.startBatchDownload(selectedItems);
+      // Map to new API format
+      const items = selectedItems.map(item => ({
+        url: `https://www.youtube.com/watch?v=${item.video.id}`,
+        title: item.video.title || 'Unknown',
+      }));
+
+      // Map quality: '320k' -> '1080p' for MP3, keep as is for MP4
+      const quality = batchFormat === 'mp3' 
+        ? '1080p' // MP3 doesn't use quality, but API expects it
+        : (batchQuality === '4K' ? '4k' : '1080p');
+
+      const { jobId } = await batchAPI.createJob({
+        items,
+        format: batchFormat,
+        quality: batchFormat === 'mp4' ? quality : undefined
+      });
+      
       setActiveJobId(jobId);
     } catch (e) {
       console.error("Batch start failed", e);
+      alert('Failed to start batch download. Please try again.');
     }
   };
 
@@ -143,11 +161,10 @@ const App: React.FC = () => {
       />
 
       {activeJobId && (
-        <DownloadModal 
+        <ProgressModal 
           jobId={activeJobId} 
           onClose={() => setActiveJobId(null)} 
-          t={t}
-          initialItemCount={selectedItems.length}
+          totalItems={selectedItems.length}
         />
       )}
 

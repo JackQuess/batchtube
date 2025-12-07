@@ -3,6 +3,7 @@ import cors from 'cors';
 import routes from './routes/index.js';
 import { startCookieCron } from './jobs/cookieCron.js';
 import { ensureYTDLP } from './core/bootstrapYTDLP.js';
+import './worker.js'; // Start background worker
 
 // Bootstrap yt-dlp before starting server
 ensureYTDLP();

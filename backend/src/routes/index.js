@@ -1,8 +1,7 @@
 import { Router } from 'express';
 import { handleSearch } from './search.js';
-import { handleBatchDownload } from './batch.js';
-import { handleBatchProgress } from './progress.js';
-import { handleDownloadFile } from './download.js';
+import singleRouter from './single.js';
+import batchRouter from './batch.js';
 import { handleRefreshCookies, handleCookiesStatus } from './cookies.js';
 import { handleTestYT } from './test.js';
 
@@ -12,10 +11,11 @@ const router = Router();
 router.get('/search', handleSearch);
 router.post('/search', handleSearch);
 
-// Batch download routes
-router.post('/batch-download', handleBatchDownload);
-router.get('/batch-progress/:jobId', handleBatchProgress);
-router.get('/download-file/:jobId', handleDownloadFile);
+// Single download routes (legacy, keep for compatibility)
+router.use('/', singleRouter);
+
+// Batch download routes (BatchTube 2.0 - queue-based)
+router.use('/', batchRouter);
 
 // Cookie management routes
 router.get('/internal/refresh-cookies', handleRefreshCookies);
