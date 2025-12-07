@@ -1,47 +1,141 @@
 import { spawn } from "child_process";
 import path from "path";
 import fs from "fs";
+import https from "https";
 import { fileURLToPath } from "url";
 import { cookiesManager } from "./CookiesManager.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-// Use system yt-dlp (installed by bootstrap) with fallback to local binary
-const localBinary = path.resolve(__dirname, "../bin/yt-dlp");
-const ytdlp = fs.existsSync(localBinary) ? localBinary : "yt-dlp";
+const BIN_DIR = path.resolve(__dirname, "../bin");
+const YTDLP_BINARY = path.join(BIN_DIR, "yt-dlp");
 const MIN_FILE_SIZE = 100 * 1024; // 100KB minimum
 
-// Auto-update yt-dlp on module load (only once)
-let ytdlpUpdated = false;
+// Ensure bin directory exists
+fs.mkdirSync(BIN_DIR, { recursive: true });
 
-function updateYTDLP() {
-  if (ytdlpUpdated) return Promise.resolve();
-  
-  return new Promise((resolve) => {
-    // Bootstrap already ensures yt-dlp is installed, just try to update
-    console.log("[YTService] Updating yt-dlp...");
-    const updateProcess = spawn(ytdlp, ["-U"], { shell: false });
-    
-    updateProcess.on("close", (code) => {
-      ytdlpUpdated = true;
-      if (code === 0) {
-        console.log("[YTService] yt-dlp updated successfully");
-      } else {
-        console.warn("[YTService] yt-dlp update failed (continuing anyway)");
+/**
+ * Download latest yt-dlp binary from GitHub releases
+ */
+async function ensureLatestYtDlp() {
+  // Check if binary already exists
+  if (fs.existsSync(YTDLP_BINARY)) {
+    try {
+      // Verify it's executable and works
+      const version = spawn(YTDLP_BINARY, ["--version"], { shell: false });
+      let versionOutput = "";
+      
+      version.stdout.on("data", (data) => {
+        versionOutput += data.toString();
+      });
+
+      await new Promise((resolve, reject) => {
+        version.on("close", (code) => {
+          if (code === 0 && versionOutput.trim()) {
+            console.log(`[YTService] yt-dlp binary found: ${versionOutput.trim()}`);
+            resolve();
+          } else {
+            // Binary exists but doesn't work, re-download
+            console.log("[YTService] Existing binary invalid, re-downloading...");
+            fs.unlinkSync(YTDLP_BINARY);
+            reject(new Error("Invalid binary"));
+          }
+        });
+        version.on("error", reject);
+      });
+
+      return YTDLP_BINARY;
+    } catch (err) {
+      // Binary exists but failed, remove and re-download
+      if (fs.existsSync(YTDLP_BINARY)) {
+        try {
+          fs.unlinkSync(YTDLP_BINARY);
+        } catch (e) {
+          // Ignore deletion errors
+        }
       }
-      resolve();
+    }
+  }
+
+  // Download latest binary
+  console.log("[YTService] Downloading latest yt-dlp binary from GitHub...");
+  const downloadUrl = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp";
+
+  return new Promise((resolve, reject) => {
+    const file = fs.createWriteStream(YTDLP_BINARY);
+
+    https.get(downloadUrl, (response) => {
+      // Handle redirects
+      if (response.statusCode === 301 || response.statusCode === 302) {
+        const redirectUrl = response.headers.location;
+        console.log(`[YTService] Following redirect to: ${redirectUrl}`);
+        https.get(redirectUrl, (redirectResponse) => {
+          redirectResponse.pipe(file);
+          redirectResponse.on("end", () => {
+            fs.chmodSync(YTDLP_BINARY, 0o755);
+            console.log("[YTService] Binary downloaded and made executable");
+            resolve(YTDLP_BINARY);
+          });
+        }).on("error", (err) => {
+          fs.unlinkSync(YTDLP_BINARY);
+          reject(new Error(`Download failed: ${err.message}`));
+        });
+        return;
+      }
+
+      if (response.statusCode !== 200) {
+        fs.unlinkSync(YTDLP_BINARY);
+        reject(new Error(`Download failed with status: ${response.statusCode}`));
+        return;
+      }
+
+      response.pipe(file);
+
+      file.on("finish", () => {
+        file.close();
+        fs.chmodSync(YTDLP_BINARY, 0o755);
+        console.log("[YTService] Binary downloaded and made executable");
+        resolve(YTDLP_BINARY);
+      });
+    }).on("error", (err) => {
+      if (fs.existsSync(YTDLP_BINARY)) {
+        fs.unlinkSync(YTDLP_BINARY);
+      }
+      reject(new Error(`Download failed: ${err.message}`));
     });
-    
-    updateProcess.on("error", (err) => {
-      console.warn("[YTService] yt-dlp update error (continuing anyway):", err.message);
-      ytdlpUpdated = true;
-      resolve();
+
+    file.on("error", (err) => {
+      if (fs.existsSync(YTDLP_BINARY)) {
+        fs.unlinkSync(YTDLP_BINARY);
+      }
+      reject(new Error(`File write failed: ${err.message}`));
     });
   });
 }
 
-// Initialize update on module load
-updateYTDLP();
+// Initialize binary on module load
+let ytdlpBinary = null;
+let binaryInitPromise = null;
+
+function getYtDlpBinary() {
+  if (!binaryInitPromise) {
+    binaryInitPromise = ensureLatestYtDlp()
+      .then(binary => {
+        ytdlpBinary = binary;
+        return binary;
+      })
+      .catch(err => {
+        console.error("[YTService] Failed to initialize yt-dlp binary:", err);
+        // Fallback to system yt-dlp if available
+        ytdlpBinary = "yt-dlp";
+        return ytdlpBinary;
+      });
+  }
+  return binaryInitPromise;
+}
+
+// Start initialization immediately
+getYtDlpBinary();
 
 /**
  * Add cookies flag if cookies.txt exists
@@ -61,13 +155,13 @@ function withCookies(args) {
 }
 
 /**
- * Build MP4 download command arguments
+ * Build MP4 download command arguments with robust format selectors
  */
 function buildMp4Command(url, output, quality) {
   if (quality === "4K" || quality === "2160p" || quality === "4k") {
     return [
       url,
-      "-f", "bv*+ba/best",
+      "-f", "bv*[height>=2160]+ba/bv*+ba/best",
       "--merge-output-format", "mp4",
       "--no-warnings",
       "--compat-options", "manifest-files",
@@ -76,10 +170,10 @@ function buildMp4Command(url, output, quality) {
     ];
   }
   
-  // Default: Stable MP4 command with signature support
+  // Default: Robust MP4 command with multiple fallbacks
   return [
     url,
-    "-f", "bv*+ba/best",
+    "-f", "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4] / bv*+ba/best",
     "--merge-output-format", "mp4",
     "--no-warnings",
     "--compat-options", "manifest-files",
@@ -107,7 +201,10 @@ function buildMp3Command(url, output) {
 /**
  * Execute yt-dlp download command
  */
-function execDownload(args, outputPath, retryOnCookieError = true) {
+async function execDownload(args, outputPath, retryOnCookieError = true) {
+  // Ensure binary is ready
+  const ytdlp = await getYtDlpBinary();
+
   return new Promise((resolve, reject) => {
     // Ensure output directory exists
     const outputDir = path.dirname(outputPath);
@@ -207,7 +304,7 @@ function execDownload(args, outputPath, retryOnCookieError = true) {
 
     child.on("error", (err) => {
       if (err.code === "ENOENT") {
-        reject(new Error("yt-dlp not installed on server"));
+        reject(new Error("yt-dlp binary not found or not executable"));
       } else {
         reject(new Error(`Failed to spawn yt-dlp: ${err.message}`));
       }
@@ -269,8 +366,8 @@ export async function downloadVideo({ url, format, quality = "1080p", output }) 
     throw new Error("URL and output path are required");
   }
 
-  // Ensure yt-dlp is updated
-  await updateYTDLP();
+  // Ensure binary is ready before starting download
+  await getYtDlpBinary();
 
   if (format === "mp3") {
     return await downloadAudio(url, output);
@@ -286,7 +383,8 @@ export class YTService {
   static async downloadVideo(url, outputPath, format, onProgress) {
     return new Promise(async (resolve, reject) => {
       try {
-        await updateYTDLP();
+        // Ensure binary is ready
+        await getYtDlpBinary();
 
         const resultPath = await downloadVideo({
           url,
