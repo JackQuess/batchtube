@@ -23,14 +23,14 @@ export const Navbar: React.FC<NavbarProps> = ({ lang, setLang }) => {
   const [showLangMenu, setShowLangMenu] = useState(false);
 
   return (
-    <nav className="fixed top-0 inset-x-0 h-14 sm:h-16 bg-[#050509]/80 backdrop-blur-md border-b border-white/5 z-50 flex items-center justify-between px-4 flex-wrap sm:flex-nowrap gap-2 sm:gap-0">
-      {/* Logo - Centered on mobile */}
-      <div className="flex items-center gap-2 cursor-pointer mx-auto sm:mx-0" onClick={() => window.location.reload()}>
-        <div className="w-7 h-7 sm:w-8 sm:h-8 bg-primary rounded-lg flex items-center justify-center relative overflow-hidden group">
+    <nav className="fixed top-0 inset-x-0 h-14 sm:h-16 bg-[#050509]/80 backdrop-blur-md border-b border-white/5 z-50 flex flex-col sm:flex-row items-center justify-between px-4 gap-4 sm:gap-0">
+      {/* Logo */}
+      <div className="flex items-center gap-2 cursor-pointer max-w-[200px] sm:max-w-none" onClick={() => window.location.reload()}>
+        <div className="w-7 h-7 sm:w-8 sm:h-8 bg-primary rounded-lg flex items-center justify-center relative overflow-hidden group flex-shrink-0">
           <div className="w-3 h-3 bg-white rounded-[1px] shadow-sm group-hover:scale-110 transition-transform"></div>
           <div className="absolute inset-0 bg-gradient-to-tr from-black/20 to-transparent"></div>
         </div>
-        <span className="text-lg sm:text-xl font-bold tracking-tight text-white">Batch<span className="text-primary">Tube</span></span>
+        <span className="text-lg sm:text-xl font-bold tracking-tight text-white truncate">Batch<span className="text-primary">Tube</span></span>
       </div>
 
       {/* Right Actions */}

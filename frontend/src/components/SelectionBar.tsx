@@ -36,9 +36,9 @@ export const SelectionBar: React.FC<SelectionBarProps> = ({
   };
 
   return (
-    <div className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-50 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 md:gap-4 bg-zinc-900/90 px-3 sm:px-4 md:px-6 py-3 sm:py-4 rounded-xl shadow-xl backdrop-blur-lg border border-zinc-700/50 max-w-[95%] sm:max-w-[90%]">
+    <div className="fixed bottom-0 left-0 right-0 sm:bottom-6 sm:left-1/2 sm:-translate-x-1/2 sm:right-auto z-50 flex flex-col gap-3 md:flex-row md:items-center md:justify-between bg-zinc-900/90 px-4 pb-4 sm:pb-0 sm:px-6 py-3 sm:py-4 rounded-t-xl sm:rounded-xl shadow-xl backdrop-blur-lg border border-zinc-700/50 sm:max-w-[90%]">
       
-      {/* Top Row - Mobile Only */}
+      {/* Mobile Top Row */}
       <div className="flex items-center gap-2 sm:hidden justify-between w-full">
         <div className="bg-primary/10 text-primary px-2 py-1 rounded-lg text-xs font-bold whitespace-nowrap">
           {count} {t.itemsSelected}
@@ -53,7 +53,7 @@ export const SelectionBar: React.FC<SelectionBarProps> = ({
       </div>
 
       {/* Desktop Layout */}
-      <div className="hidden sm:flex items-center gap-2 md:gap-4 flex-wrap">
+      <div className="hidden md:flex items-center gap-2 md:gap-4 flex-wrap">
         {/* Count Badge */}
         <div className="bg-primary/10 text-primary px-2 md:px-3 py-1 rounded-lg text-xs sm:text-sm font-bold whitespace-nowrap">
           {count} {t.itemsSelected}
@@ -145,29 +145,29 @@ export const SelectionBar: React.FC<SelectionBarProps> = ({
 
         <button 
           onClick={onDownload}
-          className="bg-primary hover:bg-red-600 text-white px-3 md:px-5 py-1.5 md:py-2 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-1.5 md:gap-2 shadow-lg shadow-primary/20 transition-all active:scale-95"
+          className="bg-primary hover:bg-red-600 text-white px-5 py-2 rounded-xl font-bold text-sm flex items-center gap-2 shadow-lg shadow-primary/20 transition-all active:scale-95"
         >
-          <Archive size={14} className="md:w-4 md:h-4" />
+          <Archive size={16} />
           {t.downloadZip}
         </button>
       </div>
 
-      {/* Mobile Bottom Row */}
-      <div className="flex sm:hidden items-center gap-2 w-full">
-        <button
-          onClick={onViewList}
-          className="flex-1 text-white bg-white/5 hover:bg-white/10 px-3 py-2 rounded-lg text-xs font-medium transition-colors text-center"
-        >
-          {t.viewList || 'Listeyi Gör'}
-        </button>
-        <div className="flex gap-2">
+      {/* Mobile Layout */}
+      <div className="flex md:hidden flex-col gap-3 w-full">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={onViewList}
+            className="text-white bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap"
+          >
+            {t.viewList || 'Listeyi Gör'}
+          </button>
           <div className="relative">
             <button 
               onClick={() => {
                 setShowFormatMenu(!showFormatMenu);
                 setShowQualityMenu(false);
               }}
-              className="text-white bg-white/5 px-2 py-2 rounded-lg text-xs font-medium hover:bg-white/10 transition-colors"
+              className="text-white bg-white/5 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-white/10 transition-colors"
             >
               {format.toUpperCase()}
             </button>
@@ -184,7 +184,7 @@ export const SelectionBar: React.FC<SelectionBarProps> = ({
                 setShowQualityMenu(!showQualityMenu);
                 setShowFormatMenu(false);
               }}
-              className="text-white bg-white/5 px-2 py-2 rounded-lg text-xs font-medium hover:bg-white/10 transition-colors"
+              className="text-white bg-white/5 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-white/10 transition-colors"
             >
               {quality}
             </button>
@@ -210,10 +210,10 @@ export const SelectionBar: React.FC<SelectionBarProps> = ({
         </div>
         <button 
           onClick={onDownload}
-          className="bg-primary hover:bg-red-600 text-white px-3 py-2 rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-primary/20 transition-all active:scale-95"
+          className="w-full bg-primary hover:bg-red-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-primary/20 transition-all active:scale-95"
         >
-          <Archive size={14} />
-          ZIP
+          <Archive size={16} />
+          {t.downloadZip}
         </button>
       </div>
     </div>
