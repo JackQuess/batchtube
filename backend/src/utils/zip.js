@@ -46,12 +46,15 @@ function createZip(zipPath, files) {
 }
 
 /**
- * Create ZIP parts from files (simple chunking)
+ * Create ZIP parts from files (universal format support)
+ * Supports: .mp3, .mp4, .m4a, .webm, .wav, .flac, and any other format
  * @param {string} jobId - Job ID
  * @param {Array<{path: string, filename: string}>} files - Files to include
  * @returns {Promise<Array<{part: number, path: string, size: number}>>} Array of ZIP part info
  */
 async function createZipParts(jobId, files) {
+  // files = [{ path: "/tmp/...", filename: "xxx.mp4" }, ...]
+
   const MAX_SIZE = 400 * 1024 * 1024; // 400MB
   const dir = `/tmp/batchtube/${jobId}`;
   fs.mkdirSync(dir, { recursive: true });
@@ -61,14 +64,15 @@ async function createZipParts(jobId, files) {
 
   let zipPath = `${dir}/${jobId}.part${part}.zip`;
   let output = fs.createWriteStream(zipPath);
+
   let archive = archiver('zip', { zlib: { level: 9 } });
   archive.pipe(output);
 
   const parts = [];
 
-  async function finalize() {
+  async function finalizePart() {
     return new Promise((resolve, reject) => {
-      archive.on('end', () => {
+      output.on('close', () => {
         const size = fs.statSync(zipPath).size;
         parts.push({ part, path: zipPath, size });
         console.log(`[Zip] Created part ${part} (${size} bytes)`);
@@ -84,16 +88,18 @@ async function createZipParts(jobId, files) {
     });
   }
 
-  for (const f of files) {
-    if (!fs.existsSync(f.path)) {
-      console.warn(`[Zip] File not found: ${f.path}`);
+  for (const file of files) {
+    if (!fs.existsSync(file.path)) {
+      console.warn(`[Zip] File not found: ${file.path}`);
       continue;
     }
 
-    const s = fs.statSync(f.path).size;
+    const stat = fs.statSync(file.path);
+    const fileSize = stat.size;
 
-    if (currentSize + s > MAX_SIZE && currentSize > 0) {
-      await finalize();
+    // If next file would exceed max, finalize and start new ZIP
+    if (currentSize + fileSize > MAX_SIZE && currentSize > 0) {
+      await finalizePart();
 
       part++;
       currentSize = 0;
@@ -104,11 +110,12 @@ async function createZipParts(jobId, files) {
       archive.pipe(output);
     }
 
-    archive.file(f.path, { name: f.filename });
-    currentSize += s;
+    // Preserve original file extension (works for any format)
+    archive.file(file.path, { name: file.filename });
+    currentSize += fileSize;
   }
 
-  await finalize();
+  await finalizePart();
   
   console.log(`[Zip] Created ${parts.length} ZIP part(s) for job ${jobId}`);
   return parts;

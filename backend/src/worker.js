@@ -24,17 +24,15 @@ const limit = pLimit(3);
  * @param {Object} part - Part object with {part, path, size}
  */
 async function uploadZipPart(jobId, part) {
-  const zipBuffer = fs.readFileSync(part.path);
-  
   try {
     const apiUrl = process.env.API_URL || 'http://localhost:3001';
     
     await axios.post(
       `${apiUrl}/api/batch/upload-part`,
-      zipBuffer,
+      fs.readFileSync(part.path),
       {
         headers: {
-          'Content-Type': 'application/zip',
+          'Content-Type': 'application/octet-stream',
           'X-Job-Id': jobId,
           'X-Part-Index': part.part.toString(),
           'X-Part-Size': part.size.toString(),

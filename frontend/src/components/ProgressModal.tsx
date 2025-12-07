@@ -237,22 +237,23 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
         </div>
 
         {/* Results List with Per-Item Progress Bars */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#0e0e11]">
-          {/* Show items from itemProgress during download, or from result when completed */}
-          {(isActive || isWaiting) && Object.keys(itemProgress).length > 0 ? (
-            // Show downloading items with live progress
-            Object.entries(itemProgress)
-              .sort(([a], [b]) => parseInt(a) - parseInt(b))
-              .map(([indexStr, itemData]) => {
-                const index = parseInt(indexStr);
-                const item = itemData;
-                const isItemDownloading = isActive && item.percent < 100;
-                
-                return (
-                  <div 
-                    key={index} 
-                    className="flex items-start gap-3 p-3 rounded-lg bg-[#141418] border border-white/5"
-                  >
+        <div className="flex-1 overflow-y-auto bg-[#0e0e11]">
+          <div className="flex flex-col items-center justify-center w-full gap-3 px-4 py-4">
+            {/* Show items from itemProgress during download, or from result when completed */}
+            {(isActive || isWaiting) && Object.keys(itemProgress).length > 0 ? (
+              // Show downloading items with live progress
+              Object.entries(itemProgress)
+                .sort(([a], [b]) => parseInt(a) - parseInt(b))
+                .map(([indexStr, itemData]) => {
+                  const index = parseInt(indexStr);
+                  const item = itemData;
+                  const isItemDownloading = isActive && item.percent < 100;
+                  
+                  return (
+                    <div 
+                      key={index} 
+                      className="w-full max-w-[520px] flex items-center gap-3 bg-[#141418] p-3 rounded-xl"
+                    >
                     {/* Thumbnail */}
                     <div className="flex-shrink-0">
                       <img 
@@ -329,7 +330,7 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
               return (
                 <div 
                   key={item.id} 
-                  className="flex items-start gap-3 p-3 rounded-lg bg-[#141418] border border-white/5"
+                  className="w-full max-w-[520px] flex items-center gap-3 bg-[#141418] p-3 rounded-xl"
                 >
                   {/* Thumbnail */}
                   <div className="flex-shrink-0">
@@ -381,7 +382,7 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
               );
             })
           ) : (
-            <div className="text-center text-gray-500 py-8">
+            <div className="text-center text-gray-500 py-8 w-full">
               {isWaiting || isActive ? (
                 <div className="flex flex-col items-center gap-2">
                   <Loader2 size={20} className="text-[#d94662] animate-spin" />
@@ -392,6 +393,7 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
               )}
             </div>
           )}
+          </div>
         </div>
 
         {/* Footer Actions */}

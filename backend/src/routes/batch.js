@@ -7,6 +7,8 @@ const batchQueue = require('../queue');
 const redisConnection = require('../utils/redis');
 const path = require('path');
 const fs = require('fs-extra');
+const AdmZip = require('adm-zip');
+const archiver = require('archiver');
 
 const router = express.Router();
 
@@ -242,18 +244,18 @@ router.get('/batch/:jobId/events', async (req, res) => {
 
 /**
  * POST /api/batch/upload-part
- * Worker sends ZIP part binary to API
+ * Worker sends ZIP part binary to API (supports all media formats)
  */
 router.post(
   '/batch/upload-part',
   express.raw({ type: '*/*', limit: '500mb' }),
   (req, res) => {
     try {
-      const jobId = req.headers['x-job-id'];
+      const job = req.headers['x-job-id'];
       const index = req.headers['x-part-index'];
       const size = req.headers['x-part-size'];
 
-      if (!jobId || !index) {
+      if (!job || !index) {
         return res.status(400).json({ error: 'Missing jobId or partIndex' });
       }
 
@@ -263,13 +265,13 @@ router.post(
         return res.status(400).json({ error: 'Empty ZIP part' });
       }
 
-      const dir = `/tmp/batchtube/${jobId}`;
+      const dir = `/tmp/batchtube/${job}`;
       fs.mkdirSync(dir, { recursive: true });
 
-      const file = `${dir}/${jobId}.part${index}.zip`;
-      fs.writeFileSync(file, zipBuffer);
+      const out = `${dir}/${job}.part${index}.zip`;
+      fs.writeFileSync(out, zipBuffer);
 
-      console.log(`[API] Stored part #${index} (${size || zipBuffer.length} bytes)`);
+      console.log(`[API] Saved part #${index} (${size || zipBuffer.length} bytes)`);
 
       return res.json({ success: true });
     } catch (err) {
@@ -281,39 +283,106 @@ router.post(
 
 /**
  * GET /api/batch/:jobId/download
- * Combine all ZIP parts and stream to user
+ * Extract all ZIP parts and create a single valid ZIP file
  */
-router.get('/batch/:jobId/download', (req, res) => {
+router.get('/batch/:jobId/download', async (req, res) => {
   try {
-    const { jobId } = req.params;
+    const jobId = req.params.jobId;
     const dir = `/tmp/batchtube/${jobId}`;
 
     if (!fs.existsSync(dir)) {
       return res.status(404).json({ error: 'ZIP not ready yet' });
     }
 
-    const parts = fs.readdirSync(dir)
-      .filter(f => f.includes('.zip'))
+    // Find all ZIP parts and sort by part number
+    const parts = fs
+      .readdirSync(dir)
+      .filter(f => f.startsWith(jobId) && f.endsWith('.zip'))
       .sort((a, b) => {
-        const ai = parseInt(a.match(/part(\d+)/)?.[1] || 0);
-        const bi = parseInt(b.match(/part(\d+)/)?.[1] || 0);
-        return ai - bi;
+        const pa = parseInt(a.match(/part(\d+)/)?.[1] || 0);
+        const pb = parseInt(b.match(/part(\d+)/)?.[1] || 0);
+        return pa - pb;
       });
 
     if (parts.length === 0) {
       return res.status(404).json({ error: 'ZIP not ready yet' });
     }
 
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="${jobId}.zip"`);
+    console.log(`[API] Merging ${parts.length} ZIP part(s) for job ${jobId}`);
 
-    for (const p of parts) {
-      const data = fs.readFileSync(`${dir}/${p}`);
-      res.write(data);
+    // Create extraction directory
+    const extractDir = `${dir}/extracted`;
+    fs.mkdirSync(extractDir, { recursive: true });
+
+    // Extract all files from each ZIP part
+    for (const part of parts) {
+      const partPath = path.join(dir, part);
+      console.log(`[API] Extracting ${part}...`);
+      
+      try {
+        const zip = new AdmZip(partPath);
+        zip.extractAllTo(extractDir, true); // true = overwrite existing files
+      } catch (extractErr) {
+        console.error(`[API] Failed to extract ${part}:`, extractErr.message);
+        throw new Error(`Failed to extract ZIP part: ${part}`);
+      }
     }
 
-    res.end();
+    console.log(`[API] All parts extracted, creating final ZIP...`);
 
+    // Create final ZIP with all extracted files
+    const finalPath = `${dir}/job-final.zip`;
+    const output = fs.createWriteStream(finalPath);
+    const archive = archiver('zip', { zlib: { level: 9 } });
+
+    archive.pipe(output);
+
+    // Add all extracted files to the final ZIP
+    const files = fs.readdirSync(extractDir);
+    for (const file of files) {
+      const filePath = path.join(extractDir, file);
+      const stats = fs.statSync(filePath);
+      
+      if (stats.isFile()) {
+        archive.file(filePath, { name: file });
+      }
+    }
+
+    // Wait for archive to finalize
+    await new Promise((resolve, reject) => {
+      output.on('close', () => {
+        const finalSize = fs.statSync(finalPath).size;
+        console.log(`[API] Final ZIP created: ${finalPath} (${finalSize} bytes)`);
+        resolve();
+      });
+
+      archive.on('error', (err) => {
+        console.error('[API] Archive creation error:', err);
+        reject(err);
+      });
+
+      archive.finalize();
+    });
+
+    // Set headers and stream the final ZIP
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="batchtube_${jobId}.zip"`);
+
+    const finalStream = fs.createReadStream(finalPath);
+    finalStream.pipe(res);
+
+    finalStream.on('end', () => {
+      console.log(`[API] Final ZIP sent to client`);
+    });
+
+    finalStream.on('error', (err) => {
+      console.error('[API] Stream error:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Failed to stream ZIP' });
+      }
+    });
+
+    // Cleanup after delay
     setTimeout(() => {
       try {
         fs.rmSync(dir, { recursive: true, force: true });
@@ -321,7 +390,7 @@ router.get('/batch/:jobId/download', (req, res) => {
       } catch (cleanupErr) {
         console.error(`[API] Failed to cleanup: ${cleanupErr.message}`);
       }
-    }, 5000);
+    }, 8000);
 
   } catch (error) {
     console.error('[Batch] Download error:', error);
