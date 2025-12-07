@@ -1,11 +1,11 @@
 {
   "name": "batchtube-api",
-  "version": "1.0.0",
-  "type": "module",
+  "version": "2.0.0",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "nodemon --watch src --exec node src/server.js"
+    "worker": "node src/worker.js",
+    "dev": "nodemon --watch src src/server.js"
   },
   "dependencies": {
     "archiver": "^7.0.0",

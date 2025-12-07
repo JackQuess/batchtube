@@ -1,38 +1,35 @@
-import express from 'express';
-import cors from 'cors';
-import routes from './routes/index.js';
-import { startCookieCron } from './jobs/cookieCron.js';
-import { ensureYTDLP } from './core/bootstrapYTDLP.js';
-import './worker.js'; // Start background worker
-
-// Bootstrap yt-dlp before starting server
-ensureYTDLP();
+/**
+ * BatchTube 2.0 - Express Server
+ * Main API server (does NOT run worker)
+ */
+const express = require('express');
+const cors = require('cors');
+const batchRoutes = require('./routes/batch');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3000;
 
-// CORS configuration for Railway production
-const allowedOrigins = [
-  "https://batchtube.net",
-  "https://www.batchtube.net",
-  "http://localhost:5173",
-  "http://localhost:3001"
-];
+// CORS configuration
+const allowedOrigins = process.env.ALLOWED_ORIGIN 
+  ? process.env.ALLOWED_ORIGIN.split(',')
+  : [
+      'https://batchtube.net',
+      'https://www.batchtube.net',
+      'http://localhost:5173',
+      'http://localhost:3000'
+    ];
 
-// Single CORS middleware
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, curl, etc.)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) {
+    if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
       callback(null, true);
     } else {
-      // In production, allow all origins for Railway flexibility
-      callback(null, true);
+      callback(null, true); // Allow all in production for flexibility
     }
   },
-  methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: false
 }));
 
@@ -43,16 +40,27 @@ app.options('*', (req, res) => {
 
 app.use(express.json());
 
-// Mount routes
-app.use('/api', routes);
+// Health check
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', service: 'batchtube-api' });
+});
 
-// Start cookie refresh cron job
-startCookieCron();
+// Batch routes
+app.use('/api', batchRoutes);
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`[Server] Backend running on port ${PORT}`);
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
+
+// Error handler
+app.use((err, req, res, next) => {
+  console.error('[Server] Error:', err);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`[Server] BatchTube API running on port ${PORT}`);
   console.log(`[Server] Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`[Server] Listening on 0.0.0.0:${PORT} (Railway compatible)`);
 });
-
-

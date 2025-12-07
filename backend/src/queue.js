@@ -2,35 +2,11 @@
  * BatchTube 2.0 - Queue System
  * BullMQ queue configuration for batch downloads
  */
-import { Queue } from 'bullmq';
-import IORedis from 'ioredis';
-
-// Redis connection configuration
-let redisConnection;
-
-if (process.env.REDIS_URL) {
-  // Parse REDIS_URL (Railway format: redis://:password@host:port)
-  const url = new URL(process.env.REDIS_URL);
-  redisConnection = new IORedis({
-    host: url.hostname,
-    port: parseInt(url.port) || 6379,
-    password: url.password || undefined,
-    maxRetriesPerRequest: null,
-    enableReadyCheck: false,
-  });
-} else {
-  // Local development
-  redisConnection = new IORedis({
-    host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT || '6379'),
-    password: process.env.REDIS_PASSWORD,
-    maxRetriesPerRequest: null,
-    enableReadyCheck: false,
-  });
-}
+const { Queue } = require('bullmq');
+const redisConnection = require('./utils/redis');
 
 // Create batch download queue
-export const batchQueue = new Queue('batch-downloads', {
+const batchQueue = new Queue('batch-downloads', {
   connection: redisConnection,
   defaultJobOptions: {
     attempts: 3,
@@ -69,5 +45,4 @@ batchQueue.on('failed', (job, err) => {
   console.error(`[Queue] Job ${job?.id} failed:`, err.message);
 });
 
-export default batchQueue;
-
+module.exports = batchQueue;

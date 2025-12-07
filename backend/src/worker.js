@@ -1,54 +1,21 @@
 /**
  * BatchTube 2.0 - Background Worker
  * Processes batch download jobs from the queue
+ * 
+ * Run separately: node backend/src/worker.js
  */
-import { Worker } from 'bullmq';
-import IORedis from 'ioredis';
-import { downloadWithYtDlp } from './core/ytService.js';
-import path from 'path';
-import fs from 'fs-extra';
-import archiver from 'archiver';
-import os from 'os';
-import pLimit from 'p-limit';
-
-// Redis connection (same as queue.js)
-let redisConnection;
-
-if (process.env.REDIS_URL) {
-  // Parse REDIS_URL (Railway format: redis://:password@host:port)
-  const url = new URL(process.env.REDIS_URL);
-  redisConnection = new IORedis({
-    host: url.hostname,
-    port: parseInt(url.port) || 6379,
-    password: url.password || undefined,
-    maxRetriesPerRequest: null,
-    enableReadyCheck: false,
-  });
-} else {
-  // Local development
-  redisConnection = new IORedis({
-    host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT || '6379'),
-    password: process.env.REDIS_PASSWORD,
-    maxRetriesPerRequest: null,
-    enableReadyCheck: false,
-  });
-}
+const { Worker } = require('bullmq');
+const redisConnection = require('./utils/redis');
+const { downloadWithYtDlp } = require('./utils/ytService');
+const { createZip } = require('./utils/zip');
+const { sanitizeFilename } = require('./utils/helpers');
+const path = require('path');
+const fs = require('fs-extra');
+const os = require('os');
+const pLimit = require('p-limit');
 
 // Concurrency limit
 const limit = pLimit(3);
-
-/**
- * Sanitize filename
- */
-function sanitizeFilename(name) {
-  return name
-    .replace(/[<>:"/\\|?*]/g, '_')
-    .replace(/\s+/g, '_')
-    .replace(/_{2,}/g, '_')
-    .substring(0, 200)
-    .trim() || 'video';
-}
 
 /**
  * Download a single video item
@@ -164,41 +131,6 @@ async function downloadItem(item, tempDir, job, onProgress) {
 }
 
 /**
- * Create ZIP archive
- */
-async function createZip(tempDir, files, zipPath) {
-  return new Promise((resolve, reject) => {
-    const output = fs.createWriteStream(zipPath);
-    const archive = archiver('zip', { zlib: { level: 9 } });
-
-    output.on('close', () => {
-      const zipSize = archive.pointer();
-      if (zipSize < 100) {
-        reject(new Error('ZIP file is too small'));
-        return;
-      }
-      console.log(`[Worker] ZIP created: ${zipPath} (${zipSize} bytes)`);
-      resolve(zipSize);
-    });
-
-    archive.on('error', (err) => {
-      console.error('[Worker] ZIP creation error:', err);
-      reject(err);
-    });
-
-    archive.pipe(output);
-
-    files.forEach(file => {
-      if (fs.existsSync(file.filePath)) {
-        archive.file(file.filePath, { name: file.fileName });
-      }
-    });
-
-    archive.finalize();
-  });
-}
-
-/**
  * Worker process
  */
 const worker = new Worker(
@@ -254,7 +186,7 @@ const worker = new Worker(
 
     // Create ZIP
     const zipPath = path.join(tempDir, `${jobId}.zip`);
-    await createZip(tempDir, successful, zipPath);
+    await createZip(zipPath, successful);
 
     // Return job result
     return {
@@ -297,5 +229,15 @@ worker.on('error', (err) => {
 
 console.log('[Worker] Batch download worker started');
 
-export default worker;
+// Keep process alive
+process.on('SIGTERM', async () => {
+  console.log('[Worker] SIGTERM received, closing worker...');
+  await worker.close();
+  process.exit(0);
+});
 
+process.on('SIGINT', async () => {
+  console.log('[Worker] SIGINT received, closing worker...');
+  await worker.close();
+  process.exit(0);
+});

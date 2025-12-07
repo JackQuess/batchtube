@@ -1,14 +1,13 @@
 /**
  * BatchTube 2.0 - Batch Download Routes
- * Clean API design with queue-based processing
+ * Clean REST API for queue-based batch processing
  */
-import { Router } from 'express';
-import { batchQueue } from '../queue.js';
-import path from 'path';
-import fs from 'fs-extra';
-import os from 'os';
+const express = require('express');
+const batchQueue = require('../queue');
+const path = require('path');
+const fs = require('fs-extra');
 
-const router = Router();
+const router = express.Router();
 
 /**
  * POST /api/batch
@@ -216,4 +215,4 @@ router.get('/batch/:jobId/download', async (req, res) => {
   }
 });
 
-export default router;
+module.exports = router;

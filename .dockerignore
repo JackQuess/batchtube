@@ -1,0 +1,16 @@
+node_modules
+frontend
+.git
+.gitignore
+*.md
+.env
+.env.local
+.DS_Store
+backend/node_modules
+backend/bin
+backend/.cache
+backend/dist
+*.log
+.vscode
+.idea
+
