@@ -31,19 +31,19 @@ export const Hero: React.FC<HeroProps> = ({ onSearch, loading, t }) => {
   };
 
   return (
-    <div className="w-full flex flex-col items-center justify-center py-12 sm:py-16 md:py-20 px-4 text-center space-y-6 sm:space-y-8 animate-fadeIn">
-      <div className="space-y-3 sm:space-y-4 max-w-2xl w-full">
-        <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-black text-white tracking-tight leading-tight px-2">
+    <div className="w-full flex flex-col items-center justify-center py-8 sm:py-12 md:py-16 text-center gap-3 sm:gap-4 animate-fadeIn">
+      <div className="space-y-3 sm:space-y-4 max-w-2xl w-full px-2">
+        <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-white tracking-tight leading-tight">
           {t.heroTitle.split('.')[0]}. <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">{t.heroTitle.split('.')[1] || 'Free.'}</span>
         </h1>
-        <p className="text-sm sm:text-base md:text-lg text-gray-400 font-light px-2">
+        <p className="text-sm sm:text-base text-neutral-400 font-light max-w-md mx-auto">
           {t.heroSubtitle}
         </p>
       </div>
 
-      <div className="w-full max-w-[600px] mx-auto px-4 relative group z-10">
+      <div className="w-full max-w-[600px] mx-auto px-3 sm:px-4 relative group z-10">
         <div className="absolute -inset-1 bg-gradient-to-r from-primary to-secondary rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000"></div>
-        <form onSubmit={handleSubmit} className="relative flex flex-col sm:flex-row items-stretch sm:items-center bg-[#0b0b10] rounded-2xl p-2 border border-white/10 shadow-2xl gap-2 sm:gap-0">
+        <form onSubmit={handleSubmit} className="relative flex flex-col sm:flex-row items-stretch sm:items-center bg-[#0b0b10] rounded-2xl p-2 sm:p-2.5 border border-white/10 shadow-2xl gap-2 sm:gap-0">
           <div className="flex items-center flex-1">
             <Search className="text-gray-500 ml-2 sm:ml-4 flex-shrink-0" size={20} />
             
@@ -52,7 +52,7 @@ export const Hero: React.FC<HeroProps> = ({ onSearch, loading, t }) => {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t.searchPlaceholder}
-              className="flex-1 bg-transparent border-none outline-none text-white px-2 sm:px-4 py-2 sm:py-3 placeholder:text-gray-600 text-sm sm:text-base sm:text-lg"
+              className="flex-1 w-full bg-transparent border-none outline-none text-white px-2 sm:px-4 py-2 sm:py-3 placeholder:text-gray-600 text-sm sm:text-base"
             />
           </div>
 
@@ -70,7 +70,7 @@ export const Hero: React.FC<HeroProps> = ({ onSearch, loading, t }) => {
             <button 
               type="submit" 
               disabled={loading}
-              className="w-full sm:w-auto bg-primary hover:bg-red-600 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-xl font-bold text-sm sm:text-base transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center min-w-[100px] sm:min-w-[100px]"
+              className="w-full sm:w-auto bg-primary hover:bg-red-600 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-bold text-sm sm:text-base transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center min-w-[100px]"
             >
               {loading ? <Loader2 className="animate-spin" size={18} /> : t.searchButton}
             </button>

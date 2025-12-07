@@ -148,8 +148,7 @@ export const SelectionBar: React.FC<SelectionBarProps> = ({
           className="bg-primary hover:bg-red-600 text-white px-3 md:px-5 py-1.5 md:py-2 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-1.5 md:gap-2 shadow-lg shadow-primary/20 transition-all active:scale-95"
         >
           <Archive size={14} className="md:w-4 md:h-4" />
-          <span className="hidden sm:inline">{t.downloadZip}</span>
-          <span className="sm:hidden">ZIP</span>
+          {t.downloadZip}
         </button>
       </div>
 

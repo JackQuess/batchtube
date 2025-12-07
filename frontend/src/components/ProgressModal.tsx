@@ -188,16 +188,16 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
         : (typeof status?.progress === 'number' ? status.progress : 0));
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-2 sm:p-4 animate-fadeIn">
-      <div className="w-full max-w-[640px] bg-[#141418] border border-white/10 rounded-xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] sm:max-h-[85vh]">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm px-3 sm:px-4 animate-fadeIn">
+      <div className="w-full max-w-[640px] bg-[#101014] border border-white/5 rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh] sm:max-h-[85vh]">
         
         {/* Header */}
-        <div className="p-4 sm:p-6 border-b border-white/5 bg-[#0e0e11]">
-          <div className="flex items-center justify-between mb-3 sm:mb-4">
-            <h2 className="text-base sm:text-lg md:text-xl font-bold text-white flex items-center gap-1.5 sm:gap-2">
-              {isCompleted ? <CheckCircle className="text-green-500" size={20} /> : 
-               isFailed ? <AlertCircle className="text-red-500" size={20} /> : 
-               <Loader2 className="animate-spin text-[#d94662]" size={20} />}
+        <div className="px-4 py-4 sm:px-6 sm:py-5 border-b border-white/5 bg-[#0e0e11]">
+          <div className="flex items-center justify-between gap-3 mb-3 sm:mb-4">
+            <h2 className="text-base sm:text-lg font-semibold text-white flex items-center gap-1.5 sm:gap-2 min-w-0">
+              {isCompleted ? <CheckCircle className="text-green-500 flex-shrink-0" size={20} /> : 
+               isFailed ? <AlertCircle className="text-red-500 flex-shrink-0" size={20} /> : 
+               <Loader2 className="animate-spin text-[#d94662] flex-shrink-0" size={20} />}
               
               <span className="truncate">
                 {isCompleted ? 'Batch Completed' : 
@@ -225,7 +225,7 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
                 {overallProgress}%
               </span>
             </div>
-            <div className="h-2 sm:h-3 bg-gray-800 rounded-full overflow-hidden">
+            <div className="w-full h-2 rounded-full bg-white/10 overflow-hidden">
               <div 
                 className={`h-full transition-all duration-300 ${
                   isCompleted ? 'bg-green-500' : 
@@ -239,8 +239,8 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
         </div>
 
         {/* Results List with Per-Item Progress Bars */}
-        <div className="flex-1 overflow-y-auto bg-[#0e0e11]">
-          <div className="flex flex-col items-center justify-center w-full gap-3 px-4 py-4">
+        <div className="flex-1 overflow-y-auto bg-[#0e0e11] max-h-[50vh]">
+          <div className="flex flex-col items-center justify-center w-full gap-2 sm:gap-3 px-3 sm:px-4 py-3 sm:py-4">
             {/* Show items from itemProgress during download, or from result when completed */}
             {(isActive || isWaiting) && Object.keys(itemProgress).length > 0 ? (
               // Show downloading items with live progress
@@ -254,45 +254,37 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
                   return (
                     <div 
                       key={index} 
-                      className="w-full max-w-[520px] flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 bg-[#141418] p-2 sm:p-3 rounded-lg sm:rounded-xl"
+                      className="w-full max-w-[520px] flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 bg-[#141418] p-3 rounded-xl"
                     >
                     {/* Thumbnail */}
-                    <div className="flex-shrink-0 flex items-center gap-2 sm:block">
+                    <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-md overflow-hidden">
                       <img 
                         src={item.thumbnail || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="48" height="48"%3E%3Crect fill="%23111" width="48" height="48"/%3E%3Ctext fill="%23999" font-size="10" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3E%3F%3C/text%3E%3C/svg%3E'} 
                         alt={item.title}
-                        className="w-10 h-10 sm:w-12 sm:h-12 rounded object-cover"
+                        className="w-full h-full object-cover"
                         onError={(e) => {
                           const target = e.target as HTMLImageElement;
                           target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="48" height="48"%3E%3Crect fill="%23111" width="48" height="48"/%3E%3Ctext fill="%23999" font-size="10" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3E%3F%3C/text%3E%3C/svg%3E';
                         }}
                       />
-                      {/* Mobile Status Icon */}
-                      <div className="sm:hidden flex-shrink-0">
-                        {isItemDownloading ? (
-                          <Loader2 className="text-[#d94662] animate-spin" size={14} />
-                        ) : item.percent >= 100 ? (
-                          <CheckCircle className="text-green-500" size={14} />
-                        ) : null}
-                      </div>
                     </div>
                     
                     {/* Content with Progress Bar */}
                     <div className="flex-1 min-w-0 w-full sm:w-auto">
                       {/* Title */}
-                      <div className="flex items-start sm:items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
-                        <div className="flex-shrink-0 hidden sm:block">
+                      <div className="flex items-center gap-1.5 sm:gap-2 mb-1 sm:mb-2">
+                        <div className="flex-shrink-0">
                           {isItemDownloading ? (
                             <Loader2 className="text-[#d94662] animate-spin" size={14} />
                           ) : item.percent >= 100 ? (
                             <CheckCircle className="text-green-500" size={14} />
                           ) : null}
                         </div>
-                        <div className="text-xs sm:text-sm font-medium text-gray-200 line-clamp-2 sm:truncate flex-1 min-w-0">
+                        <div className="text-xs sm:text-sm font-medium text-gray-200 truncate flex-1 min-w-0">
                           {item.title}
                         </div>
                         {isItemDownloading && (
-                          <span className="text-[10px] sm:text-xs text-gray-400 font-mono flex-shrink-0">
+                          <span className="text-[11px] sm:text-xs text-gray-400 font-mono flex-shrink-0">
                             {item.percent}%
                           </span>
                         )}
@@ -300,7 +292,7 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
                       
                       {/* Progress Bar */}
                       {isItemDownloading && (
-                        <div className="w-full bg-neutral-800 rounded-full h-1.5 sm:h-2 overflow-hidden">
+                        <div className="w-full mt-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
                           <div
                             className="bg-[#d94662] h-full transition-all duration-300"
                             style={{ width: `${item.percent}%` }}
@@ -310,17 +302,17 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
                     </div>
                     
                     {/* Status Badge */}
-                    <div className="flex-shrink-0 hidden sm:block">
+                    <div className="flex-shrink-0 self-start sm:self-center">
                       {isItemDownloading ? (
-                        <span className="text-xs font-bold px-2 py-1 rounded bg-gray-500/20 text-gray-400">
+                        <span className="text-[11px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-gray-500/20 text-gray-400">
                           Downloading
                         </span>
                       ) : item.percent >= 100 ? (
-                        <span className="text-xs font-bold px-2 py-1 rounded bg-green-500/20 text-green-400">
+                        <span className="text-[11px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-green-500/20 text-green-400">
                           Success
                         </span>
                       ) : (
-                        <span className="text-xs font-bold px-2 py-1 rounded bg-gray-500/20 text-gray-400">
+                        <span className="text-[11px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-gray-500/20 text-gray-400">
                           Waiting
                         </span>
                       )}
@@ -340,58 +332,50 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
               return (
                 <div 
                   key={item.id} 
-                  className="w-full max-w-[520px] flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 bg-[#141418] p-2 sm:p-3 rounded-lg sm:rounded-xl"
+                  className="w-full max-w-[520px] flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 bg-[#141418] p-3 rounded-xl"
                 >
                   {/* Thumbnail */}
-                  <div className="flex-shrink-0 flex items-center gap-2 sm:block">
+                  <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-md overflow-hidden">
                     <img 
                       src={item.thumbnail || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="48" height="48"%3E%3Crect fill="%23111" width="48" height="48"/%3E%3Ctext fill="%23999" font-size="10" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3E%3F%3C/text%3E%3C/svg%3E'} 
                       alt={item.title}
-                      className="w-10 h-10 sm:w-12 sm:h-12 rounded object-cover"
+                      className="w-full h-full object-cover"
                       onError={(e) => {
                         const target = e.target as HTMLImageElement;
                         target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="48" height="48"%3E%3Crect fill="%23111" width="48" height="48"/%3E%3Ctext fill="%23999" font-size="10" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3E%3F%3C/text%3E%3C/svg%3E';
                       }}
                     />
-                    {/* Mobile Status Icon */}
-                    <div className="sm:hidden flex-shrink-0">
-                      {isItemCompleted ? (
-                        <CheckCircle className="text-green-500" size={14} />
-                      ) : isItemFailed ? (
-                        <AlertCircle className="text-red-500" size={14} />
-                      ) : null}
-                    </div>
                   </div>
                   
                   {/* Content */}
                   <div className="flex-1 min-w-0 w-full sm:w-auto">
-                    <div className="flex items-start sm:items-center gap-1.5 sm:gap-2 mb-1 sm:mb-2">
-                      <div className="flex-shrink-0 hidden sm:block">
+                    <div className="flex items-center gap-1.5 sm:gap-2 mb-1 sm:mb-2">
+                      <div className="flex-shrink-0">
                         {isItemCompleted ? (
                           <CheckCircle className="text-green-500" size={14} />
                         ) : isItemFailed ? (
                           <AlertCircle className="text-red-500" size={14} />
                         ) : null}
                       </div>
-                      <div className="text-xs sm:text-sm font-medium text-gray-200 line-clamp-2 sm:truncate flex-1 min-w-0">
+                      <div className="text-xs sm:text-sm font-medium text-gray-200 truncate flex-1 min-w-0">
                         {displayName}
                       </div>
                     </div>
                     
                     {/* Error Message */}
                     {isItemFailed && resultItem?.error && (
-                      <div className="text-[10px] sm:text-xs text-red-400 mt-1 line-clamp-2">{resultItem.error}</div>
+                      <div className="text-[11px] sm:text-xs text-red-400 mt-1 line-clamp-2">{resultItem.error}</div>
                     )}
                   </div>
                   
                   {/* Status Badge */}
-                  <div className="flex-shrink-0 hidden sm:block">
+                  <div className="flex-shrink-0 self-start sm:self-center">
                     {isItemCompleted ? (
-                      <span className="text-xs font-bold px-2 py-1 rounded bg-green-500/20 text-green-400">
+                      <span className="text-[11px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-green-500/20 text-green-400">
                         Success
                       </span>
                     ) : isItemFailed ? (
-                      <span className="text-xs font-bold px-2 py-1 rounded bg-red-500/20 text-red-400">
+                      <span className="text-[11px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-red-500/20 text-red-400">
                         Failed
                       </span>
                     ) : null}
@@ -404,10 +388,10 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
               {isWaiting || isActive ? (
                 <div className="flex flex-col items-center gap-2">
                   <Loader2 size={20} className="text-[#d94662] animate-spin" />
-                  <span>{isWaiting ? 'Waiting in queue...' : 'Preparing download...'}</span>
+                  <span className="text-xs sm:text-sm text-neutral-400">{isWaiting ? 'Waiting in queue...' : 'Preparing download...'}</span>
                 </div>
               ) : (
-                <span>No results available</span>
+                <span className="text-xs sm:text-sm">No results available</span>
               )}
             </div>
           )}
@@ -415,10 +399,10 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="p-3 sm:p-4 border-t border-white/5 bg-[#0e0e11] flex flex-col sm:flex-row gap-2 sm:gap-3">
+        <div className="px-4 py-4 sm:px-6 sm:py-5 border-t border-white/5 bg-[#0e0e11] flex flex-col sm:flex-row gap-3">
           <button 
             onClick={onClose}
-            className="flex-1 py-2 sm:py-3 rounded-lg sm:rounded-xl font-medium text-sm sm:text-base text-gray-400 hover:bg-white/5 hover:text-white transition-colors"
+            className="w-full sm:flex-1 py-2.5 sm:py-3 rounded-xl font-medium text-sm sm:text-base text-gray-400 hover:bg-white/5 hover:text-white transition-colors"
           >
             Close
           </button>
@@ -426,27 +410,25 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
           {isCompleted ? (
             <button 
               onClick={handleDownload}
-              className="flex-1 py-2 sm:py-3 bg-green-600 hover:bg-green-500 text-white rounded-lg sm:rounded-xl font-bold text-sm sm:text-base shadow-lg shadow-green-900/20 flex items-center justify-center gap-1.5 sm:gap-2 transition-colors"
+              className="w-full sm:flex-1 py-2.5 sm:py-3 bg-green-600 hover:bg-green-500 text-white rounded-xl font-bold text-sm sm:text-base shadow-lg shadow-green-900/20 flex items-center justify-center gap-2 transition-colors"
             >
               <DownloadCloud size={16} className="sm:w-[18px] sm:h-[18px]" />
-              <span className="hidden sm:inline">Download ZIP</span>
-              <span className="sm:hidden">Download</span>
+              Download ZIP
             </button>
           ) : isFailed ? (
             <button 
               onClick={onClose}
-              className="flex-1 py-2 sm:py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg sm:rounded-xl font-bold text-sm sm:text-base transition-colors"
+              className="w-full sm:flex-1 py-2.5 sm:py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-xl font-bold text-sm sm:text-base transition-colors"
             >
               Close
             </button>
           ) : (
             <button 
               disabled
-              className="flex-1 py-2 sm:py-3 bg-gray-700 text-gray-400 rounded-lg sm:rounded-xl font-bold text-sm sm:text-base cursor-not-allowed flex items-center justify-center gap-1.5 sm:gap-2"
+              className="w-full sm:flex-1 py-2.5 sm:py-3 bg-gray-700 text-gray-400 rounded-xl font-bold text-sm sm:text-base cursor-not-allowed flex items-center justify-center gap-2"
             >
               <Loader2 size={16} className="sm:w-[18px] sm:h-[18px] animate-spin" />
-              <span className="hidden sm:inline">{isActive ? 'Downloading...' : 'Waiting...'}</span>
-              <span className="sm:hidden">{isActive ? 'Downloading' : 'Waiting'}</span>
+              {isActive ? 'Downloading...' : 'Waiting...'}
             </button>
           )}
         </div>

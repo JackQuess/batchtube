@@ -39,17 +39,17 @@ export const SelectionModal: React.FC<SelectionModalProps> = ({
 
   return (
     <div 
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-sm p-2 sm:p-4 animate-fadeIn"
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-sm px-3 sm:px-4 animate-fadeIn"
       onClick={onClose}
     >
       <div 
-        className="w-full max-w-[640px] bg-[#0b0b10] border border-white/10 rounded-xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] sm:max-h-[85vh] animate-slideUp"
+        className="w-full max-w-[640px] bg-[#0b0b10] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] sm:max-h-[85vh] animate-slideUp"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-4 sm:p-6 border-b border-white/5 bg-[#0b0b10] flex items-center justify-between">
+        <div className="px-4 py-4 sm:px-6 sm:py-5 border-b border-white/5 bg-[#0b0b10] flex items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <h2 className="text-base sm:text-lg md:text-xl font-bold text-white mb-0.5 sm:mb-1 truncate">
+            <h2 className="text-base sm:text-lg font-semibold text-white mb-0.5 sm:mb-1">
               {t.viewList || 'View List'}
             </h2>
             <p className="text-xs sm:text-sm text-gray-400">
@@ -58,14 +58,14 @@ export const SelectionModal: React.FC<SelectionModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 sm:p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors flex-shrink-0 ml-2"
+            className="p-1.5 sm:p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors flex-shrink-0"
           >
             <X size={20} className="sm:w-6 sm:h-6" />
           </button>
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto bg-[#050509]">
+        <div className="flex-1 overflow-y-auto bg-[#050509] max-h-[50vh]">
           <div className="flex flex-col items-center justify-center w-full gap-2 sm:gap-3 px-3 sm:px-4 py-3 sm:py-4">
             {items.length === 0 ? (
               <div className="text-center text-gray-500 py-12 w-full">
@@ -75,7 +75,7 @@ export const SelectionModal: React.FC<SelectionModalProps> = ({
               items.map((item, index) => (
                 <div
                   key={`${item.video.id}-${index}`}
-                  className="w-full max-w-[520px] flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 md:gap-4 p-3 sm:p-4 rounded-lg sm:rounded-xl bg-[#0b0b10] border border-white/5 hover:border-white/10 transition-colors"
+                  className="w-full max-w-[520px] flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl bg-[#0b0b10] border border-white/5 hover:border-white/10 transition-colors"
                 >
                 {/* Thumbnail */}
                 <div className="relative flex-shrink-0 w-full sm:w-20 md:w-24 h-16 rounded-lg overflow-hidden bg-[#1a1a20]">
@@ -95,7 +95,7 @@ export const SelectionModal: React.FC<SelectionModalProps> = ({
                   <h3 className="text-white font-medium text-xs sm:text-sm mb-1 line-clamp-2 sm:truncate" title={item.video.title}>
                     {item.video.title}
                   </h3>
-                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 md:gap-3 text-[10px] sm:text-xs text-gray-400">
+                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 md:gap-3 text-[11px] sm:text-xs text-gray-400">
                     <span className="truncate">{item.video.channel || 'Unknown Channel'}</span>
                     {item.video.duration && (
                       <>

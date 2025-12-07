@@ -95,31 +95,35 @@ export const VideoCard: React.FC<VideoCardProps> = ({
       `}
     >
       {/* Thumbnail */}
-      <div className="relative aspect-video w-full">
-        <img 
-          src={getThumbnailUrl()} 
-          alt={video.title} 
-          className="w-full h-full object-cover"
-          onError={handleThumbnailError}
-        />
-        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none sm:pointer-events-auto">
-          <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-transform duration-300 ${isSelected ? 'bg-primary scale-110' : 'bg-white/10 scale-90'}`}>
-            {isSelected ? <CheckCircle className="text-white" size={20} /> : <Play className="text-white fill-white" size={20} />}
+      <div className="relative w-full overflow-hidden rounded-t-xl">
+        <div className="relative pt-[56.25%]">
+          <img 
+            src={getThumbnailUrl()} 
+            alt={video.title} 
+            className="absolute inset-0 w-full h-full object-cover"
+            onError={handleThumbnailError}
+          />
+          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none sm:pointer-events-auto">
+            <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-transform duration-300 ${isSelected ? 'bg-primary scale-110' : 'bg-white/10 scale-90'}`}>
+              {isSelected ? <CheckCircle className="text-white" size={20} /> : <Play className="text-white fill-white" size={20} />}
+            </div>
           </div>
+          {formattedDuration && (
+            <span className="absolute bottom-2 right-2 bg-black/80 text-white text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded font-mono">
+              {formattedDuration}
+            </span>
+          )}
         </div>
-        {formattedDuration && (
-          <span className="absolute bottom-2 right-2 bg-black/80 text-white text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded font-mono">
-            {formattedDuration}
-          </span>
-        )}
       </div>
 
       {/* Content */}
-      <div className="p-3 sm:p-4 flex flex-col flex-grow">
-        <h3 className="text-white font-medium line-clamp-2 leading-snug mb-1 text-xs sm:text-sm" title={video.title}>
+      <div className="p-3 sm:p-4 flex flex-col flex-grow gap-2">
+        <h3 className="text-white font-medium text-sm sm:text-base line-clamp-2 leading-snug" title={video.title}>
           {video.title}
         </h3>
-        <p className="text-gray-500 text-[10px] sm:text-xs mb-2 sm:mb-3 truncate">{video.channel || 'Unknown Channel'}</p>
+        <div className="flex flex-wrap items-center gap-1 text-xs sm:text-[13px] text-gray-500">
+          <span className="truncate">{video.channel || 'Unknown Channel'}</span>
+        </div>
         
         <div className="mt-auto flex items-center justify-between pt-2 sm:pt-3 border-t border-white/5">
           <span className={`text-[10px] sm:text-xs font-bold transition-colors ${isSelected ? 'text-primary' : 'text-gray-600'}`}>

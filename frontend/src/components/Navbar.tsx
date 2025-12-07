@@ -23,7 +23,7 @@ export const Navbar: React.FC<NavbarProps> = ({ lang, setLang }) => {
   const [showLangMenu, setShowLangMenu] = useState(false);
 
   return (
-    <nav className="fixed top-0 inset-x-0 h-16 bg-[#050509]/80 backdrop-blur-md border-b border-white/5 z-50 flex items-center justify-between px-3 sm:px-4 lg:px-8 flex-wrap sm:flex-nowrap gap-2 sm:gap-0">
+    <nav className="fixed top-0 inset-x-0 h-14 sm:h-16 bg-[#050509]/80 backdrop-blur-md border-b border-white/5 z-50 flex items-center justify-between px-4 flex-wrap sm:flex-nowrap gap-2 sm:gap-0">
       {/* Logo - Centered on mobile */}
       <div className="flex items-center gap-2 cursor-pointer mx-auto sm:mx-0" onClick={() => window.location.reload()}>
         <div className="w-7 h-7 sm:w-8 sm:h-8 bg-primary rounded-lg flex items-center justify-center relative overflow-hidden group">
@@ -34,14 +34,14 @@ export const Navbar: React.FC<NavbarProps> = ({ lang, setLang }) => {
       </div>
 
       {/* Right Actions */}
-      <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto justify-center sm:justify-end">
+      <div className="flex items-center gap-2 sm:gap-3 md:gap-4 w-full sm:w-auto justify-center sm:justify-end">
         {/* Language Pill - Desktop */}
-        <div className="hidden sm:flex bg-[#0b0b10] border border-white/10 rounded-full p-1 gap-1">
+        <div className="hidden sm:flex bg-[#0b0b10] border border-white/10 rounded-full p-1 gap-1 overflow-x-auto">
           {LANGUAGES.map((l) => (
             <button
               key={l.code}
               onClick={() => setLang(l.code)}
-              className={`px-2 py-1 text-xs font-bold rounded-full transition-all ${
+              className={`px-2 py-1 text-xs font-bold rounded-full transition-all whitespace-nowrap ${
                 lang === l.code 
                   ? 'bg-primary text-white shadow-lg shadow-primary/20' 
                   : 'text-gray-500 hover:text-gray-300'
@@ -56,7 +56,7 @@ export const Navbar: React.FC<NavbarProps> = ({ lang, setLang }) => {
         <div className="relative sm:hidden">
           <button 
             onClick={() => setShowLangMenu(!showLangMenu)}
-            className="p-2 text-gray-400 hover:text-white transition-colors"
+            className="p-1.5 text-gray-400 hover:text-white transition-colors"
           >
             <Globe size={18} />
           </button>

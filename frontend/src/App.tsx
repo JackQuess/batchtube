@@ -119,14 +119,14 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#050509] text-white font-sans selection:bg-primary/30">
+    <div className="min-h-screen flex flex-col bg-[#050509] text-white font-sans selection:bg-primary/30 overflow-x-hidden">
       
       <Navbar lang={lang} setLang={setLang} />
       
-      <main className="flex-grow pt-16 sm:pt-20 pb-24 w-full max-w-[1200px] mx-auto px-4">
+      <main className="flex-grow pt-16 sm:pt-20 pb-20 sm:pb-24 w-full max-w-[1200px] mx-auto px-3 sm:px-4 md:px-6 lg:px-8">
         <Hero onSearch={handleSearch} loading={isSearching} t={t} />
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-5 md:gap-6 animate-fadeIn">
+        <div className="grid gap-4 sm:gap-5 md:gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 animate-fadeIn">
           {results.map(video => (
             <VideoCard
               key={video.id}

@@ -3,9 +3,14 @@
 @tailwind utilities;
 
 /* Base styles */
+html, body {
+  min-height: 100%;
+  background-color: #050509;
+  overflow-x: hidden;
+}
+
 body {
   font-family: 'Inter', sans-serif;
-  background-color: #050509;
   color: #f9fafb;
   margin: 0;
   padding: 0;
