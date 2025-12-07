@@ -241,47 +241,31 @@ router.get('/batch/:jobId/events', async (req, res) => {
 
 /**
  * GET /api/batch/:jobId/download
- * Download the ZIP file
+ * Download the ZIP file from /tmp
  */
 router.get('/batch/:jobId/download', async (req, res) => {
   try {
-    if (!batchQueue) {
-      return res.status(503).json({ 
-        error: 'Queue system unavailable. Redis connection required.' 
-      });
-    }
-
     const { jobId } = req.params;
 
-    const job = await batchQueue.getJob(jobId);
-
-    if (!job) {
-      return res.status(404).json({ 
-        error: 'Job not found' 
-      });
+    // Check if job exists and is completed
+    if (batchQueue) {
+      const job = await batchQueue.getJob(jobId);
+      if (job) {
+        const state = await job.getState();
+        if (state !== 'completed') {
+          return res.status(400).json({ 
+            error: 'Job is not completed yet' 
+          });
+        }
+      }
     }
 
-    const state = await job.getState();
+    // ZIP file is stored in /tmp by worker
+    const filePath = path.join('/tmp', `${jobId}.zip`);
 
-    if (state !== 'completed') {
-      return res.status(400).json({ 
-        error: 'Job is not completed yet' 
-      });
-    }
-
-    const returnValue = job.returnvalue;
-
-    if (!returnValue || !returnValue.zipPath) {
+    if (!fs.existsSync(filePath)) {
       return res.status(404).json({ 
-        error: 'ZIP file not found' 
-      });
-    }
-
-    const zipPath = returnValue.zipPath;
-
-    if (!fs.existsSync(zipPath)) {
-      return res.status(404).json({ 
-        error: 'ZIP file not found on disk' 
+        error: 'ZIP not ready yet' 
       });
     }
 
@@ -291,29 +275,21 @@ router.get('/batch/:jobId/download', async (req, res) => {
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${zipName}"`);
 
-    // Stream file
-    const fileStream = fs.createReadStream(zipPath);
-    fileStream.pipe(res);
-
-    fileStream.on('end', async () => {
-      // Cleanup after streaming
-      try {
-        const tempDir = path.dirname(zipPath);
-        await fs.remove(tempDir);
-        console.log(`[Batch] Cleaned up temp directory: ${tempDir}`);
-      } catch (err) {
-        console.error(`[Batch] Error cleaning up: ${err.message}`);
-      }
-    });
-
-    fileStream.on('error', (err) => {
-      console.error(`[Batch] Stream error: ${err}`);
-      if (!res.headersSent) {
-        res.status(500).json({ 
-          error: 'Error streaming file' 
-        });
+    // Send file and delete after download
+    res.download(filePath, zipName, (err) => {
+      if (err) {
+        console.error(`[Batch] Download error:`, err);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Download failed' });
+        }
       } else {
-        res.end();
+        // Cleanup after successful download
+        try {
+          fs.unlinkSync(filePath);
+          console.log(`[Batch] ZIP removed after download: ${filePath}`);
+        } catch (cleanupErr) {
+          console.error(`[Batch] Failed to cleanup ZIP: ${cleanupErr.message}`);
+        }
       }
     });
 
@@ -323,8 +299,6 @@ router.get('/batch/:jobId/download', async (req, res) => {
       res.status(500).json({ 
         error: 'Download failed' 
       });
-    } else {
-      res.end();
     }
   }
 });

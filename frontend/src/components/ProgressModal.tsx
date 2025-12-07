@@ -4,6 +4,7 @@
  */
 import React, { useEffect, useState } from 'react';
 import { batchAPI, BatchJobStatus } from '../services/batchAPI';
+import { API_BASE_URL } from '../config/api';
 import { CheckCircle, AlertCircle, Loader2, DownloadCloud, X } from 'lucide-react';
 
 interface ProgressModalProps {
@@ -147,8 +148,8 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
   }, [jobId, isPolling]);
 
   const handleDownload = () => {
-    const downloadUrl = batchAPI.getDownloadUrl(jobId);
-    window.location.href = downloadUrl;
+    // Direct download from API endpoint
+    window.location.href = `${API_BASE_URL}/api/batch/${jobId}/download`;
   };
 
   if (error && !status) {

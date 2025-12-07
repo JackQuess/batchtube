@@ -81,6 +81,7 @@ export const batchAPI = {
 
   /**
    * Get download URL for completed job
+   * Returns direct API endpoint (no async needed)
    */
   getDownloadUrl: (jobId: string): string => {
     return `${API_BASE_URL}/api/batch/${jobId}/download`;
