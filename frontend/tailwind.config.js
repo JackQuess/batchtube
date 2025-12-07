@@ -1,5 +1,5 @@
 /** @type {import('tailwindcss').Config} */
-module.exports = {
+export default {
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
@@ -13,12 +13,8 @@ module.exports = {
       colors: {
         background: '#050509',
         surface: '#0b0b10',
-        primary: '#e53935', // Red
-        secondary: '#ff6b81', // Glow Pink
-        text: {
-          primary: '#f9fafb',
-          secondary: '#9ca3af'
-        }
+        primary: '#e53935',
+        secondary: '#ff6b81',
       },
       animation: {
         'fadeIn': 'fadeIn 0.5s ease-out forwards',

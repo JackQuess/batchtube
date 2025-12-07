@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* Base styles */
 body {
   font-family: 'Inter', sans-serif;
@@ -25,4 +29,3 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #4b5563; 
 }
-

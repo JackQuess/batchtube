@@ -97,6 +97,7 @@ const App: React.FC = () => {
       const items = selectedItems.map(item => ({
         url: `https://www.youtube.com/watch?v=${item.video.id}`,
         title: item.video.title || 'Unknown',
+        thumbnail: item.video.thumbnail || `https://i.ytimg.com/vi/${item.video.id}/hqdefault.jpg`,
       }));
 
       // Map quality: '320k' -> '1080p' for MP3, keep as is for MP4

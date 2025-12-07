@@ -3,10 +3,56 @@
  * Handles video/audio downloads
  */
 const { spawn } = require('child_process');
+const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const YTDLP_BINARY = '/usr/local/bin/yt-dlp';
+/**
+ * Find yt-dlp binary path
+ * Tries multiple locations for cross-platform compatibility
+ */
+function findYtDlpBinary() {
+  // Try common locations
+  const possiblePaths = [
+    'yt-dlp', // In PATH
+    '/usr/local/bin/yt-dlp', // Linux/Docker standard
+    '/opt/homebrew/bin/yt-dlp', // macOS Homebrew (Apple Silicon)
+    '/usr/bin/yt-dlp', // Linux system-wide
+    '/app/.local/bin/yt-dlp', // Railway/container
+  ];
+
+  // First, try to find in PATH
+  try {
+    const whichResult = execSync('which yt-dlp', { encoding: 'utf8', stdio: 'pipe' }).trim();
+    if (whichResult && fs.existsSync(whichResult)) {
+      return whichResult;
+    }
+  } catch (e) {
+    // which failed, continue to check paths
+  }
+
+  // Check each possible path
+  for (const binPath of possiblePaths) {
+    if (binPath === 'yt-dlp') {
+      // Already tried via which, skip
+      continue;
+    }
+    if (fs.existsSync(binPath)) {
+      // Check if executable
+      try {
+        fs.accessSync(binPath, fs.constants.X_OK);
+        return binPath;
+      } catch (e) {
+        // Not executable, continue
+      }
+    }
+  }
+
+  // Fallback: return 'yt-dlp' and let spawn handle the error
+  return 'yt-dlp';
+}
+
+const YTDLP_BINARY = findYtDlpBinary();
 
 /**
  * Download with yt-dlp
@@ -53,6 +99,11 @@ function downloadWithYtDlp({ url, format, quality = '1080p', outputPath, onProgr
     ];
   } else {
     throw new Error(`Unsupported format: ${format}`);
+  }
+
+  // Log binary path for debugging (only in dev)
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[YTService] Using yt-dlp binary: ${YTDLP_BINARY}`);
   }
 
   return new Promise((resolve, reject) => {

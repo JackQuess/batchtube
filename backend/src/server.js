@@ -5,9 +5,20 @@
 const express = require('express');
 const cors = require('cors');
 const batchRoutes = require('./routes/batch');
+const { handleSearch } = require('./routes/search');
+
+// Initialize queue (will fail gracefully if Redis is not available)
+// Queue is initialized in queue.js, just require it here
+const batchQueue = require('./queue');
+if (batchQueue) {
+  console.log('[Server] Queue system available');
+} else {
+  console.warn('[Server] Queue system not available (Redis may not be running)');
+  console.warn('[Server] Batch download features will not work until Redis is available');
+}
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 
 // CORS configuration
 const allowedOrigins = process.env.ALLOWED_ORIGIN 
@@ -44,6 +55,10 @@ app.use(express.json());
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'batchtube-api' });
 });
+
+// Search routes
+app.get('/api/search', handleSearch);
+app.post('/api/search', handleSearch);
 
 // Batch routes
 app.use('/api', batchRoutes);

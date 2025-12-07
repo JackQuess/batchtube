@@ -24,9 +24,16 @@ export interface BatchJobStatus {
     total: number;
     succeeded: number;
     failed: number;
+    items?: Array<{
+      id: number;
+      title: string;
+      thumbnail: string | null;
+      status: 'success' | 'failed';
+    }>;
     results: Array<{
       id: number;
       status: 'success' | 'failed';
+      fileName?: string | null;
       error?: string;
     }>;
   };

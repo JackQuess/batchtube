@@ -20,8 +20,104 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
   const [status, setStatus] = useState<BatchJobStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState(true);
+  const [itemProgress, setItemProgress] = useState<Record<number, { percent: number; title: string; thumbnail: string | null }>>({});
 
-  // Poll job status every 2 seconds
+  // Subscribe to SSE stream for live progress
+  useEffect(() => {
+    let eventSource: EventSource | null = null;
+
+    import('../config/api').then(({ API_BASE_URL }) => {
+      eventSource = new EventSource(`${API_BASE_URL}/api/batch/${jobId}/events`);
+
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.items) {
+            // Update per-item progress with full item data
+            const progressMap: Record<number, { percent: number; title: string; thumbnail: string | null }> = {};
+            data.items.forEach((item: { index: number; percent: number; title?: string; thumbnail?: string | null }) => {
+              progressMap[item.index] = {
+                percent: item.percent,
+                title: item.title || `Item ${item.index + 1}`,
+                thumbnail: item.thumbnail || null
+              };
+            });
+            setItemProgress(prev => ({ ...prev, ...progressMap }));
+          }
+        } catch (err) {
+          console.error('[ProgressModal] SSE parse error:', err);
+        }
+      };
+
+      eventSource.addEventListener('progress', (event: MessageEvent) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.items) {
+            // Update per-item progress with full item data
+            const progressMap: Record<number, { percent: number; title: string; thumbnail: string | null }> = {};
+            data.items.forEach((item: { index: number; percent: number; title?: string; thumbnail?: string | null }) => {
+              progressMap[item.index] = {
+                percent: item.percent,
+                title: item.title || `Item ${item.index + 1}`,
+                thumbnail: item.thumbnail || null
+              };
+            });
+            setItemProgress(prev => ({ ...prev, ...progressMap }));
+          }
+        } catch (err) {
+          console.error('[ProgressModal] SSE progress error:', err);
+        }
+      });
+
+      eventSource.addEventListener('completed', (event: MessageEvent) => {
+        try {
+          const data = JSON.parse(event.data);
+          setIsPolling(false);
+          // Fetch final status
+          batchAPI.getStatus(jobId).then(setStatus);
+        } catch (err) {
+          console.error('[ProgressModal] SSE completed error:', err);
+        }
+      });
+
+      eventSource.addEventListener('failed', (event: MessageEvent) => {
+        try {
+          const data = JSON.parse(event.data);
+          setIsPolling(false);
+          setError(data.error || 'Job failed');
+        } catch (err) {
+          console.error('[ProgressModal] SSE failed error:', err);
+        }
+      });
+
+      eventSource.addEventListener('error', (event: MessageEvent) => {
+        try {
+          const data = JSON.parse(event.data);
+          setError(data.error || 'Connection error');
+          setIsPolling(false);
+        } catch (err) {
+          console.error('[ProgressModal] SSE error event:', err);
+        }
+      });
+
+      eventSource.onerror = () => {
+        console.error('[ProgressModal] SSE connection error');
+        if (eventSource) {
+          eventSource.close();
+        }
+        // Fallback to polling
+        setIsPolling(true);
+      };
+    });
+
+    return () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+    };
+  }, [jobId]);
+
+  // Fallback polling for status updates
   useEffect(() => {
     if (!isPolling) return;
 
@@ -36,17 +132,15 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
         }
       } catch (err) {
         console.error('[ProgressModal] Polling error:', err);
-        setError(err instanceof Error ? err.message : 'Failed to get status');
-        setIsPolling(false);
+        // Don't set error on polling failure, SSE might still work
       }
-    }, 2000);
+    }, 3000); // Poll every 3 seconds as fallback
 
     // Initial fetch
     batchAPI.getStatus(jobId)
       .then(setStatus)
       .catch(err => {
-        setError(err instanceof Error ? err.message : 'Failed to get status');
-        setIsPolling(false);
+        console.error('[ProgressModal] Initial status error:', err);
       });
 
     return () => clearInterval(pollInterval);
@@ -82,8 +176,14 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
   const isActive = status?.state === 'active';
   const isWaiting = status?.state === 'waiting';
 
-  const progress = status?.progress || 0;
   const result = status?.result;
+
+  // Calculate overall progress from itemProgress or fallback to status.progress
+  const overallProgress = Object.keys(itemProgress).length > 0
+    ? Math.round(Object.values(itemProgress).reduce((sum, item) => sum + item.percent, 0) / (result?.items?.length || totalItems || 1))
+    : (typeof status?.progress === 'object' && status.progress?.overall 
+        ? status.progress.overall 
+        : (typeof status?.progress === 'number' ? status.progress : 0));
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
@@ -118,7 +218,7 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
                  `${totalItems} items`}
               </span>
               <span className="text-gray-400 font-bold">
-                {progress}%
+                {overallProgress}%
               </span>
             </div>
             <div className="h-3 bg-gray-800 rounded-full overflow-hidden">
@@ -128,52 +228,162 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
                   isFailed ? 'bg-red-500' : 
                   'bg-[#d94662]'
                 }`} 
-                style={{ width: `${progress}%` }}
+                style={{ width: `${overallProgress}%` }}
               />
             </div>
           </div>
         </div>
 
-        {/* Results List */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-[#0e0e11]">
-          {result && result.results.length > 0 ? (
-            result.results.map((item) => (
-              <div 
-                key={item.id} 
-                className="flex items-center gap-3 p-3 rounded-lg bg-[#141418] border border-white/5"
-              >
-                <div className="flex-shrink-0">
-                  {item.status === 'success' ? (
-                    <CheckCircle className="text-green-500" size={20} />
-                  ) : (
-                    <AlertCircle className="text-red-500" size={20} />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-gray-200">
-                    Item {item.id + 1}
+        {/* Results List with Per-Item Progress Bars */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#0e0e11]">
+          {/* Show items from itemProgress during download, or from result when completed */}
+          {(isActive || isWaiting) && Object.keys(itemProgress).length > 0 ? (
+            // Show downloading items with live progress
+            Object.entries(itemProgress)
+              .sort(([a], [b]) => parseInt(a) - parseInt(b))
+              .map(([indexStr, itemData]) => {
+                const index = parseInt(indexStr);
+                const item = itemData;
+                const isItemDownloading = isActive && item.percent < 100;
+                
+                return (
+                  <div 
+                    key={index} 
+                    className="flex items-start gap-3 p-3 rounded-lg bg-[#141418] border border-white/5"
+                  >
+                    {/* Thumbnail */}
+                    <div className="flex-shrink-0">
+                      <img 
+                        src={item.thumbnail || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="48" height="48"%3E%3Crect fill="%23111" width="48" height="48"/%3E%3Ctext fill="%23999" font-size="10" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3E%3F%3C/text%3E%3C/svg%3E'} 
+                        alt={item.title}
+                        className="w-12 h-12 rounded object-cover"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="48" height="48"%3E%3Crect fill="%23111" width="48" height="48"/%3E%3Ctext fill="%23999" font-size="10" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3E%3F%3C/text%3E%3C/svg%3E';
+                        }}
+                      />
+                    </div>
+                    
+                    {/* Content with Progress Bar */}
+                    <div className="flex-1 min-w-0">
+                      {/* Title */}
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="flex-shrink-0">
+                          {isItemDownloading ? (
+                            <Loader2 className="text-[#d94662] animate-spin" size={16} />
+                          ) : item.percent >= 100 ? (
+                            <CheckCircle className="text-green-500" size={16} />
+                          ) : null}
+                        </div>
+                        <div className="text-sm font-medium text-gray-200 truncate flex-1" style={{ maxWidth: '320px' }}>
+                          {item.title}
+                        </div>
+                        {isItemDownloading && (
+                          <span className="text-xs text-gray-400 font-mono flex-shrink-0">
+                            {item.percent}%
+                          </span>
+                        )}
+                      </div>
+                      
+                      {/* Progress Bar */}
+                      {isItemDownloading && (
+                        <div className="w-full bg-neutral-800 rounded-full h-2 overflow-hidden">
+                          <div
+                            className="bg-[#d94662] h-full transition-all duration-300"
+                            style={{ width: `${item.percent}%` }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Status Badge */}
+                    <div className="flex-shrink-0">
+                      {isItemDownloading ? (
+                        <span className="text-xs font-bold px-2 py-1 rounded bg-gray-500/20 text-gray-400">
+                          Downloading
+                        </span>
+                      ) : item.percent >= 100 ? (
+                        <span className="text-xs font-bold px-2 py-1 rounded bg-green-500/20 text-green-400">
+                          Success
+                        </span>
+                      ) : (
+                        <span className="text-xs font-bold px-2 py-1 rounded bg-gray-500/20 text-gray-400">
+                          Waiting
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  {item.status === 'failed' && item.error && (
-                    <div className="text-xs text-red-400 mt-1">{item.error}</div>
-                  )}
+                );
+              })
+          ) : result && result.items && result.items.length > 0 ? (
+            // Show completed items with final status
+            result.items.map((item) => {
+              const resultItem = result.results?.find(r => r.id === item.id);
+              const displayName = resultItem?.fileName || item.title;
+              const itemStatus = resultItem?.status || item.status;
+              const isItemCompleted = itemStatus === 'success';
+              const isItemFailed = itemStatus === 'failed';
+              
+              return (
+                <div 
+                  key={item.id} 
+                  className="flex items-start gap-3 p-3 rounded-lg bg-[#141418] border border-white/5"
+                >
+                  {/* Thumbnail */}
+                  <div className="flex-shrink-0">
+                    <img 
+                      src={item.thumbnail || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="48" height="48"%3E%3Crect fill="%23111" width="48" height="48"/%3E%3Ctext fill="%23999" font-size="10" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3E%3F%3C/text%3E%3C/svg%3E'} 
+                      alt={item.title}
+                      className="w-12 h-12 rounded object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="48" height="48"%3E%3Crect fill="%23111" width="48" height="48"/%3E%3Ctext fill="%23999" font-size="10" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3E%3F%3C/text%3E%3C/svg%3E';
+                      }}
+                    />
+                  </div>
+                  
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="flex-shrink-0">
+                        {isItemCompleted ? (
+                          <CheckCircle className="text-green-500" size={16} />
+                        ) : isItemFailed ? (
+                          <AlertCircle className="text-red-500" size={16} />
+                        ) : null}
+                      </div>
+                      <div className="text-sm font-medium text-gray-200 truncate flex-1" style={{ maxWidth: '320px' }}>
+                        {displayName}
+                      </div>
+                    </div>
+                    
+                    {/* Error Message */}
+                    {isItemFailed && resultItem?.error && (
+                      <div className="text-xs text-red-400 mt-1">{resultItem.error}</div>
+                    )}
+                  </div>
+                  
+                  {/* Status Badge */}
+                  <div className="flex-shrink-0">
+                    {isItemCompleted ? (
+                      <span className="text-xs font-bold px-2 py-1 rounded bg-green-500/20 text-green-400">
+                        Success
+                      </span>
+                    ) : isItemFailed ? (
+                      <span className="text-xs font-bold px-2 py-1 rounded bg-red-500/20 text-red-400">
+                        Failed
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
-                <div className="flex-shrink-0">
-                  <span className={`text-xs font-bold px-2 py-1 rounded ${
-                    item.status === 'success' 
-                      ? 'bg-green-500/20 text-green-400' 
-                      : 'bg-red-500/20 text-red-400'
-                  }`}>
-                    {item.status === 'success' ? 'Success' : 'Failed'}
-                  </span>
-                </div>
-              </div>
-            ))
+              );
+            })
           ) : (
             <div className="text-center text-gray-500 py-8">
               {isWaiting || isActive ? (
                 <div className="flex flex-col items-center gap-2">
                   <Loader2 size={20} className="text-[#d94662] animate-spin" />
-                  <span>{isWaiting ? 'Waiting in queue...' : 'Downloading items...'}</span>
+                  <span>{isWaiting ? 'Waiting in queue...' : 'Preparing download...'}</span>
                 </div>
               ) : (
                 <span>No results available</span>

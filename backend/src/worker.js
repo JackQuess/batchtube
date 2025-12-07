@@ -148,13 +148,30 @@ const worker = new Worker(
     const results = [];
     const progressMap = new Map();
 
-    // Update progress callback
+    // Update progress callback - emit per-item progress with title and thumbnail
     const updateProgress = (index, percent) => {
       progressMap.set(index, percent);
+      
+      // Calculate overall percent
       const overallPercent = Math.round(
         Array.from(progressMap.values()).reduce((a, b) => a + b, 0) / items.length
       );
-      job.updateProgress(overallPercent);
+      
+      // Emit per-item progress as object with title and thumbnail
+      const progressData = {
+        overall: overallPercent,
+        items: Array.from(progressMap.entries()).map(([idx, pct]) => {
+          const item = items[idx];
+          return {
+            index: idx,
+            percent: Math.round(pct),
+            title: item?.title || `Item ${idx + 1}`,
+            thumbnail: item?.thumbnail || null
+          };
+        })
+      };
+      
+      job.updateProgress(progressData);
     };
 
     // Download all items in parallel with concurrency limit
@@ -196,9 +213,16 @@ const worker = new Worker(
         total: items.length,
         succeeded: successful.length,
         failed: items.length - successful.length,
+        items: items.map((item, index) => ({
+          id: index,
+          title: item.title || `Item ${index + 1}`,
+          thumbnail: item.thumbnail || null,
+          status: results[index]?.status || 'failed'
+        })),
         results: results.map(r => ({
           id: r.id,
           status: r.status,
+          fileName: r.fileName || null, // ⭐ Real video filename
           error: r.error || undefined
         }))
       }

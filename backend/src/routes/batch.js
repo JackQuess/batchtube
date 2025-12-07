@@ -15,6 +15,13 @@ const router = express.Router();
  */
 router.post('/batch', async (req, res) => {
   try {
+    // Check if queue is available
+    if (!batchQueue) {
+      return res.status(503).json({ 
+        error: 'Queue system unavailable. Redis connection required.' 
+      });
+    }
+
     const { items, format, quality = '1080p' } = req.body;
 
     // Validation
@@ -52,6 +59,7 @@ router.post('/batch', async (req, res) => {
         format,
         quality,
         title: item.title || `Item ${index + 1}`,
+        thumbnail: item.thumbnail || null,
         index
       })),
       format,
@@ -105,9 +113,17 @@ router.get('/batch/:jobId/status', async (req, res) => {
       status = 'waiting';
     }
 
+    // Handle both number and object progress formats
+    let progressValue = 0;
+    if (typeof progress === 'number') {
+      progressValue = progress;
+    } else if (progress && typeof progress === 'object' && progress.overall) {
+      progressValue = progress.overall;
+    }
+
     const response = {
       state: status,
-      progress: typeof progress === 'number' ? progress : 0
+      progress: progressValue
     };
 
     // Add result if completed
@@ -118,7 +134,7 @@ router.get('/batch/:jobId/status', async (req, res) => {
 
     // Add error if failed
     if (state === 'failed') {
-      const failedReason = await job.getFailedReason();
+      const failedReason = job.failedReason; // Direct property access
       response.error = failedReason || 'Job failed';
     }
 
@@ -132,11 +148,109 @@ router.get('/batch/:jobId/status', async (req, res) => {
 });
 
 /**
+ * GET /api/batch/:jobId/events
+ * Server-Sent Events stream for live progress updates
+ */
+router.get('/batch/:jobId/events', async (req, res) => {
+  try {
+    if (!batchQueue) {
+      return res.status(503).json({ 
+        error: 'Queue system unavailable. Redis connection required.' 
+      });
+    }
+
+    const { jobId } = req.params;
+
+    // Set SSE headers
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
+
+    // Send initial connection message
+    res.write(': connected\n\n');
+
+    // Get job
+    const job = await batchQueue.getJob(jobId);
+    if (!job) {
+      res.write(`event: error\ndata: ${JSON.stringify({ error: 'Job not found' })}\n\n`);
+      res.end();
+      return;
+    }
+
+    // Poll job progress
+    const pollInterval = setInterval(async () => {
+      try {
+        const currentJob = await batchQueue.getJob(jobId);
+        if (!currentJob) {
+          clearInterval(pollInterval);
+          res.write(`event: error\ndata: ${JSON.stringify({ error: 'Job not found' })}\n\n`);
+          res.end();
+          return;
+        }
+
+        const state = await currentJob.getState();
+        const progress = currentJob.progress || 0;
+
+        // Send progress update (full object with items, title, thumbnail)
+        const progressData = typeof progress === 'object' && progress.items
+          ? progress
+          : {
+              overall: typeof progress === 'number' ? progress : 0,
+              items: []
+            };
+
+        res.write(`event: progress\ndata: ${JSON.stringify(progressData)}\n\n`);
+
+        // Close connection if job is completed or failed
+        if (state === 'completed' || state === 'failed') {
+          clearInterval(pollInterval);
+          
+          if (state === 'completed') {
+            const returnValue = currentJob.returnvalue;
+            res.write(`event: completed\ndata: ${JSON.stringify({ result: returnValue?.result })}\n\n`);
+          } else {
+            res.write(`event: failed\ndata: ${JSON.stringify({ error: currentJob.failedReason || 'Job failed' })}\n\n`);
+          }
+          
+          res.end();
+        }
+      } catch (err) {
+        console.error('[Batch] SSE polling error:', err);
+        clearInterval(pollInterval);
+        res.write(`event: error\ndata: ${JSON.stringify({ error: err.message })}\n\n`);
+        res.end();
+      }
+    }, 1000); // Poll every 1 second
+
+    // Cleanup on client disconnect
+    req.on('close', () => {
+      clearInterval(pollInterval);
+      res.end();
+    });
+
+  } catch (error) {
+    console.error('[Batch] SSE error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'SSE connection failed' });
+    } else {
+      res.end();
+    }
+  }
+});
+
+/**
  * GET /api/batch/:jobId/download
  * Download the ZIP file
  */
 router.get('/batch/:jobId/download', async (req, res) => {
   try {
+    if (!batchQueue) {
+      return res.status(503).json({ 
+        error: 'Queue system unavailable. Redis connection required.' 
+      });
+    }
+
     const { jobId } = req.params;
 
     const job = await batchQueue.getJob(jobId);
