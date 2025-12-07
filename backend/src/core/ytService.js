@@ -156,8 +156,14 @@ function withCookies(args) {
 
 /**
  * Build MP4 download command arguments with robust format selectors
+ * @param {string} url - YouTube URL
+ * @param {string} basePath - Base path WITHOUT extension (yt-dlp will add .%(ext)s)
+ * @param {string} quality - Quality setting
  */
-function buildMp4Command(url, output, quality) {
+function buildMp4Command(url, basePath, quality) {
+  // Use template with %(ext)s to let yt-dlp choose the extension
+  const outputTemplate = `${basePath}.%(ext)s`;
+  
   if (quality === "4K" || quality === "2160p" || quality === "4k") {
     return [
       url,
@@ -166,7 +172,7 @@ function buildMp4Command(url, output, quality) {
       "--no-warnings",
       "--compat-options", "manifest-files",
       "--no-check-certificate",
-      "-o", output
+      "-o", outputTemplate
     ];
   }
   
@@ -178,14 +184,19 @@ function buildMp4Command(url, output, quality) {
     "--no-warnings",
     "--compat-options", "manifest-files",
     "--no-check-certificate",
-    "-o", output
+    "-o", outputTemplate
   ];
 }
 
 /**
  * Build MP3 download command arguments
+ * @param {string} url - YouTube URL
+ * @param {string} basePath - Base path WITHOUT extension (yt-dlp will add .%(ext)s)
  */
-function buildMp3Command(url, output) {
+function buildMp3Command(url, basePath) {
+  // Use template with %(ext)s to let yt-dlp choose the extension
+  const outputTemplate = `${basePath}.%(ext)s`;
+  
   return [
     url,
     "-x",
@@ -194,20 +205,87 @@ function buildMp3Command(url, output) {
     "--no-warnings",
     "--compat-options", "manifest-files",
     "--no-check-certificate",
-    "-o", output
+    "-o", outputTemplate
   ];
 }
 
 /**
- * Execute yt-dlp download command
+ * Find the actual downloaded file by scanning the directory
+ * @param {string} basePath - Base path without extension
+ * @returns {string|null} - Full path to the found file, or null if not found
  */
-async function execDownload(args, outputPath, retryOnCookieError = true) {
+function findDownloadedFile(basePath) {
+  const dir = path.dirname(basePath);
+  const baseName = path.basename(basePath);
+  
+  if (!fs.existsSync(dir)) {
+    return null;
+  }
+
+  try {
+    const files = fs.readdirSync(dir);
+    
+    // Filter files that start with the base name
+    const candidates = files.filter(f => {
+      const fileName = path.basename(f, path.extname(f));
+      return fileName.startsWith(baseName) || f.startsWith(baseName);
+    });
+
+    if (candidates.length > 0) {
+      // Prefer .mp4 if available
+      const mp4File = candidates.find(f => f.toLowerCase().endsWith('.mp4'));
+      if (mp4File) {
+        const finalPath = path.join(dir, mp4File);
+        const stats = fs.statSync(finalPath);
+        if (stats.size >= MIN_FILE_SIZE) {
+          console.log(`[YTService] Using downloaded file: ${finalPath}`);
+          return finalPath;
+        }
+      }
+      
+      // Try other candidates
+      for (const candidate of candidates) {
+        const candidatePath = path.join(dir, candidate);
+        const stats = fs.statSync(candidatePath);
+        if (stats.size >= MIN_FILE_SIZE) {
+          console.log(`[YTService] Using downloaded file: ${candidatePath}`);
+          return candidatePath;
+        }
+      }
+    }
+
+    // Last fallback: search for any media file in the directory
+    const mediaExtensions = /\.(mp4|mkv|webm|mp3|m4a|opus)$/i;
+    const anyMedia = files.find(f => mediaExtensions.test(f));
+    if (anyMedia) {
+      const mediaPath = path.join(dir, anyMedia);
+      const stats = fs.statSync(mediaPath);
+      if (stats.size >= MIN_FILE_SIZE) {
+        console.log(`[YTService] Using fallback media file: ${mediaPath}`);
+        return mediaPath;
+      }
+    }
+
+    return null;
+  } catch (err) {
+    console.error(`[YTService] Error scanning directory ${dir}:`, err);
+    return null;
+  }
+}
+
+/**
+ * Execute yt-dlp download command
+ * @param {Array} args - yt-dlp command arguments (output should use .%(ext)s template)
+ * @param {string} basePath - Base path without extension (for file detection)
+ * @param {boolean} retryOnCookieError - Whether to retry on cookie errors
+ */
+async function execDownload(args, basePath, retryOnCookieError = true) {
   // Ensure binary is ready
   const ytdlp = await getYtDlpBinary();
 
   return new Promise((resolve, reject) => {
     // Ensure output directory exists
-    const outputDir = path.dirname(outputPath);
+    const outputDir = path.dirname(basePath);
     fs.mkdirSync(outputDir, { recursive: true });
 
     // Ensure cookies are fresh before download
@@ -256,7 +334,7 @@ async function execDownload(args, outputPath, retryOnCookieError = true) {
           try {
             await cookiesManager.refresh();
             console.log("[YTService] Retrying download after cookie refresh...");
-            const retryResult = await execDownload(args, outputPath, false);
+            const retryResult = await execDownload(args, basePath, false);
             resolve(retryResult);
             return;
           } catch (retryErr) {
@@ -275,19 +353,23 @@ async function execDownload(args, outputPath, retryOnCookieError = true) {
         return;
       }
 
-      // Verify output file exists
-      if (!fs.existsSync(outputPath)) {
-        console.error(`[YTService] Output file not found: ${outputPath}`);
-        reject(new Error("Output file not found"));
+      // Find the actual downloaded file by scanning the directory
+      const finalFilePath = findDownloadedFile(basePath);
+      
+      if (!finalFilePath) {
+        const dir = path.dirname(basePath);
+        const files = fs.existsSync(dir) ? fs.readdirSync(dir) : [];
+        console.warn(`[YTService] Expected file not found, scanning dir: ${dir}, base: ${path.basename(basePath)}, files: ${files.join(', ')}`);
+        reject(new Error("Output file not found after download"));
         return;
       }
 
       // Verify file size >= minimum threshold (100KB)
-      const stats = fs.statSync(outputPath);
+      const stats = fs.statSync(finalFilePath);
       if (stats.size < MIN_FILE_SIZE) {
-        console.error(`[YTService] Output file is too small: ${outputPath} (${stats.size} bytes, minimum ${MIN_FILE_SIZE})`);
+        console.error(`[YTService] Output file is too small: ${finalFilePath} (${stats.size} bytes, minimum ${MIN_FILE_SIZE})`);
         try {
-          fs.unlinkSync(outputPath);
+          fs.unlinkSync(finalFilePath);
         } catch (e) {
           // Ignore deletion errors
         }
@@ -297,9 +379,9 @@ async function execDownload(args, outputPath, retryOnCookieError = true) {
 
       // Success
       if (isDev) {
-        console.log(`[YTService] Download successful: ${outputPath} (${stats.size} bytes)`);
+        console.log(`[YTService] Download successful: ${finalFilePath} (${stats.size} bytes)`);
       }
-      resolve(outputPath);
+      resolve(finalFilePath);
     });
 
     child.on("error", (err) => {
@@ -326,30 +408,41 @@ async function execDownload(args, outputPath, retryOnCookieError = true) {
 
 /**
  * Download MP3
+ * @param {string} url - YouTube URL
+ * @param {string} outputPath - Full output path (will be converted to base path)
  */
-async function downloadAudio(url, output) {
+async function downloadAudio(url, outputPath) {
   // Ensure output is in /tmp for Railway
-  if (!output.startsWith('/tmp')) {
-    const filename = path.basename(output);
-    output = `/tmp/${filename}`;
+  if (!outputPath.startsWith('/tmp')) {
+    const filename = path.basename(outputPath);
+    outputPath = `/tmp/${filename}`;
   }
 
-  const args = buildMp3Command(url, output);
-  return await execDownload(args, output);
+  // Remove extension to create base path (yt-dlp will add .%(ext)s)
+  const basePath = outputPath.replace(/\.(mp3|m4a|opus|webm)$/i, '');
+  
+  const args = buildMp3Command(url, basePath);
+  return await execDownload(args, basePath);
 }
 
 /**
  * Download MP4
+ * @param {string} url - YouTube URL
+ * @param {string} outputPath - Full output path (will be converted to base path)
+ * @param {string} quality - Quality setting
  */
-async function downloadVideoFile(url, output, quality = "1080p") {
+async function downloadVideoFile(url, outputPath, quality = "1080p") {
   // Ensure output is in /tmp for Railway
-  if (!output.startsWith('/tmp')) {
-    const filename = path.basename(output);
-    output = `/tmp/${filename}`;
+  if (!outputPath.startsWith('/tmp')) {
+    const filename = path.basename(outputPath);
+    outputPath = `/tmp/${filename}`;
   }
 
-  const args = buildMp4Command(url, output, quality);
-  return await execDownload(args, output);
+  // Remove extension to create base path (yt-dlp will add .%(ext)s)
+  const basePath = outputPath.replace(/\.(mp4|mkv|webm|m4v)$/i, '');
+  
+  const args = buildMp4Command(url, basePath, quality);
+  return await execDownload(args, basePath);
 }
 
 /**

@@ -51,10 +51,12 @@ class BatchEngine {
     });
 
     try {
+      // Create unique base name with index to avoid clashes in parallel downloads
       const safeTitle = (item.title || 'video').replace(/[^a-z0-9]/gi, '_').substring(0, 100);
+      const baseName = `${item.index}_${safeTitle}`;
       const ext = item.format === 'mp3' ? 'mp3' : 'mp4';
-      // Ensure output is in /tmp for Railway
-      const outputPath = path.join(fileDir, `${safeTitle}.${ext}`);
+      // Use full path with extension (ytService will convert to base path internally)
+      const outputPath = path.join(fileDir, `${baseName}.${ext}`);
 
       const result = await YTService.downloadVideo(
         item.url,
