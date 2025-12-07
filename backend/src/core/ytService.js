@@ -4,6 +4,38 @@ import fs from "fs";
 import { cookiesManager } from "./CookiesManager.js";
 
 const ytdlp = "yt-dlp";
+const MIN_FILE_SIZE = 100 * 1024; // 100KB minimum
+
+// Auto-update yt-dlp on module load (only once)
+let ytdlpUpdated = false;
+
+function updateYTDLP() {
+  if (ytdlpUpdated) return Promise.resolve();
+  
+  return new Promise((resolve) => {
+    console.log("[YTService] Updating yt-dlp...");
+    const updateProcess = spawn(ytdlp, ["-U"], { shell: true });
+    
+    updateProcess.on("close", (code) => {
+      ytdlpUpdated = true;
+      if (code === 0) {
+        console.log("[YTService] yt-dlp updated successfully");
+      } else {
+        console.warn("[YTService] yt-dlp update failed (continuing anyway)");
+      }
+      resolve();
+    });
+    
+    updateProcess.on("error", (err) => {
+      console.warn("[YTService] yt-dlp update error (continuing anyway):", err.message);
+      ytdlpUpdated = true;
+      resolve();
+    });
+  });
+}
+
+// Initialize update on module load
+updateYTDLP();
 
 /**
  * Add cookies flag if cookies.txt exists
@@ -23,14 +55,20 @@ function withCookies(args) {
 }
 
 /**
- * Build MP4 download command arguments
+ * Build MP4 download command arguments with fallback formats
  */
-function buildMp4Command(url, output) {
-  // Stable MP4 command - works for all qualities
-  // yt-dlp will automatically select the best available quality
+function buildMp4Command(url, output, formatIndex = 0) {
+  const baseFormats = [
+    "bv*[ext=mp4]+ba[ext=m4a]/mp4",
+    "bv*+ba/bestvideo+bestaudio",
+    "best"
+  ];
+
+  const format = baseFormats[formatIndex] || baseFormats[baseFormats.length - 1];
+
   return [
     url,
-    "-f", "bv*[ext=mp4]+ba[ext=m4a]/mp4",
+    "-f", format,
     "--merge-output-format", "mp4",
     "-o", output
   ];
@@ -50,9 +88,9 @@ function buildMp3Command(url, output) {
 }
 
 /**
- * Execute yt-dlp download command
+ * Execute yt-dlp download command with retry logic for MP4
  */
-function execDownload(args, outputPath, retryOnCookieError = true) {
+function execDownload(args, outputPath, retryOnCookieError = true, formatIndex = 0) {
   return new Promise((resolve, reject) => {
     // Ensure output directory exists
     const outputDir = path.dirname(outputPath);
@@ -72,20 +110,13 @@ function execDownload(args, outputPath, retryOnCookieError = true) {
       console.log(`[YTService] Executing: ${ytdlp} ${finalArgs.join(" ")}`);
     }
 
-    // Railway requires shell:true for yt-dlp
     const child = spawn(ytdlp, finalArgs, { shell: true });
 
     let stdout = "";
     let stderr = "";
-    let hasProgress = false;
 
     child.stdout.on("data", (data) => {
-      const text = data.toString();
-      stdout += text;
-      // Log progress if available
-      if (text.includes("[download]") || text.includes("%")) {
-        hasProgress = true;
-      }
+      stdout += data.toString();
     });
 
     child.stderr.on("data", (data) => {
@@ -113,7 +144,7 @@ function execDownload(args, outputPath, retryOnCookieError = true) {
             await cookiesManager.refresh();
             // Retry once after refresh
             console.log("[YTService] Retrying download after cookie refresh...");
-            const retryResult = await execDownload(args, outputPath, false);
+            const retryResult = await execDownload(args, outputPath, false, formatIndex);
             resolve(retryResult);
             return;
           } catch (retryErr) {
@@ -140,11 +171,17 @@ function execDownload(args, outputPath, retryOnCookieError = true) {
         return;
       }
 
-      // Verify file size > 0
+      // Verify file size >= minimum threshold (100KB)
       const stats = fs.statSync(outputPath);
-      if (stats.size === 0) {
-        console.error(`[YTService] Output file is empty: ${outputPath}`);
-        reject(new Error("Output file is empty"));
+      if (stats.size < MIN_FILE_SIZE) {
+        console.error(`[YTService] Output file is too small: ${outputPath} (${stats.size} bytes, minimum ${MIN_FILE_SIZE})`);
+        // Try to delete the empty file
+        try {
+          fs.unlinkSync(outputPath);
+        } catch (e) {
+          // Ignore deletion errors
+        }
+        reject(new Error(`Output file is too small (${stats.size} bytes, minimum ${MIN_FILE_SIZE} bytes)`));
         return;
       }
 
@@ -178,11 +215,79 @@ function execDownload(args, outputPath, retryOnCookieError = true) {
 }
 
 /**
+ * Download MP4 with fallback format retry
+ */
+async function downloadVideoWithFallback(url, output) {
+  const baseFormats = [
+    "bv*[ext=mp4]+ba[ext=m4a]/mp4",
+    "bv*+ba/bestvideo+bestaudio",
+    "best"
+  ];
+
+  let lastError = null;
+
+  for (let i = 0; i < baseFormats.length; i++) {
+    try {
+      const args = buildMp4Command(url, output, i);
+      const result = await execDownload(args, output, true, i);
+      return result;
+    } catch (error) {
+      lastError = error;
+      console.warn(`[YTService] Format ${i + 1} failed, trying next...`);
+      
+      // If file exists but is too small, delete it before retry
+      if (fs.existsSync(output)) {
+        try {
+          fs.unlinkSync(output);
+        } catch (e) {
+          // Ignore deletion errors
+        }
+      }
+      
+      // Continue to next format
+      if (i < baseFormats.length - 1) {
+        continue;
+      }
+    }
+  }
+
+  // All formats failed
+  throw lastError || new Error("All format fallbacks failed");
+}
+
+/**
+ * Download MP3
+ */
+async function downloadAudio(url, output) {
+  // Ensure output is in /tmp for Railway
+  if (!output.startsWith('/tmp')) {
+    const filename = path.basename(output);
+    output = `/tmp/${filename}`;
+  }
+
+  const args = buildMp3Command(url, output);
+  return await execDownload(args, output);
+}
+
+/**
+ * Download MP4
+ */
+async function downloadVideoFile(url, output) {
+  // Ensure output is in /tmp for Railway
+  if (!output.startsWith('/tmp')) {
+    const filename = path.basename(output);
+    output = `/tmp/${filename}`;
+  }
+
+  return await downloadVideoWithFallback(url, output);
+}
+
+/**
  * Main download function
  * @param {Object} params - Download parameters
  * @param {string} params.url - YouTube URL
  * @param {string} params.format - "mp4" or "mp3"
- * @param {string} params.quality - "1080p", "720p", "4K", etc. (only for MP4)
+ * @param {string} params.quality - Ignored (for compatibility)
  * @param {string} params.output - Output file path
  * @returns {Promise<string>} Resolves with output path
  */
@@ -191,24 +296,14 @@ export async function downloadVideo({ url, format, quality, output }) {
     throw new Error("URL and output path are required");
   }
 
-  // Ensure output is in /tmp for Railway
-  if (!output.startsWith('/tmp')) {
-    const filename = path.basename(output);
-    output = `/tmp/${filename}`;
-  }
-
-  let args;
+  // Ensure yt-dlp is updated
+  await updateYTDLP();
 
   if (format === "mp3") {
-    // MP3 download
-    args = buildMp3Command(url, output);
+    return await downloadAudio(url, output);
   } else {
-    // MP4 download - use stable command regardless of quality
-    args = buildMp4Command(url, output);
+    return await downloadVideoFile(url, output);
   }
-
-  // Execute download
-  return await execDownload(args, output);
 }
 
 /**
@@ -218,14 +313,14 @@ export class YTService {
   static async downloadVideo(url, outputPath, format, onProgress) {
     return new Promise(async (resolve, reject) => {
       try {
-        // Map format to quality
-        const quality = format === "mp4" ? "1080p" : undefined;
+        // Ensure yt-dlp is updated
+        await updateYTDLP();
 
         // Call the new downloadVideo function
         const resultPath = await downloadVideo({
           url,
           format: format === "mp3" ? "mp3" : "mp4",
-          quality,
+          quality: undefined, // Ignored
           output: outputPath
         });
 
