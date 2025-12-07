@@ -47,107 +47,78 @@ function createZip(zipPath, files) {
 
 /**
  * Create chunked ZIP archives from files
- * @param {string} basePath - Base path for ZIP files (without extension)
- * @param {Array<{filePath: string, fileName: string}>} files - Files to include
+ * @param {string} jobId - Job ID
+ * @param {Array<{path: string, filename: string}>} files - Files to include
  * @returns {Promise<Array<{index: number, path: string, size: number}>>} Array of ZIP part info
  */
-function createChunkedZips(basePath, files) {
-  return new Promise(async (resolve, reject) => {
-    const parts = [];
-    let currentPartIndex = 1;
-    let currentPartSize = 0;
-    let currentArchive = null;
-    let currentOutput = null;
-    let currentPartPath = null;
+async function createChunkedZip(jobId, files) {
+  const MAX_PART_SIZE = 400 * 1024 * 1024; // 400 MB
+  const baseDir = `/tmp/batchtube/${jobId}`;
+  
+  if (!fs.existsSync(baseDir)) {
+    fs.mkdirSync(baseDir, { recursive: true });
+  }
 
-    const startNewPart = () => {
-      return new Promise((resolvePart, rejectPart) => {
-        if (currentArchive) {
-          currentArchive.finalize();
-        }
+  let partIndex = 1;
+  let currentSize = 0;
 
-        currentPartPath = `${basePath}.part${currentPartIndex}.zip`;
-        currentOutput = fs.createWriteStream(currentPartPath);
-        currentArchive = archiver('zip', { zlib: { level: 9 } });
-        currentPartSize = 0;
+  let output = fs.createWriteStream(`${baseDir}/${jobId}.part${partIndex}.zip`);
+  let archive = archiver('zip', { zlib: { level: 9 } });
+  archive.pipe(output);
 
-        currentOutput.on('close', () => {
-          const zipSize = currentArchive.pointer();
-          if (zipSize < 100) {
-            rejectPart(new Error(`ZIP part ${currentPartIndex} is too small`));
-            return;
-          }
-          console.log(`[Zip] Created part ${currentPartIndex}: ${currentPartPath} (${zipSize} bytes)`);
-          parts.push({
-            index: currentPartIndex,
-            path: currentPartPath,
-            size: zipSize
-          });
-          resolvePart();
+  const zipParts = [];
+
+  async function finalizeCurrentZip() {
+    return new Promise((resolve, reject) => {
+      output.on('close', () => {
+        const partPath = `${baseDir}/${jobId}.part${partIndex}.zip`;
+        const partSize = fs.statSync(partPath).size;
+        zipParts.push({
+          index: partIndex,
+          path: partPath,
+          size: partSize
         });
-
-        currentArchive.on('error', (err) => {
-          console.error(`[Zip] Part ${currentPartIndex} creation error:`, err);
-          rejectPart(err);
-        });
-
-        currentArchive.pipe(currentOutput);
+        console.log(`[Zip] Part ${partIndex} created: ${partPath} (${partSize} bytes)`);
+        resolve();
       });
-    };
 
-    try {
-      // Start first part
-      await startNewPart();
+      archive.on('error', (err) => {
+        console.error(`[Zip] Part ${partIndex} finalize error:`, err);
+        reject(err);
+      });
 
-      // Add files to parts
-      for (const file of files) {
-        if (!fs.existsSync(file.filePath)) {
-          console.warn(`[Zip] File not found: ${file.filePath}`);
-          continue;
-        }
+      archive.finalize();
+    });
+  }
 
-        const fileStats = fs.statSync(file.filePath);
-        const fileSize = fileStats.size;
-
-        // Check if adding this file would exceed the limit
-        if (currentPartSize + fileSize > MAX_PART_SIZE && currentPartSize > 0) {
-          // Finalize current part
-          await new Promise((resolveFinalize) => {
-            currentArchive.finalize();
-            currentOutput.on('close', resolveFinalize);
-          });
-
-          // Start new part
-          currentPartIndex++;
-          await startNewPart();
-        }
-
-        // Add file to current archive
-        currentArchive.file(file.filePath, { name: file.fileName });
-        currentPartSize += fileSize;
-      }
-
-      // Finalize last part
-      if (currentArchive) {
-        await new Promise((resolveFinalize) => {
-          currentArchive.finalize();
-          currentOutput.on('close', resolveFinalize);
-        });
-      }
-
-      if (parts.length === 0) {
-        reject(new Error('No ZIP parts created'));
-        return;
-      }
-
-      console.log(`[Zip] Created ${parts.length} ZIP part(s)`);
-      resolve(parts);
-    } catch (err) {
-      console.error('[Zip] Chunked creation error:', err);
-      reject(err);
+  for (const file of files) {
+    if (!fs.existsSync(file.path)) {
+      console.warn(`[Zip] File not found: ${file.path}`);
+      continue;
     }
-  });
+
+    const fileSize = fs.statSync(file.path).size;
+
+    if (currentSize + fileSize > MAX_PART_SIZE && currentSize > 0) {
+      await finalizeCurrentZip();
+
+      partIndex++;
+      currentSize = 0;
+
+      output = fs.createWriteStream(`${baseDir}/${jobId}.part${partIndex}.zip`);
+      archive = archiver('zip', { zlib: { level: 9 } });
+      archive.pipe(output);
+    }
+
+    archive.file(file.path, { name: file.filename });
+    currentSize += fileSize;
+  }
+
+  await finalizeCurrentZip();
+  
+  console.log(`[Zip] Created ${zipParts.length} ZIP part(s) for job ${jobId}`);
+  return zipParts;
 }
 
-module.exports = { createZip, createChunkedZips, MAX_PART_SIZE };
+module.exports = { createZip, createChunkedZip, MAX_PART_SIZE };
 

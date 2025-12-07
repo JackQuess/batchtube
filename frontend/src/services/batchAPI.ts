@@ -80,22 +80,11 @@ export const batchAPI = {
   },
 
   /**
-   * Get ZIP parts information for completed job
+   * Get download URL for completed job
+   * Returns direct API endpoint for combined ZIP download
    */
-  getDownloadParts: async (jobId: string): Promise<{ jobId: string; parts: Array<{ index: number; size: number; url: string }> }> => {
-    const res = await fetch(`${API_BASE_URL}/api/batch/${jobId}/download`, {
-      method: 'GET',
-      mode: 'cors',
-      credentials: 'omit',
-      headers: { 'Content-Type': 'application/json' }
-    });
-
-    if (!res.ok) {
-      const error = await res.json().catch(() => ({ error: 'Failed to get download parts' }));
-      throw new Error(error.error || 'Failed to get download parts');
-    }
-
-    return res.json();
+  getDownloadUrl: (jobId: string): string => {
+    return `${API_BASE_URL}/api/batch/${jobId}/download`;
   }
 };
 

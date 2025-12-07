@@ -13,12 +13,6 @@ interface ProgressModalProps {
   totalItems: number;
 }
 
-interface ZipPart {
-  index: number;
-  size: number;
-  url: string;
-}
-
 export const ProgressModal: React.FC<ProgressModalProps> = ({ 
   jobId, 
   onClose, 
@@ -28,7 +22,6 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState(true);
   const [itemProgress, setItemProgress] = useState<Record<number, { percent: number; title: string; thumbnail: string | null }>>({});
-  const [zipParts, setZipParts] = useState<ZipPart[] | null>(null);
 
   // Subscribe to SSE stream for live progress
   useEffect(() => {
@@ -154,23 +147,10 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
     return () => clearInterval(pollInterval);
   }, [jobId, isPolling]);
 
-  // Fetch ZIP parts when job is completed
-  useEffect(() => {
-    if (status?.state === 'completed' && !zipParts) {
-      batchAPI.getDownloadParts(jobId)
-        .then(data => {
-          setZipParts(data.parts);
-        })
-        .catch(err => {
-          console.error('[ProgressModal] Failed to get ZIP parts:', err);
-          setError('Failed to get download links');
-        });
-    }
-  }, [status?.state, jobId, zipParts]);
-
-  const handleDownloadPart = (partUrl: string) => {
-    // Direct download from API endpoint
-    window.location.href = `${API_BASE_URL}${partUrl}`;
+  const handleDownload = () => {
+    // Direct download from API endpoint (combined ZIP)
+    const downloadUrl = batchAPI.getDownloadUrl(jobId);
+    window.location.href = downloadUrl;
   };
 
   if (error && !status) {
@@ -415,75 +395,37 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 border-t border-white/5 bg-[#0e0e11]">
-          {isCompleted && zipParts && zipParts.length > 0 ? (
-            <div className="space-y-3">
-              <div className="text-sm text-gray-400 mb-2">
-                Download {zipParts.length} ZIP part{zipParts.length > 1 ? 's' : ''}:
-              </div>
-              <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto">
-                {zipParts.map((part) => (
-                  <button
-                    key={part.index}
-                    onClick={() => handleDownloadPart(part.url)}
-                    className="w-full py-2.5 px-4 bg-green-600 hover:bg-green-500 text-white rounded-xl font-medium shadow-lg shadow-green-900/20 flex items-center justify-between transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      <DownloadCloud size={16} />
-                      <span>Part {part.index}</span>
-                    </div>
-                    <span className="text-sm opacity-90">
-                      {(part.size / (1024 * 1024)).toFixed(1)} MB
-                    </span>
-                  </button>
-                ))}
-              </div>
-              <button 
-                onClick={onClose}
-                className="w-full mt-2 py-2.5 rounded-xl font-medium text-gray-400 hover:bg-white/5 hover:text-white transition-colors"
-              >
-                Close
-              </button>
-            </div>
-          ) : isCompleted ? (
-            <div className="flex gap-3">
-              <button 
-                onClick={onClose}
-                className="flex-1 py-3 rounded-xl font-medium text-gray-400 hover:bg-white/5 hover:text-white transition-colors"
-              >
-                Close
-              </button>
-              <button 
-                disabled
-                className="flex-1 py-3 bg-gray-700 text-gray-400 rounded-xl font-bold cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                <Loader2 size={18} className="animate-spin" />
-                Loading parts...
-              </button>
-            </div>
+        <div className="p-4 border-t border-white/5 bg-[#0e0e11] flex gap-3">
+          <button 
+            onClick={onClose}
+            className="flex-1 py-3 rounded-xl font-medium text-gray-400 hover:bg-white/5 hover:text-white transition-colors"
+          >
+            Close
+          </button>
+          
+          {isCompleted ? (
+            <button 
+              onClick={handleDownload}
+              className="flex-1 py-3 bg-green-600 hover:bg-green-500 text-white rounded-xl font-bold shadow-lg shadow-green-900/20 flex items-center justify-center gap-2 transition-colors"
+            >
+              <DownloadCloud size={18} />
+              Download ZIP
+            </button>
           ) : isFailed ? (
             <button 
               onClick={onClose}
-              className="w-full py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-xl font-bold transition-colors"
+              className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-xl font-bold transition-colors"
             >
               Close
             </button>
           ) : (
-            <div className="flex gap-3">
-              <button 
-                onClick={onClose}
-                className="flex-1 py-3 rounded-xl font-medium text-gray-400 hover:bg-white/5 hover:text-white transition-colors"
-              >
-                Close
-              </button>
-              <button 
-                disabled
-                className="flex-1 py-3 bg-gray-700 text-gray-400 rounded-xl font-bold cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                <Loader2 size={18} className="animate-spin" />
-                {isActive ? 'Downloading...' : 'Waiting...'}
-              </button>
-            </div>
+            <button 
+              disabled
+              className="flex-1 py-3 bg-gray-700 text-gray-400 rounded-xl font-bold cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              <Loader2 size={18} className="animate-spin" />
+              {isActive ? 'Downloading...' : 'Waiting...'}
+            </button>
           )}
         </div>
 

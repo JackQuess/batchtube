@@ -7,7 +7,7 @@
 const { Worker } = require('bullmq');
 const redisConnection = require('./utils/redis');
 const { downloadWithYtDlp } = require('./utils/ytService');
-const { createChunkedZips } = require('./utils/zip');
+const { createChunkedZip } = require('./utils/zip');
 const { sanitizeFilename } = require('./utils/helpers');
 const path = require('path');
 const fs = require('fs-extra');
@@ -44,11 +44,11 @@ async function uploadZipPart(jobId, part) {
       }
     );
     
-    console.log(`[Worker] Uploaded ZIP part ${part.index} → API (${zipBuffer.length} bytes)`);
+    console.log(`[Worker] Uploaded ZIP part ${part.index}`);
     return true;
   } catch (err) {
     console.error(`[Worker] ZIP part ${part.index} upload error:`, err.message);
-    return false;
+    throw err; // Throw to fail the job if upload fails
   }
 }
 
@@ -236,31 +236,26 @@ const worker = new Worker(
       throw new Error('No items downloaded successfully');
     }
 
+    // Prepare files for ZIP creation (map to {filePath, fileName})
+    const downloadedFiles = successful.map(r => ({
+      path: r.filePath,
+      filename: r.fileName
+    }));
+
+    console.log(`[Worker] Creating chunked ZIP for ${downloadedFiles.length} files...`);
+
     // Create chunked ZIP parts
-    const baseZipPath = path.join(tempDir, jobId);
-    const zipParts = await createChunkedZips(baseZipPath, successful);
+    const zipParts = await createChunkedZip(jobId, downloadedFiles);
+
+    console.log(`[Worker] Created ${zipParts.length} ZIP part(s), uploading to API...`);
 
     // Upload each ZIP part to API
     for (const part of zipParts) {
+      console.log(`[Worker] Uploading ZIP part ${part.index}...`);
       await uploadZipPart(jobId, part);
     }
 
-    // Save part metadata to Redis
-    try {
-      const partMetadata = zipParts.map(p => ({
-        index: p.index,
-        size: p.size
-      }));
-      await redisConnection.set(
-        `batch:${jobId}:parts`,
-        JSON.stringify(partMetadata),
-        'EX',
-        3600 // 1 hour TTL
-      );
-      console.log(`[Worker] Saved part metadata to Redis (${zipParts.length} parts)`);
-    } catch (redisError) {
-      console.error(`[Worker] Failed to save part metadata:`, redisError.message);
-    }
+    console.log(`[Worker] All ZIP parts uploaded successfully`);
 
     // Clean up local ZIP parts after sending to API
     for (const part of zipParts) {

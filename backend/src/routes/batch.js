@@ -247,12 +247,13 @@ router.get('/batch/:jobId/events', async (req, res) => {
 router.post(
   '/batch/upload-part',
   express.raw({ type: '*/*', limit: '500mb' }),
-  async (req, res) => {
+  (req, res) => {
     try {
       const jobId = req.headers['x-job-id'];
-      const partIndex = req.headers['x-part-index'];
+      const index = req.headers['x-part-index'];
+      const size = req.headers['x-part-size'];
 
-      if (!jobId || !partIndex) {
+      if (!jobId || !index) {
         return res.status(400).json({ error: 'Missing jobId or partIndex' });
       }
 
@@ -262,17 +263,17 @@ router.post(
         return res.status(400).json({ error: 'Empty ZIP part' });
       }
 
-      const dir = '/tmp';
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
+      const tempDir = `/tmp/batchtube/${jobId}`;
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
       }
 
-      const filePath = path.join(dir, `${jobId}.part${partIndex}.zip`);
+      const filePath = `${tempDir}/${jobId}.part${index}.zip`;
       fs.writeFileSync(filePath, zipBuffer);
 
-      console.log(`[API] ZIP part ${partIndex} saved: ${filePath} (${zipBuffer.length} bytes)`);
+      console.log(`[API] Saved ZIP part #${index} (${size || zipBuffer.length} bytes)`);
 
-      res.json({ success: true });
+      return res.json({ success: true });
     } catch (err) {
       console.error('[API] ZIP part upload error:', err);
       res.status(500).json({ error: 'Part upload failed' });
@@ -282,71 +283,53 @@ router.post(
 
 /**
  * GET /api/batch/:jobId/download
- * Returns JSON with all ZIP parts information
+ * Combine all ZIP parts and stream to user
  */
 router.get('/batch/:jobId/download', async (req, res) => {
   try {
     const { jobId } = req.params;
+    const dir = `/tmp/batchtube/${jobId}`;
 
-    // Read part metadata from Redis
-    let metaJson;
-    try {
-      metaJson = await redisConnection.get(`batch:${jobId}:parts`);
-    } catch (redisError) {
-      console.error('[Batch] Redis error:', redisError.message);
-      return res.status(500).json({ error: 'Failed to get part metadata' });
+    if (!fs.existsSync(dir)) {
+      return res.status(404).json({ error: 'ZIP not ready yet' });
     }
 
-    if (!metaJson) {
-      return res.status(404).json({ error: 'No ZIP parts found' });
+    const parts = fs
+      .readdirSync(dir)
+      .filter(f => f.endsWith('.zip'))
+      .sort((a, b) => {
+        const ai = Number(a.match(/part(\d+)/)?.[1] || 0);
+        const bi = Number(b.match(/part(\d+)/)?.[1] || 0);
+        return ai - bi;
+      });
+
+    if (parts.length === 0) {
+      return res.status(404).json({ error: 'ZIP not ready yet' });
     }
 
-    const parts = JSON.parse(metaJson);
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="batch-${jobId}.zip"`);
 
-    // Construct download URLs for each part
-    const partLinks = parts.map(p => ({
-      index: p.index,
-      size: p.size,
-      url: `/api/batch/${jobId}/download-part/${p.index}`
-    }));
-
-    return res.json({ jobId, parts: partLinks });
-  } catch (error) {
-    console.error('[Batch] Download metadata error:', error);
-    res.status(500).json({ error: 'Failed to get download info' });
-  }
-});
-
-/**
- * GET /api/batch/:jobId/download-part/:partIndex
- * Download a specific ZIP part
- */
-router.get('/batch/:jobId/download-part/:partIndex', async (req, res) => {
-  try {
-    const { jobId, partIndex } = req.params;
-    const filePath = path.join('/tmp', `${jobId}.part${partIndex}.zip`);
-
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ error: 'ZIP part not found' });
+    for (const p of parts) {
+      const full = `${dir}/${p}`;
+      const data = fs.readFileSync(full);
+      res.write(data);
     }
 
-    const fileName = `${jobId}.part${partIndex}.zip`;
-    
-    res.download(filePath, fileName, (err) => {
-      if (err) {
-        console.error(`[Batch] Download part ${partIndex} error:`, err);
-        if (!res.headersSent) {
-          res.status(500).json({ error: 'Download failed' });
-        }
-      } else {
-        // Optionally delete after download (commented out to allow retries)
-        // fs.unlink(filePath, () => {
-        //   console.log(`[API] Cleaned ZIP part: ${filePath}`);
-        // });
+    res.end();
+
+    // Clean up after a delay
+    setTimeout(() => {
+      try {
+        fs.rmSync(dir, { recursive: true, force: true });
+        console.log(`[API] Cleaned up ZIP directory: ${dir}`);
+      } catch (cleanupErr) {
+        console.error(`[API] Failed to cleanup: ${cleanupErr.message}`);
       }
-    });
+    }, 5000);
+
   } catch (error) {
-    console.error('[Batch] Download part error:', error);
+    console.error('[Batch] Download error:', error);
     if (!res.headersSent) {
       res.status(500).json({ error: 'Download failed' });
     }
