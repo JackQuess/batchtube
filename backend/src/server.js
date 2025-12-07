@@ -2,6 +2,10 @@ import express from 'express';
 import cors from 'cors';
 import routes from './routes/index.js';
 import { startCookieCron } from './jobs/cookieCron.js';
+import { ensureYTDLP } from './core/bootstrapYTDLP.js';
+
+// Bootstrap yt-dlp before starting server
+ensureYTDLP();
 
 const app = express();
 const PORT = process.env.PORT || 3001;

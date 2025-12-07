@@ -6,7 +6,9 @@ import { cookiesManager } from "./CookiesManager.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const ytdlp = path.resolve(__dirname, "../bin/yt-dlp");
+// Use system yt-dlp (installed by bootstrap) with fallback to local binary
+const localBinary = path.resolve(__dirname, "../bin/yt-dlp");
+const ytdlp = fs.existsSync(localBinary) ? localBinary : "yt-dlp";
 const MIN_FILE_SIZE = 100 * 1024; // 100KB minimum
 
 // Auto-update yt-dlp on module load (only once)
@@ -16,14 +18,7 @@ function updateYTDLP() {
   if (ytdlpUpdated) return Promise.resolve();
   
   return new Promise((resolve) => {
-    // Check if binary exists
-    if (!fs.existsSync(ytdlp)) {
-      console.warn("[YTService] yt-dlp binary not found at", ytdlp, "- skipping update");
-      ytdlpUpdated = true;
-      resolve();
-      return;
-    }
-
+    // Bootstrap already ensures yt-dlp is installed, just try to update
     console.log("[YTService] Updating yt-dlp...");
     const updateProcess = spawn(ytdlp, ["-U"], { shell: false });
     
@@ -72,17 +67,23 @@ function buildMp4Command(url, output, quality) {
   if (quality === "4K" || quality === "2160p" || quality === "4k") {
     return [
       url,
-      "-f", "bv*[height>=2160]+ba/bv*+ba",
+      "-f", "bv*+ba/best",
       "--merge-output-format", "mp4",
+      "--no-warnings",
+      "--compat-options", "manifest-files",
+      "--no-check-certificate",
       "-o", output
     ];
   }
   
-  // Default: Stable MP4 command
+  // Default: Stable MP4 command with signature support
   return [
     url,
-    "-f", "bv*[ext=mp4]+ba[ext=m4a]/mp4",
+    "-f", "bv*+ba/best",
     "--merge-output-format", "mp4",
+    "--no-warnings",
+    "--compat-options", "manifest-files",
+    "--no-check-certificate",
     "-o", output
   ];
 }
@@ -96,6 +97,9 @@ function buildMp3Command(url, output) {
     "-x",
     "--audio-format", "mp3",
     "--audio-quality", "320K",
+    "--no-warnings",
+    "--compat-options", "manifest-files",
+    "--no-check-certificate",
     "-o", output
   ];
 }
