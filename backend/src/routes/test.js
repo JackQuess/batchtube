@@ -1,6 +1,11 @@
 import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const ytdlp = path.resolve(__dirname, '../bin/yt-dlp');
 
 export const handleTestYT = async (req, res) => {
   try {
@@ -8,10 +13,19 @@ export const handleTestYT = async (req, res) => {
     const testOutput = '/tmp/test-yt-dlp.mp4';
 
     console.log('[Test] Testing yt-dlp installation...');
-    console.log('[Test] Command: yt-dlp', testUrl, '-f', 'mp4', '-o', testOutput);
+    console.log('[Test] Binary path:', ytdlp);
+    console.log('[Test] Command:', ytdlp, testUrl, '-f', 'mp4', '-o', testOutput);
+
+    // Check if binary exists
+    if (!fs.existsSync(ytdlp)) {
+      return res.status(500).json({
+        success: false,
+        error: `yt-dlp binary not found at ${ytdlp}`
+      });
+    }
 
     // Test yt-dlp version first
-    const versionCheck = spawn('yt-dlp', ['--version'], { shell: true });
+    const versionCheck = spawn(ytdlp, ['--version'], { shell: false });
     let versionOutput = '';
     
     versionCheck.stdout.on('data', (data) => {
@@ -36,12 +50,12 @@ export const handleTestYT = async (req, res) => {
     }
 
     // Run test download
-    const child = spawn('yt-dlp', [
+    const child = spawn(ytdlp, [
       testUrl,
       '-f', 'mp4',
       '--no-playlist',
       '-o', testOutput
-    ], { shell: true });
+    ], { shell: false });
 
     let stdout = '';
     let stderr = '';

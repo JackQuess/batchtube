@@ -1,9 +1,12 @@
 import { spawn } from "child_process";
 import path from "path";
 import fs from "fs";
+import { fileURLToPath } from "url";
 import { cookiesManager } from "./CookiesManager.js";
 
-const ytdlp = "yt-dlp";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const ytdlp = path.resolve(__dirname, "../bin/yt-dlp");
 const MIN_FILE_SIZE = 100 * 1024; // 100KB minimum
 
 // Auto-update yt-dlp on module load (only once)
@@ -13,8 +16,17 @@ function updateYTDLP() {
   if (ytdlpUpdated) return Promise.resolve();
   
   return new Promise((resolve) => {
+    // Check if binary exists
+    if (!fs.existsSync(ytdlp)) {
+      console.warn("[YTService] yt-dlp binary not found at", ytdlp, "- skipping update");
+      ytdlpUpdated = true;
+      resolve();
+      return;
+    }
+
     console.log("[YTService] Updating yt-dlp...");
-    const updateProcess = spawn(ytdlp, ["-U"], { shell: true });
+    // Use the binary path directly, no shell needed for local binary
+    const updateProcess = spawn(ytdlp, ["-U"], { shell: false });
     
     updateProcess.on("close", (code) => {
       ytdlpUpdated = true;
@@ -110,7 +122,8 @@ function execDownload(args, outputPath, retryOnCookieError = true, formatIndex =
       console.log(`[YTService] Executing: ${ytdlp} ${finalArgs.join(" ")}`);
     }
 
-    const child = spawn(ytdlp, finalArgs, { shell: true });
+    // Use shell:false for local binary (more secure, no deprecation warning)
+    const child = spawn(ytdlp, finalArgs, { shell: false });
 
     let stdout = "";
     let stderr = "";

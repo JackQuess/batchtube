@@ -23,6 +23,10 @@ RUN npm ci --only=production
 # Copy application code
 COPY . .
 
+# Copy yt-dlp binary and make it executable
+COPY bin/yt-dlp /app/bin/yt-dlp
+RUN chmod +x /app/bin/yt-dlp
+
 # Expose port
 EXPOSE 3000
 
