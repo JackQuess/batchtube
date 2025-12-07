@@ -65,17 +65,18 @@ export const SelectionModal: React.FC<SelectionModalProps> = ({
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#050509]">
-          {items.length === 0 ? (
-            <div className="text-center text-gray-500 py-12">
-              <p>{t.itemsSelected?.replace('Videos', 'No videos') || 'No items selected'}</p>
-            </div>
-          ) : (
-            items.map((item, index) => (
-              <div
-                key={`${item.video.id}-${index}`}
-                className="flex items-center gap-4 p-4 rounded-xl bg-[#0b0b10] border border-white/5 hover:border-white/10 transition-colors"
-              >
+        <div className="flex-1 overflow-y-auto bg-[#050509]">
+          <div className="flex flex-col items-center justify-center w-full gap-3 px-4 py-4">
+            {items.length === 0 ? (
+              <div className="text-center text-gray-500 py-12 w-full">
+                <p>{t.itemsSelected?.replace('Videos', 'No videos') || 'No items selected'}</p>
+              </div>
+            ) : (
+              items.map((item, index) => (
+                <div
+                  key={`${item.video.id}-${index}`}
+                  className="w-full max-w-[520px] flex items-center gap-4 p-4 rounded-xl bg-[#0b0b10] border border-white/5 hover:border-white/10 transition-colors"
+                >
                 {/* Thumbnail */}
                 <div className="relative flex-shrink-0 w-24 h-16 rounded-lg overflow-hidden bg-[#1a1a20]">
                   <img
@@ -121,6 +122,7 @@ export const SelectionModal: React.FC<SelectionModalProps> = ({
               </div>
             ))
           )}
+          </div>
         </div>
       </div>
     </div>
