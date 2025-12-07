@@ -123,10 +123,10 @@ const App: React.FC = () => {
       
       <Navbar lang={lang} setLang={setLang} />
       
-      <main className="flex-grow pt-20 pb-24 w-full max-w-7xl mx-auto">
+      <main className="flex-grow pt-16 sm:pt-20 pb-24 w-full max-w-[1200px] mx-auto px-4">
         <Hero onSearch={handleSearch} loading={isSearching} t={t} />
 
-        <div className="px-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-fadeIn">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-5 md:gap-6 animate-fadeIn">
           {results.map(video => (
             <VideoCard
               key={video.id}

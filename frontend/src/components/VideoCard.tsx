@@ -90,39 +90,39 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   return (
     <div 
       onClick={handleClick}
-      className={`group relative bg-[#0b0b10] rounded-xl overflow-hidden border transition-all duration-300 cursor-pointer flex flex-col
+      className={`group relative bg-[#0b0b10] rounded-xl overflow-hidden border transition-all duration-300 cursor-pointer flex flex-col touch-manipulation
         ${isSelected ? 'border-primary ring-1 ring-primary shadow-lg shadow-primary/10' : 'border-white/5 hover:border-white/20'}
       `}
     >
       {/* Thumbnail */}
-      <div className="relative aspect-video">
+      <div className="relative aspect-video w-full">
         <img 
           src={getThumbnailUrl()} 
           alt={video.title} 
           className="w-full h-full object-cover"
           onError={handleThumbnailError}
         />
-        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-          <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-transform duration-300 ${isSelected ? 'bg-primary scale-110' : 'bg-white/10 scale-90'}`}>
-            {isSelected ? <CheckCircle className="text-white" /> : <Play className="text-white fill-white" />}
+        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none sm:pointer-events-auto">
+          <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-transform duration-300 ${isSelected ? 'bg-primary scale-110' : 'bg-white/10 scale-90'}`}>
+            {isSelected ? <CheckCircle className="text-white" size={20} /> : <Play className="text-white fill-white" size={20} />}
           </div>
         </div>
         {formattedDuration && (
-          <span className="absolute bottom-2 right-2 bg-black/80 text-white text-xs px-2 py-0.5 rounded font-mono">
+          <span className="absolute bottom-2 right-2 bg-black/80 text-white text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded font-mono">
             {formattedDuration}
           </span>
         )}
       </div>
 
       {/* Content */}
-      <div className="p-4 flex flex-col flex-grow">
-        <h3 className="text-white font-medium line-clamp-2 leading-snug mb-1" title={video.title}>
+      <div className="p-3 sm:p-4 flex flex-col flex-grow">
+        <h3 className="text-white font-medium line-clamp-2 leading-snug mb-1 text-xs sm:text-sm" title={video.title}>
           {video.title}
         </h3>
-        <p className="text-gray-500 text-xs mb-3">{video.channel || 'Unknown Channel'}</p>
+        <p className="text-gray-500 text-[10px] sm:text-xs mb-2 sm:mb-3 truncate">{video.channel || 'Unknown Channel'}</p>
         
-        <div className="mt-auto flex items-center justify-between pt-3 border-t border-white/5">
-          <span className={`text-xs font-bold transition-colors ${isSelected ? 'text-primary' : 'text-gray-600'}`}>
+        <div className="mt-auto flex items-center justify-between pt-2 sm:pt-3 border-t border-white/5">
+          <span className={`text-[10px] sm:text-xs font-bold transition-colors ${isSelected ? 'text-primary' : 'text-gray-600'}`}>
             {isSelected ? t.selected.toUpperCase() : t.addToBatch.toUpperCase()}
           </span>
         </div>

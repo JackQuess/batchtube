@@ -36,100 +36,187 @@ export const SelectionBar: React.FC<SelectionBarProps> = ({
   };
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 bg-zinc-900/90 px-6 py-4 rounded-xl shadow-xl backdrop-blur-lg border border-zinc-700/50 max-w-[90%]">
+    <div className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-50 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 md:gap-4 bg-zinc-900/90 px-3 sm:px-4 md:px-6 py-3 sm:py-4 rounded-xl shadow-xl backdrop-blur-lg border border-zinc-700/50 max-w-[95%] sm:max-w-[90%]">
       
-      {/* Count Badge */}
-      <div className="bg-primary/10 text-primary px-3 py-1 rounded-lg text-sm font-bold whitespace-nowrap">
-        {count} {t.itemsSelected}
+      {/* Top Row - Mobile Only */}
+      <div className="flex items-center gap-2 sm:hidden justify-between w-full">
+        <div className="bg-primary/10 text-primary px-2 py-1 rounded-lg text-xs font-bold whitespace-nowrap">
+          {count} {t.itemsSelected}
+        </div>
+        <button 
+          onClick={onClear}
+          className="p-1.5 text-gray-500 hover:text-white transition-colors"
+          title={t.clearAll}
+        >
+          <X size={18} />
+        </button>
       </div>
 
-      <div className="h-6 w-px bg-white/10"></div>
+      {/* Desktop Layout */}
+      <div className="hidden sm:flex items-center gap-2 md:gap-4 flex-wrap">
+        {/* Count Badge */}
+        <div className="bg-primary/10 text-primary px-2 md:px-3 py-1 rounded-lg text-xs sm:text-sm font-bold whitespace-nowrap">
+          {count} {t.itemsSelected}
+        </div>
 
-      {/* Status Text */}
-      <span className="text-gray-400 text-sm whitespace-nowrap">
-        {t.readyToProcess || 'İşleme hazır'}
-      </span>
+        <div className="h-6 w-px bg-white/10 hidden md:block"></div>
 
-      <div className="h-6 w-px bg-white/10"></div>
+        {/* Status Text */}
+        <span className="text-gray-400 text-xs sm:text-sm whitespace-nowrap hidden md:inline">
+          {t.readyToProcess || 'İşleme hazır'}
+        </span>
 
-      {/* View List Button */}
-      <button
-        onClick={onViewList}
-        className="text-white bg-white/5 hover:bg-white/10 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap"
-      >
-        {t.viewList || 'Listeyi Gör'}
-      </button>
+        <div className="h-6 w-px bg-white/10 hidden md:block"></div>
 
-      {/* Format Selector */}
-      <div className="relative">
-        <button 
-          onClick={() => {
-            setShowFormatMenu(!showFormatMenu);
-            setShowQualityMenu(false);
-          }}
-          className="flex items-center gap-2 text-white bg-white/5 px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-white/10 transition-colors"
+        {/* View List Button */}
+        <button
+          onClick={onViewList}
+          className="text-white bg-white/5 hover:bg-white/10 px-3 md:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap"
         >
-          <span className="uppercase text-gray-400">{t.formatLabel}:</span> {format.toUpperCase()}
-          <ChevronDown size={14} className="text-gray-500" />
+          {t.viewList || 'Listeyi Gör'}
         </button>
-        {showFormatMenu && (
-          <div className="absolute bottom-full mb-2 left-0 w-full bg-[#1a1a20] border border-white/10 rounded-lg overflow-hidden z-20">
-            <div onClick={() => handleFormatChange('mp3')} className="px-3 py-2 text-sm text-gray-300 hover:bg-white/10 cursor-pointer">MP3</div>
-            <div onClick={() => handleFormatChange('mp4')} className="px-3 py-2 text-sm text-gray-300 hover:bg-white/10 cursor-pointer">MP4</div>
-          </div>
-        )}
+
+        {/* Format Selector */}
+        <div className="relative">
+          <button 
+            onClick={() => {
+              setShowFormatMenu(!showFormatMenu);
+              setShowQualityMenu(false);
+            }}
+            className="flex items-center gap-1 md:gap-2 text-white bg-white/5 px-2 md:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium hover:bg-white/10 transition-colors"
+          >
+            <span className="uppercase text-gray-400 hidden sm:inline">{t.formatLabel}:</span>
+            <span className="uppercase text-gray-400 sm:hidden">F:</span>
+            {format.toUpperCase()}
+            <ChevronDown size={12} className="text-gray-500" />
+          </button>
+          {showFormatMenu && (
+            <div className="absolute bottom-full mb-2 left-0 w-full bg-[#1a1a20] border border-white/10 rounded-lg overflow-hidden z-20 min-w-[80px]">
+              <div onClick={() => handleFormatChange('mp3')} className="px-3 py-2 text-xs sm:text-sm text-gray-300 hover:bg-white/10 cursor-pointer">MP3</div>
+              <div onClick={() => handleFormatChange('mp4')} className="px-3 py-2 text-xs sm:text-sm text-gray-300 hover:bg-white/10 cursor-pointer">MP4</div>
+            </div>
+          )}
+        </div>
+
+        {/* Quality Selector */}
+        <div className="relative">
+          <button 
+            onClick={() => {
+              setShowQualityMenu(!showQualityMenu);
+              setShowFormatMenu(false);
+            }}
+            className="flex items-center gap-1 md:gap-2 text-white bg-white/5 px-2 md:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium hover:bg-white/10 transition-colors"
+          >
+            <span className="text-gray-400 hidden sm:inline">Quality:</span>
+            <span className="text-gray-400 sm:hidden">Q:</span>
+            {quality}
+            <ChevronDown size={12} className="text-gray-500" />
+          </button>
+          {showQualityMenu && (
+            <div className="absolute bottom-full mb-2 left-0 w-full bg-[#1a1a20] border border-white/10 rounded-lg overflow-hidden z-20 max-h-48 overflow-y-auto min-w-[100px]">
+              {qualities.map((q) => (
+                <div 
+                  key={q}
+                  onClick={() => {
+                    setQuality(q);
+                    setShowQualityMenu(false);
+                  }} 
+                  className={`px-3 py-2 text-xs sm:text-sm hover:bg-white/10 cursor-pointer ${
+                    quality === q ? 'text-primary font-bold' : 'text-gray-300'
+                  }`}
+                >
+                  {q}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex-1 hidden lg:block"></div>
+
+        {/* Actions */}
+        <button 
+          onClick={onClear}
+          className="p-2 text-gray-500 hover:text-white transition-colors hidden md:block"
+          title={t.clearAll}
+        >
+          <X size={18} />
+        </button>
+
+        <button 
+          onClick={onDownload}
+          className="bg-primary hover:bg-red-600 text-white px-3 md:px-5 py-1.5 md:py-2 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-1.5 md:gap-2 shadow-lg shadow-primary/20 transition-all active:scale-95"
+        >
+          <Archive size={14} className="md:w-4 md:h-4" />
+          <span className="hidden sm:inline">{t.downloadZip}</span>
+          <span className="sm:hidden">ZIP</span>
+        </button>
       </div>
 
-      {/* Quality Selector */}
-      <div className="relative">
-        <button 
-          onClick={() => {
-            setShowQualityMenu(!showQualityMenu);
-            setShowFormatMenu(false);
-          }}
-          className="flex items-center gap-2 text-white bg-white/5 px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-white/10 transition-colors"
+      {/* Mobile Bottom Row */}
+      <div className="flex sm:hidden items-center gap-2 w-full">
+        <button
+          onClick={onViewList}
+          className="flex-1 text-white bg-white/5 hover:bg-white/10 px-3 py-2 rounded-lg text-xs font-medium transition-colors text-center"
         >
-          <span className="text-gray-400">Quality:</span> {quality}
-          <ChevronDown size={14} className="text-gray-500" />
+          {t.viewList || 'Listeyi Gör'}
         </button>
-        {showQualityMenu && (
-          <div className="absolute bottom-full mb-2 left-0 w-full bg-[#1a1a20] border border-white/10 rounded-lg overflow-hidden z-20 max-h-48 overflow-y-auto">
-            {qualities.map((q) => (
-              <div 
-                key={q}
-                onClick={() => {
-                  setQuality(q);
-                  setShowQualityMenu(false);
-                }} 
-                className={`px-3 py-2 text-sm hover:bg-white/10 cursor-pointer ${
-                  quality === q ? 'text-primary font-bold' : 'text-gray-300'
-                }`}
-              >
-                {q}
+        <div className="flex gap-2">
+          <div className="relative">
+            <button 
+              onClick={() => {
+                setShowFormatMenu(!showFormatMenu);
+                setShowQualityMenu(false);
+              }}
+              className="text-white bg-white/5 px-2 py-2 rounded-lg text-xs font-medium hover:bg-white/10 transition-colors"
+            >
+              {format.toUpperCase()}
+            </button>
+            {showFormatMenu && (
+              <div className="absolute bottom-full mb-2 left-0 w-full bg-[#1a1a20] border border-white/10 rounded-lg overflow-hidden z-20 min-w-[80px]">
+                <div onClick={() => handleFormatChange('mp3')} className="px-3 py-2 text-xs text-gray-300 hover:bg-white/10 cursor-pointer">MP3</div>
+                <div onClick={() => handleFormatChange('mp4')} className="px-3 py-2 text-xs text-gray-300 hover:bg-white/10 cursor-pointer">MP4</div>
               </div>
-            ))}
+            )}
           </div>
-        )}
+          <div className="relative">
+            <button 
+              onClick={() => {
+                setShowQualityMenu(!showQualityMenu);
+                setShowFormatMenu(false);
+              }}
+              className="text-white bg-white/5 px-2 py-2 rounded-lg text-xs font-medium hover:bg-white/10 transition-colors"
+            >
+              {quality}
+            </button>
+            {showQualityMenu && (
+              <div className="absolute bottom-full mb-2 left-0 w-full bg-[#1a1a20] border border-white/10 rounded-lg overflow-hidden z-20 max-h-48 overflow-y-auto min-w-[100px]">
+                {qualities.map((q) => (
+                  <div 
+                    key={q}
+                    onClick={() => {
+                      setQuality(q);
+                      setShowQualityMenu(false);
+                    }} 
+                    className={`px-3 py-2 text-xs hover:bg-white/10 cursor-pointer ${
+                      quality === q ? 'text-primary font-bold' : 'text-gray-300'
+                    }`}
+                  >
+                    {q}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        <button 
+          onClick={onDownload}
+          className="bg-primary hover:bg-red-600 text-white px-3 py-2 rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-primary/20 transition-all active:scale-95"
+        >
+          <Archive size={14} />
+          ZIP
+        </button>
       </div>
-
-      <div className="flex-1"></div>
-
-      {/* Actions */}
-      <button 
-        onClick={onClear}
-        className="p-2 text-gray-500 hover:text-white transition-colors"
-        title={t.clearAll}
-      >
-        <X size={20} />
-      </button>
-
-      <button 
-        onClick={onDownload}
-        className="bg-primary hover:bg-red-600 text-white px-5 py-2 rounded-xl font-bold text-sm flex items-center gap-2 shadow-lg shadow-primary/20 transition-all active:scale-95"
-      >
-        <Archive size={16} />
-        {t.downloadZip}
-      </button>
     </div>
   );
 };
