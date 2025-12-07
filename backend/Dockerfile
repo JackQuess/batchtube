@@ -1,35 +1,36 @@
 FROM node:20-slim
 
-# Install system dependencies
+# 1. Sistem gereksinimlerini kur (Python3 ve FFmpeg şart, Curl indirme için lazım)
 RUN apt-get update && \
     apt-get install -y \
     python3 \
-    python3-pip \
     ffmpeg \
+    curl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Install yt-dlp
-RUN pip3 install --no-cache-dir yt-dlp
+# 2. yt-dlp'yi doğrudan GitHub'dan en son sürüm olarak indir ve global path'e koy
+# Bu yöntem pip'ten daha güvenilirdir çünkü release anında güncellenir.
+RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
 
-# Set working directory
+# 3. Çalıştırma izni ver
+RUN chmod a+rx /usr/local/bin/yt-dlp
+
+# Çalışma dizini ayarla
 WORKDIR /app
 
-# Copy package files
+# Package dosyalarını kopyala
 COPY package*.json ./
 
-# Install Node.js dependencies
+# Node modüllerini kur
 RUN npm ci --only=production
 
-# Copy application code
+# 4. Uygulama kodunu kopyala
+# ÖNEMLİ: .dockerignore dosyasında 'bin' klasörünün veya 'node_modules'un olduğundan emin ol
 COPY . .
 
-# Copy yt-dlp binary and make it executable
-COPY bin/yt-dlp /app/bin/yt-dlp
-RUN chmod +x /app/bin/yt-dlp
-
-# Expose port
+# Portu aç
 EXPOSE 3000
 
-# Start the application
+# Uygulamayı başlat
 CMD ["node", "src/server.js"]
-
