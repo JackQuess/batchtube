@@ -25,37 +25,15 @@ function withCookies(args) {
 /**
  * Build MP4 download command arguments
  */
-function buildMp4Command(url, output, quality) {
-  let args = [];
-
-  if (quality === "4K" || quality === "2160p" || quality === "4k") {
-    // 4K: Use height selector
-    args = [
-      url,
-      "-f", "bv*[height>=2160]+ba",
-      "--merge-output-format", "mp4",
-      "-o", output
-    ];
-  } else if (quality === "720p") {
-    // 720p: Use height selector
-    args = [
-      url,
-      "-f", "bv*[height<=720]+ba",
-      "--merge-output-format", "mp4",
-      "-o", output
-    ];
-  } else {
-    // Default (1080p or any other): Universal MP4 command
-    // This is the stable working command that never fails
-    args = [
-      url,
-      "-f", "bv*[ext=mp4]+ba[ext=m4a]/mp4",
-      "--merge-output-format", "mp4",
-      "-o", output
-    ];
-  }
-
-  return args;
+function buildMp4Command(url, output) {
+  // Stable MP4 command - works for all qualities
+  // yt-dlp will automatically select the best available quality
+  return [
+    url,
+    "-f", "bv*[ext=mp4]+ba[ext=m4a]/mp4",
+    "--merge-output-format", "mp4",
+    "-o", output
+  ];
 }
 
 /**
@@ -94,7 +72,8 @@ function execDownload(args, outputPath, retryOnCookieError = true) {
       console.log(`[YTService] Executing: ${ytdlp} ${finalArgs.join(" ")}`);
     }
 
-    const child = spawn(ytdlp, finalArgs);
+    // Railway requires shell:true for yt-dlp
+    const child = spawn(ytdlp, finalArgs, { shell: true });
 
     let stdout = "";
     let stderr = "";
@@ -207,9 +186,15 @@ function execDownload(args, outputPath, retryOnCookieError = true) {
  * @param {string} params.output - Output file path
  * @returns {Promise<string>} Resolves with output path
  */
-export async function downloadVideo({ url, format, quality = "1080p", output }) {
+export async function downloadVideo({ url, format, quality, output }) {
   if (!url || !output) {
     throw new Error("URL and output path are required");
+  }
+
+  // Ensure output is in /tmp for Railway
+  if (!output.startsWith('/tmp')) {
+    const filename = path.basename(output);
+    output = `/tmp/${filename}`;
   }
 
   let args;
@@ -218,8 +203,8 @@ export async function downloadVideo({ url, format, quality = "1080p", output }) 
     // MP3 download
     args = buildMp3Command(url, output);
   } else {
-    // MP4 download
-    args = buildMp4Command(url, output, quality);
+    // MP4 download - use stable command regardless of quality
+    args = buildMp4Command(url, output);
   }
 
   // Execute download

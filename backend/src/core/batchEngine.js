@@ -53,6 +53,7 @@ class BatchEngine {
     try {
       const safeTitle = (item.title || 'video').replace(/[^a-z0-9]/gi, '_').substring(0, 100);
       const ext = item.format === 'mp3' ? 'mp3' : 'mp4';
+      // Ensure output is in /tmp for Railway
       const outputPath = path.join(fileDir, `${safeTitle}.${ext}`);
 
       const result = await YTService.downloadVideo(

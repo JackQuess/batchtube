@@ -1,9 +1,9 @@
 import { generateId } from '../utils/id.js';
 import path from 'path';
-import os from 'os';
 import fs from 'fs-extra';
 
-const TEMP_DIR = path.join(os.tmpdir(), 'batchtube-downloads');
+// Railway requires /tmp for file operations
+const TEMP_DIR = '/tmp/batchtube-downloads';
 fs.ensureDirSync(TEMP_DIR);
 
 class JobStore {
