@@ -12,7 +12,7 @@ const { sanitizeFilename } = require('./utils/helpers');
 const path = require('path');
 const fs = require('fs-extra');
 const os = require('os');
-const pLimit = require('p-limit');
+const pLimit = require('p-limit').default;
 
 // Concurrency limit
 const limit = pLimit(3);
