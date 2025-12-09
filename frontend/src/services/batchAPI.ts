@@ -4,6 +4,8 @@
  */
 import { API_BASE_URL } from '../config/api';
 
+const isSafari = () => /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
 export interface BatchJobRequest {
   items: Array<{
     url: string;
@@ -45,12 +47,16 @@ export const batchAPI = {
    * Create a new batch download job
    */
   createJob: async (request: BatchJobRequest): Promise<BatchJobResponse> => {
+    const formatToUse = request.format === 'mp4'
+      ? (isSafari() ? 'mp4-h264' : 'mp4')
+      : request.format;
+
     const res = await fetch(`${API_BASE_URL}/api/batch`, {
       method: 'POST',
       mode: 'cors',
       credentials: 'omit',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request)
+      body: JSON.stringify({ ...request, format: formatToUse })
     });
 
     if (!res.ok) {
@@ -87,4 +93,3 @@ export const batchAPI = {
     return `${API_BASE_URL}/api/batch/${jobId}/download`;
   }
 };
-
