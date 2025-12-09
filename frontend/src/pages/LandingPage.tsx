@@ -90,12 +90,6 @@ export const LandingPage: React.FC = () => {
                   Start Downloading
                   <ArrowRight className="w-5 h-5" />
                 </a>
-                <a
-                  href="#how-it-works"
-                  className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-[24px] border border-white/15 bg-white/5 backdrop-blur font-semibold hover:bg-white/10 transition-colors"
-                >
-                  See How It Works
-                </a>
               </div>
               <div className="relative mt-6">
                 <CardGlow />
