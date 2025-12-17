@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { VideoResult, VideoFormat, SupportedLanguage, SelectionItem, LegalDocType, VideoQuality } from './types';
+import { VideoResult, VideoFormat, SupportedLanguage, SelectionItem, VideoQuality } from './types';
 import { TRANSLATIONS } from './constants';
 import { api } from './services/apiService';
 
@@ -10,22 +10,36 @@ import { VideoCard } from './components/VideoCard';
 import { SelectionBar } from './components/SelectionBar';
 import { SelectionModal } from './components/SelectionModal';
 import { ProgressModal } from './components/ProgressModal';
-import { LegalModal } from './components/LegalModal';
 import { Footer } from './components/Footer';
 import { CookieConsent } from './components/CookieConsent';
 import { AdSlotSearch } from './components/AdSlotSearch';
 import { AdSlotGrid } from './components/AdSlotGrid';
-import { loadAdSense } from './lib/adLoader';
+import { loadAdSense, unloadAdSense } from './lib/adLoader';
 import { batchAPI } from './services/batchAPI';
+import { useCookieConsent } from './components/CookieConsent';
+import { usePathname } from './lib/simpleRouter';
+import { shouldShowAds } from './lib/adsPolicy';
+import { HowItWorks } from './pages/HowItWorks';
+import { Faq } from './pages/Faq';
+import { SupportedSites } from './pages/SupportedSites';
+import { LegalPage } from './pages/LegalPage';
+import { NotFound } from './pages/NotFound';
+import { applySeoMeta } from './lib/seo';
 
 const App: React.FC = () => {
+  const route = usePathname();
+
   // Global State
   const [lang, setLang] = useState<SupportedLanguage>('en');
   const t = TRANSLATIONS[lang];
+  const consent = useCookieConsent();
+  const consentGranted = consent === 'accepted';
   
   // Search State
   const [results, setResults] = useState<VideoResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [hasSearchedOnce, setHasSearchedOnce] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   
   // Selection/Batch State
   const [selectedItems, setSelectedItems] = useState<SelectionItem[]>([]);
@@ -34,20 +48,24 @@ const App: React.FC = () => {
   
   // Job/Modal State
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
-  const [legalModalType, setLegalModalType] = useState<LegalDocType | null>(null);
   const [isSelectionModalOpen, setIsSelectionModalOpen] = useState(false);
 
   useEffect(() => {
-    document.title = `BatchTube | ${t.heroTitle}`;
-  }, [lang, t.heroTitle]);
+    if (route !== '/') return;
+    applySeoMeta({
+      title: `BatchTube | ${t.heroTitle}`,
+      description:
+        'Search videos, select multiple items, and generate a single ZIP for fast downloads — a premium batch workflow with privacy-first defaults.'
+    });
+  }, [lang, route, t.heroTitle]);
 
-  // Load AdSense if consent is accepted
+  // Close utility modals when leaving home (keeps content pages clean).
   useEffect(() => {
-    const consent = localStorage.getItem('bt_cookie_consent');
-    if (consent === 'accepted') {
-      loadAdSense();
+    if (route !== '/') {
+      setIsSelectionModalOpen(false);
+      setActiveJobId(null);
     }
-  }, []);
+  }, [route]);
 
   // Update default quality when format changes
   useEffect(() => {
@@ -62,11 +80,14 @@ const App: React.FC = () => {
   const handleSearch = async (query: string) => {
     setIsSearching(true);
     setResults([]);
+    setHasSearchedOnce(true);
+    setSearchError(null);
     try {
       const data = await api.search(query);
       setResults(data);
     } catch (e) {
       console.error(e);
+      setSearchError('Search failed. Please try again.');
     } finally {
       setIsSearching(false);
     }
@@ -120,70 +141,120 @@ const App: React.FC = () => {
     }
   };
 
+  const isHome = route === '/';
+  const isModalOpen = isSelectionModalOpen || !!activeJobId;
+  const isEmptyState = hasSearchedOnce && !isSearching && results.length === 0 && !searchError;
+  const hasErrorOrEmpty = !!searchError || isEmptyState;
+
+  const showAds = shouldShowAds({
+    route,
+    resultsCount: results.length,
+    isLoading: isSearching,
+    hasError: hasErrorOrEmpty,
+    isModalOpen,
+    consentGranted
+  });
+
+  // Route-aware AdSense loading: only load when ads are allowed to render.
+  useEffect(() => {
+    if (showAds) loadAdSense();
+    else unloadAdSense();
+  }, [showAds]);
+
   return (
     <div className="min-h-screen flex flex-col bg-[#050509] text-white font-sans selection:bg-primary/30 overflow-x-hidden">
       
       <Navbar lang={lang} setLang={setLang} />
       
       <main className="flex-grow pt-8 sm:pt-12 md:pt-16 pb-16 sm:pb-20 w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        <Hero onSearch={handleSearch} loading={isSearching} t={t} />
-        
-        {/* Ad Slot: Below Search Bar */}
-        {results.length > 0 && <AdSlotSearch />}
+        {isHome ? (
+          <>
+            <Hero onSearch={handleSearch} loading={isSearching} t={t} />
 
-        <div className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 animate-fadeIn">
-          {results.map((video, index) => (
-            <React.Fragment key={video.id}>
-              <VideoCard
-                video={video}
-                isSelected={!!selectedItems.find(i => i.video.id === video.id)}
-                onSelect={(format, quality) => toggleSelection(video, format, quality)}
-                t={t}
-              />
-              {/* Ad Slot: After every 8th video card */}
-              {(index + 1) % 8 === 0 && (
-                <AdSlotGrid index={Math.floor((index + 1) / 8)} />
-              )}
-            </React.Fragment>
-          ))}
-        </div>
+            {searchError && (
+              <div className="mt-6 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                {searchError}
+              </div>
+            )}
+
+            {isEmptyState && (
+              <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-neutral-300">
+                No results found. Try a different keyword, or paste a direct video URL.
+              </div>
+            )}
+
+            {/* Ad Slot: Below Search Bar (strict policy) */}
+            {showAds && <AdSlotSearch />}
+
+            <div className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 animate-fadeIn">
+              {results.map((video, index) => (
+                <React.Fragment key={video.id}>
+                  <VideoCard
+                    video={video}
+                    isSelected={!!selectedItems.find(i => i.video.id === video.id)}
+                    onSelect={(format, quality) => toggleSelection(video, format, quality)}
+                    t={t}
+                  />
+                  {/* Ad Slot: After every 8th video card (strict policy) */}
+                  {showAds && (index + 1) % 8 === 0 && (
+                    <AdSlotGrid index={Math.floor((index + 1) / 8)} />
+                  )}
+                </React.Fragment>
+              ))}
+            </div>
+          </>
+        ) : route === '/how-it-works' ? (
+          <HowItWorks />
+        ) : route === '/faq' ? (
+          <Faq />
+        ) : route === '/supported-sites' ? (
+          <SupportedSites />
+        ) : route === '/legal' ? (
+          <LegalPage type="legal" />
+        ) : route === '/terms' ? (
+          <LegalPage type="terms" />
+        ) : route === '/privacy' ? (
+          <LegalPage type="privacy" />
+        ) : route === '/cookies' ? (
+          <LegalPage type="cookies" />
+        ) : (
+          <NotFound />
+        )}
       </main>
 
-      <SelectionBar 
-        count={selectedItems.length}
-        format={batchFormat}
-        setFormat={setBatchFormat}
-        quality={batchQuality}
-        setQuality={setBatchQuality}
-        onClear={() => setSelectedItems([])}
-        onDownload={handleBatchDownload}
-        onViewList={() => setIsSelectionModalOpen(true)}
-        t={t}
-      />
+      {isHome && (
+        <SelectionBar 
+          count={selectedItems.length}
+          format={batchFormat}
+          setFormat={setBatchFormat}
+          quality={batchQuality}
+          setQuality={setBatchQuality}
+          onClear={() => setSelectedItems([])}
+          onDownload={handleBatchDownload}
+          onViewList={() => setIsSelectionModalOpen(true)}
+          t={t}
+        />
+      )}
 
-      <Footer onOpenLegal={setLegalModalType} t={t} />
+      <Footer t={t} />
 
-      <SelectionModal
-        isOpen={isSelectionModalOpen}
-        onClose={() => setIsSelectionModalOpen(false)}
-        items={selectedItems}
-        onRemove={handleRemoveFromSelection}
-        t={t}
-      />
+      {isHome && (
+        <SelectionModal
+          isOpen={isSelectionModalOpen}
+          onClose={() => setIsSelectionModalOpen(false)}
+          items={selectedItems}
+          onRemove={handleRemoveFromSelection}
+          t={t}
+        />
+      )}
 
-      {activeJobId && (
+      {isHome && activeJobId && (
         <ProgressModal 
           jobId={activeJobId} 
           onClose={() => setActiveJobId(null)} 
           totalItems={selectedItems.length}
         />
       )}
-
-      <LegalModal 
-        type={legalModalType} 
-        onClose={() => setLegalModalType(null)} 
-        t={t}
-      />
 
       <CookieConsent t={t} />
     </div>

@@ -4,19 +4,19 @@ This document provides step-by-step instructions for integrating Google AdSense 
 
 ## 📋 Overview
 
-Three manual ad slots have been integrated:
+Two manual ad slots have been integrated:
 1. **AdSlotSearch** - Below the search bar
 2. **AdSlotGrid** - Between video cards (after every 8th card)
-3. **AdSlotModal** - Inside the download progress modal
+
+Ads are intentionally **restricted** to avoid AdSense policy issues (no ads on loading/empty/error screens, modals, legal pages, 404s, or low-value pages).
 
 ## 🔧 Step 1: Get Your AdSense Publisher ID
 
 1. Go to [Google AdSense](https://www.google.com/adsense/)
 2. Get your Publisher ID (format: `ca-pub-XXXXXXXXXXXXXXXX`)
-3. Create 3 ad units in AdSense dashboard:
+3. Create 2 ad units in AdSense dashboard:
    - **Search Bar Ad** (responsive, auto format)
    - **Grid Ad** (rectangle format, responsive)
-   - **Modal Ad** (300x250 rectangle, responsive)
 
 ## 🔧 Step 2: Update Ad Client ID
 
@@ -28,21 +28,11 @@ Create/update `.env` file in `frontend/`:
 VITE_ADSENSE_CLIENT_ID=ca-pub-XXXXXXXXXXXXXXXX
 ```
 
-Then update `adLoader.ts`:
-
-```typescript
-// frontend/src/lib/adLoader.ts
-const CLIENT_ID = import.meta.env.VITE_ADSENSE_CLIENT_ID || 'ca-pub-XXXXXXXXXXXXXXXX';
-```
-
 ### Option B: Direct Update
 
 Update the following files with your actual Publisher ID:
 
-1. **`frontend/src/lib/adLoader.ts`** (line 23):
-   ```typescript
-   script.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXX';
-   ```
+1. **`frontend/src/lib/adLoader.ts`** (AdSense script URL is built from `VITE_ADSENSE_CLIENT_ID`).
 
 2. **`frontend/src/components/AdSlotSearch.tsx`** (line 6):
    ```typescript
@@ -50,11 +40,6 @@ Update the following files with your actual Publisher ID:
    ```
 
 3. **`frontend/src/components/AdSlotGrid.tsx`** (line 6):
-   ```typescript
-   clientId = 'ca-pub-XXXXXXXXXXXXXXXX'
-   ```
-
-4. **`frontend/src/components/AdSlotModal.tsx`** (line 6):
    ```typescript
    clientId = 'ca-pub-XXXXXXXXXXXXXXXX'
    ```
@@ -73,11 +58,6 @@ For each ad component, replace `data-ad-slot="XXXXXXXXXX"` with your actual AdSe
    data-ad-slot="YOUR_GRID_AD_SLOT_ID"
    ```
 
-3. **AdSlotModal.tsx** (line 30):
-   ```tsx
-   data-ad-slot="YOUR_MODAL_AD_SLOT_ID"
-   ```
-
 ## 📍 Integration Points
 
 ### 1. AdSlotSearch (Below Search Bar)
@@ -87,11 +67,11 @@ For each ad component, replace `data-ad-slot="XXXXXXXXXX"` with your actual AdSe
 ```tsx
 <Hero onSearch={handleSearch} loading={isSearching} t={t} />
 
-{/* Ad Slot: Below Search Bar */}
-{results.length > 0 && <AdSlotSearch />}
+{/* Ads render only when allowed by policy */}
+{showAds && <AdSlotSearch />}
 ```
 
-- **Conditional:** Only shows when search results exist
+- **Conditional:** Only shows when `shouldShowAds(...) === true` (and results count is high enough)
 - **Responsive:** Full-width container, auto-sized ad
 - **No layout impact:** Uses margin spacing only
 
@@ -104,7 +84,7 @@ For each ad component, replace `data-ad-slot="XXXXXXXXXX"` with your actual AdSe
   <React.Fragment key={video.id}>
     <VideoCard ... />
     {/* Ad Slot: After every 8th video card */}
-    {(index + 1) % 8 === 0 && (
+    {showAds && (index + 1) % 8 === 0 && (
       <AdSlotGrid index={Math.floor((index + 1) / 8)} />
     )}
   </React.Fragment>
@@ -116,32 +96,25 @@ For each ad component, replace `data-ad-slot="XXXXXXXXXX"` with your actual AdSe
 - **Native style:** Looks like a video card with "AD" label
 - **No layout break:** Maintains grid structure
 
-### 3. AdSlotModal (Inside Download Modal)
+## ✅ Policy Guardrails (Important)
 
-**Location:** `frontend/src/components/ProgressModal.tsx` (line ~435)
+Ad rendering is controlled centrally via:
 
-```tsx
-{/* Footer Actions */}
-<div className="p-4 sm:p-6 ...">
-  ...
-</div>
+- `frontend/src/lib/adsPolicy.ts` → `shouldShowAds({ route, resultsCount, isLoading, hasError, isModalOpen, consentGranted })`
 
-{/* Ad Slot: Inside Download Modal (bottom section) */}
-<AdSlotModal />
-```
+This ensures ads are **never** rendered on:
 
-- **Position:** Bottom of modal, after footer actions
-- **Size:** 300x250 or responsive
-- **Centered:** Horizontally centered, max-width 300px
-- **Non-intrusive:** Separated with border-top
+- Initial home state (no results)
+- Loading / error / empty states
+- Any modal states
+- Legal/content pages and 404 routes
 
 ## ✅ Verification Checklist
 
-- [ ] AdSense script loads (check browser console)
-- [ ] All 3 ad slots display correctly
+- [ ] AdSense script loads only on eligible results screens
+- [ ] Both ad slots display correctly (search + grid)
 - [ ] Ads are responsive on mobile/tablet/desktop
 - [ ] Grid layout remains intact
-- [ ] Modal layout remains intact
 - [ ] No UI elements are displaced
 - [ ] Cookie consent works (ads only load after consent)
 
@@ -151,8 +124,7 @@ For each ad component, replace `data-ad-slot="XXXXXXXXXX"` with your actual AdSe
 
 1. **Check AdSense Script:**
    - Open browser console
-   - Look for `[AdSense] Script loaded successfully`
-   - If missing, check cookie consent
+   - Confirm the script is present only when results are visible and eligible
 
 2. **Check Ad Slot IDs:**
    - Verify `data-ad-slot` values match your AdSense dashboard
@@ -165,13 +137,12 @@ For each ad component, replace `data-ad-slot="XXXXXXXXXX"` with your actual AdSe
 ### Layout Issues
 
 - **Grid breaking:** Ensure `AdSlotGrid` uses `gridColumn: span 1`
-- **Modal overflow:** Check `max-w-[300px]` on `AdSlotModal`
 - **Spacing issues:** Verify margin/padding classes
 
 ## 📝 Notes
 
 - **Auto Ads:** Remain enabled in AdSense dashboard
-- **Manual Slots:** These 3 slots are in addition to auto ads
+- **Manual Slots:** These slots are in addition to auto ads
 - **Cookie Consent:** Ads only load after user accepts cookies
 - **No Style Changes:** All existing UI components remain unchanged
 - **Responsive:** All ads use `data-full-width-responsive="true"`
@@ -188,4 +159,3 @@ After updating client IDs and slot IDs:
 ---
 
 **Important:** Replace all placeholder values (`ca-pub-XXXXXXXXXXXXXXXX` and `XXXXXXXXXX`) with your actual AdSense Publisher ID and Ad Slot IDs before deploying to production.
-

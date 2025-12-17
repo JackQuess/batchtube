@@ -1,48 +1,47 @@
 
 const STORAGE_KEY = 'bt_cookie_consent';
 
-export function loadAdSense() {
-  // Check if consent is accepted
+const DEFAULT_CLIENT_ID = 'ca-pub-XXXXXXXXXX';
+
+export function loadAdSense(options?: { clientId?: string }) {
+  const clientId = options?.clientId || import.meta.env.VITE_ADSENSE_CLIENT_ID || DEFAULT_CLIENT_ID;
+
+  // Check if consent is accepted (strict: do not load at all without consent)
   const consent = localStorage.getItem(STORAGE_KEY);
-  if (consent !== 'accepted') {
-    console.log('[AdSense] Consent not accepted, skipping ad load');
-    return;
-  }
+  if (consent !== 'accepted') return;
 
   // Check if already loaded
   if (document.getElementById('adsense-script')) {
-    console.log('[AdSense] Already loaded');
     return;
   }
-
-  console.log('[AdSense] Loading AdSense script...');
 
   // Load AdSense script
   const script = document.createElement('script');
   script.id = 'adsense-script';
-  script.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXX';
+  script.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${encodeURIComponent(clientId)}`;
   script.async = true;
   script.crossOrigin = 'anonymous';
   
   script.onload = () => {
-    console.log('[AdSense] Script loaded successfully');
+    // no-op
   };
 
   script.onerror = () => {
-    console.error('[AdSense] Failed to load script');
+    // no-op
   };
 
   document.head.appendChild(script);
 }
 
+export function unloadAdSense() {
+  const script = document.getElementById('adsense-script');
+  if (script) script.remove();
+}
+
 export function resetCookieConsent() {
   localStorage.removeItem(STORAGE_KEY);
   // Remove AdSense script if exists
-  const script = document.getElementById('adsense-script');
-  if (script) {
-    script.remove();
-  }
+  unloadAdSense();
   // Reload page
   window.location.reload();
 }
-

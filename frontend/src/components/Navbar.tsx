@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { SupportedLanguage } from '../types';
 import { APP_VERSION } from '../constants';
 import { Globe } from 'lucide-react';
+import { navigate } from '../lib/simpleRouter';
 
 interface NavbarProps {
   lang: SupportedLanguage;
@@ -26,7 +27,10 @@ export const Navbar: React.FC<NavbarProps> = ({ lang, setLang }) => {
     <nav className="w-full flex items-center justify-between px-4 py-3 md:px-6 sticky top-0 z-50 bg-[#050509]/80 backdrop-blur-lg border-b border-white/5">
       <div className="flex items-center justify-between w-full">
         {/* Logo */}
-        <div className="flex items-center gap-2 cursor-pointer max-w-[200px] sm:max-w-none" onClick={() => window.location.reload()}>
+        <div
+          className="flex items-center gap-2 cursor-pointer max-w-[200px] sm:max-w-none"
+          onClick={() => navigate('/')}
+        >
           <div className="w-7 h-7 sm:w-8 sm:h-8 bg-primary rounded-lg flex items-center justify-center relative overflow-hidden group flex-shrink-0">
             <div className="w-3 h-3 bg-white rounded-[1px] shadow-sm group-hover:scale-110 transition-transform"></div>
             <div className="absolute inset-0 bg-gradient-to-tr from-black/20 to-transparent"></div>

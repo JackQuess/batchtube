@@ -1,18 +1,33 @@
 
 import React, { useState, useEffect } from 'react';
 import { Translations } from '../types';
-import { loadAdSense } from '../lib/adLoader';
 
 export type CookieConsentStatus = 'accepted' | 'rejected' | 'essential' | null;
 
 const STORAGE_KEY = 'bt_cookie_consent';
+const CONSENT_CHANGED_EVENT = 'bt_cookie_consent_changed';
 
 export function useCookieConsent(): CookieConsentStatus {
   const [consent, setConsent] = useState<CookieConsentStatus>(null);
 
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY) as CookieConsentStatus;
-    setConsent(stored || null);
+    const read = () => {
+      const stored = localStorage.getItem(STORAGE_KEY) as CookieConsentStatus;
+      setConsent(stored || null);
+    };
+    read();
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEY) read();
+    };
+    const onCustom = () => read();
+
+    window.addEventListener('storage', onStorage);
+    window.addEventListener(CONSENT_CHANGED_EVENT, onCustom);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener(CONSENT_CHANGED_EVENT, onCustom);
+    };
   }, []);
 
   return consent;
@@ -32,23 +47,14 @@ export const CookieConsent: React.FC<CookieConsentProps> = ({ t }) => {
       setShow(true);
       // Trigger fade-in animation
       setTimeout(() => setIsVisible(true), 10);
-    } else {
-      // Load ads if accepted
-      if (consent === 'accepted') {
-        loadAdSense();
-      }
     }
   }, []);
 
   const handleConsent = (status: 'accepted' | 'rejected' | 'essential') => {
     localStorage.setItem(STORAGE_KEY, status);
+    window.dispatchEvent(new Event(CONSENT_CHANGED_EVENT));
     setShow(false);
     setIsVisible(false);
-
-    // Load AdSense only if accepted
-    if (status === 'accepted') {
-      loadAdSense();
-    }
   };
 
   if (!show) return null;

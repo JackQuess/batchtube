@@ -70,3 +70,12 @@ MAX_CONCURRENT_JOBS=3
 ## ⚖️ Legal
 
 This project is for educational purposes only. Users must comply with YouTube's Terms of Service. BatchTube is not affiliated with Google LLC.
+
+## 📄 ads.txt (AdSense)
+
+BatchTube serves `ads.txt` from the frontend public directory:
+
+- File: `frontend/public/ads.txt`
+- Production URL (example): `https://batchtube.net/ads.txt`
+
+To enable AdSense, replace the placeholder line in `frontend/public/ads.txt` with the exact line provided in your AdSense dashboard (Publisher ID `pub-...`).

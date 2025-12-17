@@ -18,10 +18,11 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
   onClose, 
   totalItems 
 }) => {
+  type ItemProgress = { percent: number; title: string; thumbnail: string | null };
   const [status, setStatus] = useState<BatchJobStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState(true);
-  const [itemProgress, setItemProgress] = useState<Record<number, { percent: number; title: string; thumbnail: string | null }>>({});
+  const [itemProgress, setItemProgress] = useState<Record<number, ItemProgress>>({});
 
   // Subscribe to SSE stream for live progress
   useEffect(() => {
@@ -181,8 +182,9 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
   const result = status?.result;
 
   // Calculate overall progress from itemProgress or fallback to status.progress
-  const overallProgress = Object.keys(itemProgress).length > 0
-    ? Math.round(Object.values(itemProgress).reduce((sum, item) => sum + item.percent, 0) / (result?.items?.length || totalItems || 1))
+  const itemProgressValues = Object.values(itemProgress) as ItemProgress[];
+  const overallProgress = itemProgressValues.length > 0
+    ? Math.round(itemProgressValues.reduce((sum, item) => sum + item.percent, 0) / (result?.items?.length || totalItems || 1))
     : (typeof status?.progress === 'object' && status.progress?.overall 
         ? status.progress.overall 
         : (typeof status?.progress === 'number' ? status.progress : 0));
@@ -248,7 +250,7 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
                 .sort(([a], [b]) => parseInt(a) - parseInt(b))
                 .map(([indexStr, itemData]) => {
                   const index = parseInt(indexStr);
-                  const item = itemData;
+                  const item = itemData as ItemProgress;
                   const isItemDownloading = isActive && item.percent < 100;
                   
                   return (
