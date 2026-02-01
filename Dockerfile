@@ -4,14 +4,16 @@ FROM node:20-slim
 RUN apt-get update && \
     apt-get install -y \
     python3 \
+    python3-pip \
     ffmpeg \
     curl \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Download yt-dlp from GitHub release
-RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && \
-    chmod a+rx /usr/local/bin/yt-dlp
+# Install yt-dlp via pip (more reliable updates) + verify
+RUN python3 -m pip install --no-cache-dir -U yt-dlp && \
+    ln -sf /usr/local/bin/yt-dlp /usr/bin/yt-dlp && \
+    yt-dlp --version
 
 # Set working directory to /app/backend
 WORKDIR /app/backend
