@@ -39,7 +39,7 @@ export const AdSlotGrid: React.FC<AdSlotGridProps> = ({
 
   return (
     <div 
-      className="bg-[#0b0b10] rounded-xl overflow-hidden border border-white/5 flex flex-col"
+      className="bg-[#0b0b10] rounded-xl overflow-hidden border border-white/5 flex flex-col w-full max-w-[360px]"
       style={{ gridColumn: 'span 1' }}
     >
       {/* Ad Label */}
@@ -62,4 +62,3 @@ export const AdSlotGrid: React.FC<AdSlotGridProps> = ({
     </div>
   );
 };
-

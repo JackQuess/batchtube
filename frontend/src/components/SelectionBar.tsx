@@ -35,7 +35,7 @@ export const SelectionBar: React.FC<SelectionBarProps> = ({
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 sm:bottom-6 sm:left-1/2 sm:-translate-x-1/2 sm:right-auto z-40 flex flex-col gap-3 md:flex-row md:items-center md:justify-between bg-zinc-900/90 px-4 pb-4 sm:pb-0 sm:px-6 py-3 sm:py-4 rounded-t-xl sm:rounded-xl shadow-xl backdrop-blur-lg border border-zinc-700/50 sm:max-w-[90%]">
+    <div className="fixed bottom-0 left-0 right-0 sm:bottom-6 sm:left-1/2 sm:-translate-x-1/2 sm:right-auto z-40 flex flex-col gap-3 md:flex-row md:items-center md:justify-between bg-zinc-900/90 px-4 pb-4 sm:pb-0 sm:px-6 py-3 sm:py-5 rounded-t-xl sm:rounded-xl shadow-xl backdrop-blur-lg border border-zinc-700/50 sm:w-[min(1100px,calc(100vw-24px))] sm:max-w-none">
 
       {/* Mobile Top Row */}
       <div className="flex items-center gap-2 sm:hidden justify-between w-full">
