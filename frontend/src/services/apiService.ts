@@ -37,6 +37,21 @@ const normalizeDuration = (value: unknown): string | null => {
     return trimmed;
   }
 
+  if (trimmed.startsWith('PT')) {
+    const iso = trimmed.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+    if (iso) {
+      const hours = parseInt(iso[1] || '0', 10);
+      const minutes = parseInt(iso[2] || '0', 10);
+      const secs = parseInt(iso[3] || '0', 10);
+      const total = hours * 3600 + minutes * 60 + secs;
+      if (total === 0) return null;
+      if (hours > 0) {
+        return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+      }
+      return `${minutes}:${secs.toString().padStart(2, '0')}`;
+    }
+  }
+
   const seconds = parseInt(trimmed, 10);
   if (Number.isNaN(seconds)) return null;
 
@@ -97,10 +112,25 @@ const getThumbnailFromList = (value: unknown): string | undefined => {
   return undefined;
 };
 
+const getSnippetThumbnail = (snippet: any): string | undefined => {
+  if (!snippet?.thumbnails) return undefined;
+  const thumbs = snippet.thumbnails;
+  return (
+    normalizeText(thumbs.maxres?.url) ||
+    normalizeText(thumbs.standard?.url) ||
+    normalizeText(thumbs.high?.url) ||
+    normalizeText(thumbs.medium?.url) ||
+    normalizeText(thumbs.default?.url)
+  );
+};
+
 const normalizeVideoResult = (item: any): VideoResult | null => {
   const id =
     normalizeText(item?.id) ||
+    normalizeText(item?.id?.videoId) ||
+    normalizeText(item?.id?.value) ||
     normalizeText(item?.videoId) ||
+    normalizeText(item?.snippet?.resourceId?.videoId) ||
     extractVideoId(item?.url) ||
     extractVideoId(item?.webpage_url) ||
     extractVideoId(item?.link) ||
@@ -112,25 +142,29 @@ const normalizeVideoResult = (item: any): VideoResult | null => {
     normalizeText(item?.title) ||
     normalizeText(item?.fulltitle) ||
     normalizeText(item?.name) ||
-    normalizeText(item?.videoTitle);
+    normalizeText(item?.videoTitle) ||
+    normalizeText(item?.snippet?.title);
   const channel =
     normalizeText(item?.channel) ||
     normalizeText(item?.channelName) ||
     normalizeText(item?.uploader) ||
     normalizeText(item?.ownerChannelName) ||
     normalizeText(item?.author) ||
-    normalizeText(item?.author_name);
+    normalizeText(item?.author_name) ||
+    normalizeText(item?.snippet?.channelTitle);
   const thumbnail =
     normalizeText(item?.thumbnail) ||
     normalizeText(item?.thumbnail_url) ||
-    getThumbnailFromList(item?.thumbnails);
+    getThumbnailFromList(item?.thumbnails) ||
+    getSnippetThumbnail(item?.snippet);
   const duration = normalizeDuration(
     item?.duration ??
     item?.lengthText ??
     item?.length ??
     item?.durationSeconds ??
     item?.lengthSeconds ??
-    item?.duration_string
+    item?.duration_string ??
+    item?.contentDetails?.duration
   );
 
   return {
