@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Translations, VideoFormat, VideoQuality, MP4Quality, MP3Quality } from '../types';
 import { X, Archive, ChevronDown } from 'lucide-react';
@@ -18,8 +17,8 @@ interface SelectionBarProps {
 const MP4_QUALITIES: MP4Quality[] = ['4K', '1440p', '1080p', '720p', '480p'];
 const MP3_QUALITIES: MP3Quality[] = ['320k', '128k'];
 
-export const SelectionBar: React.FC<SelectionBarProps> = ({ 
-  count, format, setFormat, quality, setQuality, onClear, onDownload, onViewList, t 
+export const SelectionBar: React.FC<SelectionBarProps> = ({
+  count, format, setFormat, quality, setQuality, onClear, onDownload, onViewList, t
 }) => {
   const [showFormatMenu, setShowFormatMenu] = useState(false);
   const [showQualityMenu, setShowQualityMenu] = useState(false);
@@ -27,23 +26,23 @@ export const SelectionBar: React.FC<SelectionBarProps> = ({
   if (count === 0) return null;
 
   const qualities = format === 'mp3' ? MP3_QUALITIES : MP4_QUALITIES;
+  const selectionLabel = count === 1 ? t.itemSelected : t.itemsSelected;
 
   const handleFormatChange = (newFormat: VideoFormat) => {
     setFormat(newFormat);
-    // Set default quality for new format
     setQuality(newFormat === 'mp3' ? '320k' : '1080p');
     setShowFormatMenu(false);
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 sm:bottom-6 sm:left-1/2 sm:-translate-x-1/2 sm:right-auto z-50 flex flex-col gap-3 md:flex-row md:items-center md:justify-between bg-zinc-900/90 px-4 pb-4 sm:pb-0 sm:px-6 py-3 sm:py-4 rounded-t-xl sm:rounded-xl shadow-xl backdrop-blur-lg border border-zinc-700/50 sm:max-w-[90%]">
-      
+    <div className="fixed bottom-0 left-0 right-0 sm:bottom-6 sm:left-1/2 sm:-translate-x-1/2 sm:right-auto z-40 flex flex-col gap-3 md:flex-row md:items-center md:justify-between bg-zinc-900/90 px-4 pb-4 sm:pb-0 sm:px-6 py-3 sm:py-4 rounded-t-xl sm:rounded-xl shadow-xl backdrop-blur-lg border border-zinc-700/50 sm:max-w-[90%]">
+
       {/* Mobile Top Row */}
       <div className="flex items-center gap-2 sm:hidden justify-between w-full">
         <div className="bg-primary/10 text-primary px-2 py-1 rounded-lg text-xs font-bold whitespace-nowrap">
-          {count} {t.itemsSelected}
+          {count} {selectionLabel}
         </div>
-        <button 
+        <button
           onClick={onClear}
           className="p-1.5 text-gray-500 hover:text-white transition-colors"
           title={t.clearAll}
@@ -56,14 +55,14 @@ export const SelectionBar: React.FC<SelectionBarProps> = ({
       <div className="hidden md:flex items-center gap-2 md:gap-4 flex-wrap">
         {/* Count Badge */}
         <div className="bg-primary/10 text-primary px-2 md:px-3 py-1 rounded-lg text-xs sm:text-sm font-bold whitespace-nowrap">
-          {count} {t.itemsSelected}
+          {count} {selectionLabel}
         </div>
 
         <div className="h-6 w-px bg-white/10 hidden md:block"></div>
 
         {/* Status Text */}
         <span className="text-gray-400 text-xs sm:text-sm whitespace-nowrap hidden md:inline">
-          {t.readyToProcess || 'İşleme hazır'}
+          {t.readyToProcess}
         </span>
 
         <div className="h-6 w-px bg-white/10 hidden md:block"></div>
@@ -73,12 +72,12 @@ export const SelectionBar: React.FC<SelectionBarProps> = ({
           onClick={onViewList}
           className="text-white bg-white/5 hover:bg-white/10 px-3 md:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap"
         >
-          {t.viewList || 'Listeyi Gör'}
+          {t.viewList}
         </button>
 
         {/* Format Selector */}
         <div className="relative">
-          <button 
+          <button
             onClick={() => {
               setShowFormatMenu(!showFormatMenu);
               setShowQualityMenu(false);
@@ -86,7 +85,7 @@ export const SelectionBar: React.FC<SelectionBarProps> = ({
             className="flex items-center gap-1 md:gap-2 text-white bg-white/5 px-2 md:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium hover:bg-white/10 transition-colors"
           >
             <span className="uppercase text-gray-400 hidden sm:inline">{t.formatLabel}:</span>
-            <span className="uppercase text-gray-400 sm:hidden">F:</span>
+            <span className="uppercase text-gray-400 sm:hidden">{t.formatShort}:</span>
             {format.toUpperCase()}
             <ChevronDown size={12} className="text-gray-500" />
           </button>
@@ -100,27 +99,27 @@ export const SelectionBar: React.FC<SelectionBarProps> = ({
 
         {/* Quality Selector */}
         <div className="relative">
-          <button 
+          <button
             onClick={() => {
               setShowQualityMenu(!showQualityMenu);
               setShowFormatMenu(false);
             }}
             className="flex items-center gap-1 md:gap-2 text-white bg-white/5 px-2 md:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium hover:bg-white/10 transition-colors"
           >
-            <span className="text-gray-400 hidden sm:inline">Quality:</span>
-            <span className="text-gray-400 sm:hidden">Q:</span>
+            <span className="text-gray-400 hidden sm:inline">{t.qualityLabel}:</span>
+            <span className="text-gray-400 sm:hidden">{t.qualityShort}:</span>
             {quality}
             <ChevronDown size={12} className="text-gray-500" />
           </button>
           {showQualityMenu && (
             <div className="absolute bottom-full mb-2 left-0 w-full bg-[#1a1a20] border border-white/10 rounded-lg overflow-hidden z-20 max-h-48 overflow-y-auto min-w-[100px]">
               {qualities.map((q) => (
-                <div 
+                <div
                   key={q}
                   onClick={() => {
                     setQuality(q);
                     setShowQualityMenu(false);
-                  }} 
+                  }}
                   className={`px-3 py-2 text-xs sm:text-sm hover:bg-white/10 cursor-pointer ${
                     quality === q ? 'text-primary font-bold' : 'text-gray-300'
                   }`}
@@ -135,7 +134,7 @@ export const SelectionBar: React.FC<SelectionBarProps> = ({
         <div className="flex-1 hidden lg:block"></div>
 
         {/* Actions */}
-        <button 
+        <button
           onClick={onClear}
           className="p-2 text-gray-500 hover:text-white transition-colors hidden md:block"
           title={t.clearAll}
@@ -143,7 +142,7 @@ export const SelectionBar: React.FC<SelectionBarProps> = ({
           <X size={18} />
         </button>
 
-        <button 
+        <button
           onClick={onDownload}
           className="bg-primary hover:bg-red-600 text-white px-5 py-2 rounded-xl font-bold text-sm flex items-center gap-2 shadow-lg shadow-primary/20 transition-all active:scale-95"
         >
@@ -159,10 +158,10 @@ export const SelectionBar: React.FC<SelectionBarProps> = ({
             onClick={onViewList}
             className="text-white bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap"
           >
-            {t.viewList || 'Listeyi Gör'}
+            {t.viewList}
           </button>
           <div className="relative">
-            <button 
+            <button
               onClick={() => {
                 setShowFormatMenu(!showFormatMenu);
                 setShowQualityMenu(false);
@@ -179,7 +178,7 @@ export const SelectionBar: React.FC<SelectionBarProps> = ({
             )}
           </div>
           <div className="relative">
-            <button 
+            <button
               onClick={() => {
                 setShowQualityMenu(!showQualityMenu);
                 setShowFormatMenu(false);
@@ -191,12 +190,12 @@ export const SelectionBar: React.FC<SelectionBarProps> = ({
             {showQualityMenu && (
               <div className="absolute bottom-full mb-2 left-0 w-full bg-[#1a1a20] border border-white/10 rounded-lg overflow-hidden z-20 max-h-48 overflow-y-auto min-w-[100px]">
                 {qualities.map((q) => (
-                  <div 
+                  <div
                     key={q}
                     onClick={() => {
                       setQuality(q);
                       setShowQualityMenu(false);
-                    }} 
+                    }}
                     className={`px-3 py-2 text-xs hover:bg-white/10 cursor-pointer ${
                       quality === q ? 'text-primary font-bold' : 'text-gray-300'
                     }`}
@@ -208,7 +207,7 @@ export const SelectionBar: React.FC<SelectionBarProps> = ({
             )}
           </div>
         </div>
-        <button 
+        <button
           onClick={onDownload}
           className="w-full bg-primary hover:bg-red-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-primary/20 transition-all active:scale-95"
         >

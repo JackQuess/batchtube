@@ -39,7 +39,7 @@ const App: React.FC = () => {
   const [results, setResults] = useState<VideoResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearchedOnce, setHasSearchedOnce] = useState(false);
-  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchError, setSearchError] = useState(false);
   
   // Selection/Batch State
   const [selectedItems, setSelectedItems] = useState<SelectionItem[]>([]);
@@ -54,10 +54,9 @@ const App: React.FC = () => {
     if (route !== '/') return;
     applySeoMeta({
       title: `BatchTube | ${t.heroTitle}`,
-      description:
-        'Search videos, select multiple items, and generate a single ZIP for fast downloads — a premium batch workflow with privacy-first defaults.'
+      description: t.heroSubtitle
     });
-  }, [lang, route, t.heroTitle]);
+  }, [lang, route, t.heroTitle, t.heroSubtitle]);
 
   // Close utility modals when leaving home (keeps content pages clean).
   useEffect(() => {
@@ -81,13 +80,13 @@ const App: React.FC = () => {
     setIsSearching(true);
     setResults([]);
     setHasSearchedOnce(true);
-    setSearchError(null);
+    setSearchError(false);
     try {
       const data = await api.search(query);
       setResults(data);
     } catch (e) {
       console.error(e);
-      setSearchError('Search failed. Please try again.');
+      setSearchError(true);
     } finally {
       setIsSearching(false);
     }
@@ -119,7 +118,7 @@ const App: React.FC = () => {
       // Map to new API format
       const items = selectedItems.map(item => ({
         url: `https://www.youtube.com/watch?v=${item.video.id}`,
-        title: item.video.title || 'Unknown',
+        title: item.video.title || t.metadataUnavailable,
         thumbnail: item.video.thumbnail || `https://i.ytimg.com/vi/${item.video.id}/hqdefault.jpg`,
       }));
 
@@ -137,7 +136,7 @@ const App: React.FC = () => {
       setActiveJobId(jobId);
     } catch (e) {
       console.error("Batch start failed", e);
-      alert('Failed to start batch download. Please try again.');
+      alert(t.batchStartFailed);
     }
   };
 
@@ -173,13 +172,13 @@ const App: React.FC = () => {
 
             {searchError && (
               <div className="mt-6 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-                {searchError}
+                {t.searchFailed}
               </div>
             )}
 
             {isEmptyState && (
               <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-neutral-300">
-                No results found. Try a different keyword, or paste a direct video URL.
+                {t.noResultsFound}
               </div>
             )}
 
@@ -204,21 +203,21 @@ const App: React.FC = () => {
             </div>
           </>
         ) : route === '/how-it-works' ? (
-          <HowItWorks />
+          <HowItWorks lang={lang} t={t} />
         ) : route === '/faq' ? (
-          <Faq />
+          <Faq lang={lang} t={t} />
         ) : route === '/supported-sites' ? (
-          <SupportedSites />
+          <SupportedSites lang={lang} t={t} />
         ) : route === '/legal' ? (
-          <LegalPage type="legal" />
+          <LegalPage type="legal" lang={lang} t={t} />
         ) : route === '/terms' ? (
-          <LegalPage type="terms" />
+          <LegalPage type="terms" lang={lang} t={t} />
         ) : route === '/privacy' ? (
-          <LegalPage type="privacy" />
+          <LegalPage type="privacy" lang={lang} t={t} />
         ) : route === '/cookies' ? (
-          <LegalPage type="cookies" />
+          <LegalPage type="cookies" lang={lang} t={t} />
         ) : (
-          <NotFound />
+          <NotFound t={t} />
         )}
       </main>
 
@@ -253,6 +252,7 @@ const App: React.FC = () => {
           jobId={activeJobId} 
           onClose={() => setActiveJobId(null)} 
           totalItems={selectedItems.length}
+          t={t}
         />
       )}
 

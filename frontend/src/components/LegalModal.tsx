@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LegalDocType, Translations } from '../types';
+import { LegalDocType, SupportedLanguage, Translations } from '../types';
 import { LEGAL_TEXTS } from '../constants';
 import { X, Scale } from 'lucide-react';
 
@@ -8,10 +8,12 @@ interface LegalModalProps {
   type: LegalDocType | null;
   onClose: () => void;
   t: Translations;
+  lang: SupportedLanguage;
 }
 
-export const LegalModal: React.FC<LegalModalProps> = ({ type, onClose, t }) => {
+export const LegalModal: React.FC<LegalModalProps> = ({ type, onClose, t, lang }) => {
   if (!type) return null;
+  const legalText = LEGAL_TEXTS[lang]?.[type];
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-fadeIn" onClick={onClose}>
@@ -28,7 +30,7 @@ export const LegalModal: React.FC<LegalModalProps> = ({ type, onClose, t }) => {
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 text-gray-300 leading-relaxed whitespace-pre-wrap font-light">
-          {LEGAL_TEXTS[type] || "Content unavailable."}
+          {legalText || t.noResultsAvailable}
         </div>
 
         <div className="p-4 border-t border-white/5 bg-[#050509] flex justify-end">

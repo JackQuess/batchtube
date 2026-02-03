@@ -1,4 +1,3 @@
-
 export type VideoFormat = 'mp4' | 'mp3';
 
 export type MP4Quality = '4K' | '1440p' | '1080p' | '720p' | '480p';
@@ -9,12 +8,14 @@ export type JobStatus = 'queued' | 'downloading' | 'processing' | 'completed' | 
 
 export interface VideoResult {
   id: string;
-  title: string;
-  thumbnail: string;
-  duration: string;
-  channel: string;
+  title?: string;
+  thumbnail?: string;
+  duration?: string | null;
+  channel?: string;
+  channelAvatar?: string;
   views?: string;
   description?: string;
+  publishedTime?: string;
 }
 
 export interface DownloadItem {
@@ -73,6 +74,7 @@ export interface BatchProgressResponse {
 export type SupportedLanguage = 'en' | 'es' | 'fr' | 'de' | 'tr' | 'pt' | 'ar';
 
 export type LegalDocType = 'terms' | 'privacy' | 'cookies' | 'legal';
+export type InfoDocType = 'howItWorks' | 'faq' | 'supportedSites';
 
 export interface Translations {
   heroTitle: string;
@@ -80,20 +82,24 @@ export interface Translations {
   searchPlaceholder: string;
   searchButton: string;
   pasteLink: string;
-  
+
   // Card
   singleDownload: string;
   addToBatch: string;
   selected: string;
-  
+
   // Batch Bar
   itemsSelected: string;
+  itemSelected: string;
   clearAll: string;
   downloadZip: string;
   formatLabel: string;
+  formatShort: string;
+  qualityLabel: string;
+  qualityShort: string;
   viewList: string;
   readyToProcess: string;
-  
+
   // Status
   downloading: string;
   processing: string;
@@ -101,16 +107,46 @@ export interface Translations {
   failed: string;
   saveFile: string;
   preparing: string;
-  
-  // Legal
+  waiting: string;
+  success: string;
+  error: string;
+
+  // Legal / Info
   terms: string;
   privacy: string;
   cookies: string;
   legal: string;
+  howItWorks: string;
+  faq: string;
+  supportedSites: string;
   close: string;
   acceptCookies: string;
   cookieMessage: string;
-  
+  allRightsReserved: string;
+
+  // Messages
+  searchFailed: string;
+  noResultsFound: string;
+  noResultsAvailable: string;
+  backToSearch: string;
+  batchStartFailed: string;
+  notFoundTitle: string;
+  notFoundBody: string;
+
+  // Metadata
+  metadataUnavailable: string;
+  unknownChannel: string;
+  noItemsSelected: string;
+  itemsLabel: string;
+  itemLabel: string;
+
+  // Progress/Batch
+  batchCompleted: string;
+  batchFailed: string;
+  waitingInQueue: string;
+  preparingDownload: string;
+  succeededLabel: string;
+
   // Cookie Consent
   cookie: {
     message: string;

@@ -61,7 +61,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({ jobId, onClose, t,
 
   if (!data && !error) {
     return (
-      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 backdrop-blur-sm">
          <div className="bg-[#0b0b10] p-8 rounded-2xl border border-white/10 flex flex-col items-center">
             <Loader2 className="animate-spin text-primary mb-4" size={32} />
             <span className="text-gray-400 animate-pulse">{t.preparing}</span>
@@ -77,7 +77,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({ jobId, onClose, t,
   const isPreparing = !data || (data.status !== 'completed' && data.status !== 'failed' && !isRunning);
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
       <div className="w-full max-w-2xl bg-[#0b0b10] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
         
         {/* Header */}
@@ -96,7 +96,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({ jobId, onClose, t,
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-gray-400">
-                {completedItems} / {totalItems} items
+                {completedItems} / {totalItems} {totalItems === 1 ? t.itemLabel : t.itemsLabel}
               </span>
               <span className="text-gray-400 font-bold">
                 {data?.overallPercent || 0}%
@@ -169,10 +169,10 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({ jobId, onClose, t,
               ) : totalItems > 0 ? (
                 <div className="flex flex-col items-center gap-2">
                   <Loader2 size={20} className="text-primary animate-spin" />
-                  <span>{t.downloading}...</span>
+                  <span>{t.downloading}</span>
                 </div>
               ) : (
-                <span>No items to display</span>
+                <span>{t.noResultsAvailable}</span>
               )}
             </div>
           )}

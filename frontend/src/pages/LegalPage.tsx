@@ -1,33 +1,42 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { AppLink } from '../lib/simpleRouter';
 import { applySeoMeta } from '../lib/seo';
 import { LEGAL_TEXTS } from '../constants';
-import { LegalDocType } from '../types';
+import { LegalDocType, SupportedLanguage, Translations } from '../types';
 
-const TITLES: Record<LegalDocType, string> = {
-  legal: 'Legal Notice',
-  terms: 'Terms of Service',
-  privacy: 'Privacy Policy',
-  cookies: 'Cookie Policy'
-};
+interface LegalPageProps {
+  type: LegalDocType;
+  lang: SupportedLanguage;
+  t: Translations;
+}
 
-export const LegalPage: React.FC<{ type: LegalDocType }> = ({ type }) => {
+export const LegalPage: React.FC<LegalPageProps> = ({ type, lang, t }) => {
+  const titleMap: Record<LegalDocType, string> = {
+    legal: t.legal,
+    terms: t.terms,
+    privacy: t.privacy,
+    cookies: t.cookies
+  };
+
+  const content = LEGAL_TEXTS[lang]?.[type] || LEGAL_TEXTS.en[type];
+  const title = titleMap[type] || t.legal;
+  const description = useMemo(() => content.replace(/\n+/g, ' ').trim(), [content]);
+
   useEffect(() => {
-    const title = TITLES[type] || 'Legal';
     applySeoMeta({
       title: `${title} | BatchTube`,
-      description: `Read BatchTube's ${title.toLowerCase()} and understand usage, privacy, and cookie preferences.`
+      description
     });
-  }, [type]);
+  }, [description, title]);
 
   return (
     <div className="max-w-3xl mx-auto w-full px-4 sm:px-6">
       <div className="rounded-2xl bg-white/[0.03] border border-white/10 p-6 sm:p-8 shadow-2xl shadow-black/20">
-        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{TITLES[type]}</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{title}</h1>
 
         <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4">
           <pre className="whitespace-pre-wrap text-sm text-neutral-300 leading-relaxed font-sans">
-            {LEGAL_TEXTS[type]}
+            {content}
           </pre>
         </div>
 
@@ -36,20 +45,19 @@ export const LegalPage: React.FC<{ type: LegalDocType }> = ({ type }) => {
             to="/"
             className="px-4 py-2 rounded-full bg-primary hover:bg-red-600 transition-colors text-sm font-semibold"
           >
-            Back to Search
+            {t.backToSearch}
           </AppLink>
           <AppLink to="/privacy" className="px-4 py-2 rounded-full bg-white/10 hover:bg-white/15 transition-colors text-sm">
-            Privacy
+            {t.privacy}
           </AppLink>
           <AppLink to="/terms" className="px-4 py-2 rounded-full bg-white/10 hover:bg-white/15 transition-colors text-sm">
-            Terms
+            {t.terms}
           </AppLink>
           <AppLink to="/cookies" className="px-4 py-2 rounded-full bg-white/10 hover:bg-white/15 transition-colors text-sm">
-            Cookies
+            {t.cookies}
           </AppLink>
         </div>
       </div>
     </div>
   );
 };
-

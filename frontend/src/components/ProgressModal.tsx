@@ -4,19 +4,21 @@
  */
 import React, { useEffect, useState } from 'react';
 import { batchAPI, BatchJobStatus } from '../services/batchAPI';
-import { API_BASE_URL } from '../config/api';
 import { CheckCircle, AlertCircle, Loader2, DownloadCloud, X } from 'lucide-react';
+import { Translations } from '../types';
 
 interface ProgressModalProps {
   jobId: string;
   onClose: () => void;
   totalItems: number;
+  t: Translations;
 }
 
 export const ProgressModal: React.FC<ProgressModalProps> = ({ 
   jobId, 
   onClose, 
-  totalItems 
+  totalItems,
+  t
 }) => {
   type ItemProgress = { percent: number; title: string; thumbnail: string | null };
   const [status, setStatus] = useState<BatchJobStatus | null>(null);
@@ -40,7 +42,7 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
             data.items.forEach((item: { index: number; percent: number; title?: string; thumbnail?: string | null }) => {
               progressMap[item.index] = {
                 percent: item.percent,
-                title: item.title || `Item ${item.index + 1}`,
+                title: item.title || `${t.itemLabel} ${item.index + 1}`,
                 thumbnail: item.thumbnail || null
               };
             });
@@ -60,7 +62,7 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
             data.items.forEach((item: { index: number; percent: number; title?: string; thumbnail?: string | null }) => {
               progressMap[item.index] = {
                 percent: item.percent,
-                title: item.title || `Item ${item.index + 1}`,
+                title: item.title || `${t.itemLabel} ${item.index + 1}`,
                 thumbnail: item.thumbnail || null
               };
             });
@@ -86,7 +88,7 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
         try {
           const data = JSON.parse(event.data);
           setIsPolling(false);
-          setError(data.error || 'Job failed');
+          setError(data.error || t.batchFailed);
         } catch (err) {
           console.error('[ProgressModal] SSE failed error:', err);
         }
@@ -95,7 +97,7 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
       eventSource.addEventListener('error', (event: MessageEvent) => {
         try {
           const data = JSON.parse(event.data);
-          setError(data.error || 'Connection error');
+          setError(data.error || t.error);
           setIsPolling(false);
         } catch (err) {
           console.error('[ProgressModal] SSE error event:', err);
@@ -117,7 +119,7 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
         eventSource.close();
       }
     };
-  }, [jobId]);
+  }, [jobId, t.batchFailed, t.error, t.itemLabel]);
 
   // Fallback polling for status updates
   useEffect(() => {
@@ -156,18 +158,18 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
 
   if (error && !status) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 px-4">
         <div className="w-full max-w-md bg-[#111118] border border-white/5 rounded-2xl shadow-xl p-4 sm:p-6">
           <div className="flex items-center gap-3 mb-4">
             <AlertCircle className="text-red-500 flex-shrink-0" size={20} />
-            <h2 className="text-lg sm:text-xl font-bold text-white">Error</h2>
+            <h2 className="text-lg sm:text-xl font-bold text-white">{t.error}</h2>
           </div>
           <p className="text-sm text-gray-400 mb-6">{error}</p>
           <button
             onClick={onClose}
             className="w-full py-2.5 sm:py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-xl font-bold text-sm transition-colors"
           >
-            Close
+            {t.close}
           </button>
         </div>
       </div>
@@ -190,7 +192,7 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
         : (typeof status?.progress === 'number' ? status.progress : 0));
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 animate-fadeIn">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 px-4 animate-fadeIn">
       <div className="w-full max-w-xl md:max-w-2xl bg-[#111118] border border-white/5 rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
         
         {/* Header */}
@@ -202,10 +204,10 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
                <Loader2 className="animate-spin text-[#d94662] flex-shrink-0" size={20} />}
               
               <span className="truncate">
-                {isCompleted ? 'Batch Completed' : 
-                 isFailed ? 'Batch Failed' : 
-                 isActive ? 'Downloading...' : 
-                 'Preparing...'}
+                {isCompleted ? t.batchCompleted : 
+                 isFailed ? t.batchFailed : 
+                 isActive ? t.downloading : 
+                 t.preparing}
               </span>
             </h2>
             <button
@@ -220,8 +222,8 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
           <div className="space-y-2">
             <div className="flex justify-between text-xs sm:text-sm">
               <span className="text-gray-400 truncate pr-2">
-                {result ? `${result.succeeded} / ${result.total} succeeded` : 
-                 `${totalItems} items`}
+                {result ? `${result.succeeded} / ${result.total} ${t.succeededLabel}` : 
+                 `${totalItems} ${totalItems === 1 ? t.itemLabel : t.itemsLabel}`}
               </span>
               <span className="text-gray-400 font-bold flex-shrink-0">
                 {overallProgress}%
@@ -307,15 +309,15 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
                     <div className="flex-shrink-0">
                       {isItemDownloading ? (
                         <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-500/20 text-gray-400">
-                          Downloading
+                          {t.downloading}
                         </span>
                       ) : item.percent >= 100 ? (
                         <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-500/20 text-green-400">
-                          Success
+                          {t.success}
                         </span>
                       ) : (
                         <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-500/20 text-gray-400">
-                          Waiting
+                          {t.waiting}
                         </span>
                       )}
                     </div>
@@ -374,11 +376,11 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
                   <div className="flex-shrink-0">
                     {isItemCompleted ? (
                       <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-500/20 text-green-400">
-                        Success
+                        {t.success}
                       </span>
                     ) : isItemFailed ? (
                       <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-500/20 text-red-400">
-                        Failed
+                        {t.failed}
                       </span>
                     ) : null}
                   </div>
@@ -390,10 +392,10 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
               {isWaiting || isActive ? (
                 <div className="flex flex-col items-center gap-2">
                   <Loader2 size={20} className="text-[#d94662] animate-spin" />
-                  <span className="text-xs sm:text-sm text-neutral-400">{isWaiting ? 'Waiting in queue...' : 'Preparing download...'}</span>
+                  <span className="text-xs sm:text-sm text-neutral-400">{isWaiting ? t.waitingInQueue : t.preparingDownload}</span>
                 </div>
               ) : (
-                <span className="text-xs sm:text-sm">No results available</span>
+                <span className="text-xs sm:text-sm">{t.noResultsAvailable}</span>
               )}
             </div>
           )}
@@ -406,7 +408,7 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
             onClick={onClose}
             className="w-full sm:w-auto px-4 py-2.5 rounded-xl font-medium text-sm text-gray-400 hover:bg-white/5 hover:text-white transition-colors"
           >
-            Close
+            {t.close}
           </button>
           
           {isCompleted ? (
@@ -415,14 +417,14 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
               className="w-full sm:w-auto sm:self-end px-4 py-2.5 bg-green-600 hover:bg-green-500 text-white rounded-xl font-bold text-sm shadow-lg shadow-green-900/20 flex items-center justify-center gap-2 transition-colors"
             >
               <DownloadCloud size={18} />
-              Download ZIP
+              {t.downloadZip}
             </button>
           ) : isFailed ? (
             <button 
               onClick={onClose}
               className="w-full sm:w-auto px-4 py-2.5 bg-gray-700 hover:bg-gray-600 text-white rounded-xl font-bold text-sm transition-colors"
             >
-              Close
+              {t.close}
             </button>
           ) : (
             <button 
@@ -430,7 +432,7 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
               className="w-full sm:w-auto px-4 py-2.5 bg-gray-700 text-gray-400 rounded-xl font-bold text-sm cursor-not-allowed flex items-center justify-center gap-2"
             >
               <Loader2 size={18} className="animate-spin" />
-              {isActive ? 'Downloading...' : 'Waiting...'}
+              {isActive ? t.downloading : t.waiting}
             </button>
           )}
         </div>
