@@ -13,6 +13,18 @@ const isPlaceholder = (value: string) => {
 };
 
 const normalizeDuration = (value: unknown): string | null => {
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || value < 0) return null;
+    if (value === 0) return '0:00';
+    const hours = Math.floor(value / 3600);
+    const minutes = Math.floor((value % 3600) / 60);
+    const secs = Math.floor(value % 60);
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
+  }
+
   if (!isNonEmptyString(value)) return null;
 
   const trimmed = value.trim();
@@ -47,14 +59,75 @@ const normalizeText = (value: unknown): string | undefined => {
   return trimmed;
 };
 
+const extractVideoId = (value: unknown): string | undefined => {
+  if (!isNonEmptyString(value)) return undefined;
+  const raw = value.trim();
+  try {
+    const url = new URL(raw);
+    const host = url.hostname.toLowerCase();
+    if (host.includes('youtu.be')) {
+      const id = url.pathname.replace('/', '').trim();
+      return id || undefined;
+    }
+    if (host.includes('youtube.com')) {
+      const v = url.searchParams.get('v');
+      if (v) return v;
+      const parts = url.pathname.split('/').filter(Boolean);
+      const shortsIndex = parts.indexOf('shorts');
+      const embedIndex = parts.indexOf('embed');
+      if (shortsIndex >= 0 && parts[shortsIndex + 1]) return parts[shortsIndex + 1];
+      if (embedIndex >= 0 && parts[embedIndex + 1]) return parts[embedIndex + 1];
+    }
+  } catch {
+    // Fall through to regex parsing
+  }
+  const match = raw.match(/[?&]v=([^&]+)/) || raw.match(/youtu\.be\/([^?&]+)/) || raw.match(/youtube\.com\/shorts\/([^?&/]+)/);
+  return match?.[1];
+};
+
+const getThumbnailFromList = (value: unknown): string | undefined => {
+  if (Array.isArray(value)) {
+    const first = value.find(Boolean);
+    if (typeof first === 'string') return normalizeText(first);
+    if (typeof first === 'object' && first) {
+      return normalizeText((first as any).url) || normalizeText((first as any).src);
+    }
+  }
+  return undefined;
+};
+
 const normalizeVideoResult = (item: any): VideoResult | null => {
-  const id = normalizeText(item?.id) || normalizeText(item?.videoId) || '';
+  const id =
+    normalizeText(item?.id) ||
+    normalizeText(item?.videoId) ||
+    extractVideoId(item?.url) ||
+    extractVideoId(item?.webpage_url) ||
+    extractVideoId(item?.link) ||
+    extractVideoId(item?.href) ||
+    '';
   if (!id) return null;
 
-  const title = normalizeText(item?.title);
-  const channel = normalizeText(item?.channel) || normalizeText(item?.author_name);
-  const thumbnail = normalizeText(item?.thumbnail) || normalizeText(item?.thumbnail_url);
-  const duration = normalizeDuration(item?.duration ?? item?.lengthText ?? item?.length);
+  const title =
+    normalizeText(item?.title) ||
+    normalizeText(item?.name) ||
+    normalizeText(item?.videoTitle);
+  const channel =
+    normalizeText(item?.channel) ||
+    normalizeText(item?.uploader) ||
+    normalizeText(item?.ownerChannelName) ||
+    normalizeText(item?.author) ||
+    normalizeText(item?.author_name);
+  const thumbnail =
+    normalizeText(item?.thumbnail) ||
+    normalizeText(item?.thumbnail_url) ||
+    getThumbnailFromList(item?.thumbnails);
+  const duration = normalizeDuration(
+    item?.duration ??
+    item?.lengthText ??
+    item?.length ??
+    item?.durationSeconds ??
+    item?.lengthSeconds
+  );
 
   return {
     id,
@@ -69,9 +142,27 @@ const normalizeVideoResult = (item: any): VideoResult | null => {
   };
 };
 
+const coerceArray = (value: unknown): any[] => {
+  if (!value) return [];
+  return Array.isArray(value) ? value : [value];
+};
+
 const normalizeResults = (data: unknown): VideoResult[] => {
-  if (!Array.isArray(data)) return [];
-  return data
+  let items: any[] = [];
+
+  if (Array.isArray(data)) {
+    items = data;
+  } else if (data && typeof data === 'object') {
+    const objectData = data as any;
+    if (Array.isArray(objectData.items)) items = objectData.items;
+    else if (Array.isArray(objectData.results)) items = objectData.results;
+    else if (Array.isArray(objectData.entries)) items = objectData.entries;
+    else if (objectData.video) items = coerceArray(objectData.video);
+    else if (objectData.item) items = coerceArray(objectData.item);
+    else items = [objectData];
+  }
+
+  return items
     .map(normalizeVideoResult)
     .filter((item): item is VideoResult => item !== null);
 };

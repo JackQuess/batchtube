@@ -52,7 +52,7 @@ export const SelectionBar: React.FC<SelectionBarProps> = ({
       </div>
 
       {/* Desktop Layout */}
-      <div className="hidden md:flex items-center gap-2 md:gap-4 flex-wrap">
+      <div className="hidden md:flex items-center gap-2 md:gap-4 flex-nowrap w-full min-w-0">
         {/* Count Badge */}
         <div className="bg-primary/10 text-primary px-2 md:px-3 py-1 rounded-lg text-xs sm:text-sm font-bold whitespace-nowrap">
           {count} {selectionLabel}
@@ -61,7 +61,7 @@ export const SelectionBar: React.FC<SelectionBarProps> = ({
         <div className="h-6 w-px bg-white/10 hidden md:block"></div>
 
         {/* Status Text */}
-        <span className="text-gray-400 text-xs sm:text-sm whitespace-nowrap hidden md:inline">
+        <span className="text-gray-400 text-xs sm:text-sm whitespace-nowrap hidden md:inline min-w-0 truncate">
           {t.readyToProcess}
         </span>
 
@@ -70,7 +70,7 @@ export const SelectionBar: React.FC<SelectionBarProps> = ({
         {/* View List Button */}
         <button
           onClick={onViewList}
-          className="text-white bg-white/5 hover:bg-white/10 px-3 md:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap"
+          className="text-white bg-white/5 hover:bg-white/10 px-3 md:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap shrink-0"
         >
           {t.viewList}
         </button>
@@ -82,7 +82,7 @@ export const SelectionBar: React.FC<SelectionBarProps> = ({
               setShowFormatMenu(!showFormatMenu);
               setShowQualityMenu(false);
             }}
-            className="flex items-center gap-1 md:gap-2 text-white bg-white/5 px-2 md:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium hover:bg-white/10 transition-colors"
+            className="flex items-center gap-1 md:gap-2 text-white bg-white/5 px-2 md:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium hover:bg-white/10 transition-colors whitespace-nowrap shrink-0"
           >
             <span className="uppercase text-gray-400 hidden sm:inline">{t.formatLabel}:</span>
             <span className="uppercase text-gray-400 sm:hidden">{t.formatShort}:</span>
@@ -104,7 +104,7 @@ export const SelectionBar: React.FC<SelectionBarProps> = ({
               setShowQualityMenu(!showQualityMenu);
               setShowFormatMenu(false);
             }}
-            className="flex items-center gap-1 md:gap-2 text-white bg-white/5 px-2 md:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium hover:bg-white/10 transition-colors"
+            className="flex items-center gap-1 md:gap-2 text-white bg-white/5 px-2 md:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium hover:bg-white/10 transition-colors whitespace-nowrap shrink-0"
           >
             <span className="text-gray-400 hidden sm:inline">{t.qualityLabel}:</span>
             <span className="text-gray-400 sm:hidden">{t.qualityShort}:</span>
@@ -131,12 +131,12 @@ export const SelectionBar: React.FC<SelectionBarProps> = ({
           )}
         </div>
 
-        <div className="flex-1 hidden lg:block"></div>
+        <div className="flex-1 hidden lg:block min-w-0"></div>
 
         {/* Actions */}
         <button
           onClick={onClear}
-          className="p-2 text-gray-500 hover:text-white transition-colors hidden md:block"
+          className="p-2 text-gray-500 hover:text-white transition-colors hidden md:block shrink-0"
           title={t.clearAll}
         >
           <X size={18} />
@@ -144,7 +144,7 @@ export const SelectionBar: React.FC<SelectionBarProps> = ({
 
         <button
           onClick={onDownload}
-          className="bg-primary hover:bg-red-600 text-white px-5 py-2 rounded-xl font-bold text-sm flex items-center gap-2 shadow-lg shadow-primary/20 transition-all active:scale-95"
+          className="bg-primary hover:bg-red-600 text-white px-5 py-2 rounded-xl font-bold text-sm flex items-center gap-2 shadow-lg shadow-primary/20 transition-all active:scale-95 whitespace-nowrap shrink-0"
         >
           <Archive size={16} />
           {t.downloadZip}
