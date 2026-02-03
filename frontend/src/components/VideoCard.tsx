@@ -77,7 +77,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   return (
     <div
       onClick={handleClick}
-      className={`group relative bg-[#0b0b10] rounded-xl overflow-hidden border transition-all duration-300 cursor-pointer flex flex-col touch-manipulation
+      className={`group relative w-full max-w-[360px] bg-[#0b0b10] rounded-xl overflow-hidden border transition-all duration-300 cursor-pointer flex flex-col touch-manipulation
         ${isSelected ? 'border-primary ring-1 ring-primary shadow-lg shadow-primary/10' : 'border-white/5 hover:border-white/20'}
       `}
     >

@@ -30,7 +30,8 @@ const normalizeDuration = (value: unknown): string | null => {
   const trimmed = value.trim();
   if (isPlaceholder(trimmed)) return null;
 
-  if (trimmed === '0:00') return null;
+  if (trimmed === '0:00' || trimmed === '0') return null;
+  if (trimmed.toLowerCase().includes('line')) return null;
 
   if (trimmed.includes(':')) {
     return trimmed;
@@ -109,10 +110,12 @@ const normalizeVideoResult = (item: any): VideoResult | null => {
 
   const title =
     normalizeText(item?.title) ||
+    normalizeText(item?.fulltitle) ||
     normalizeText(item?.name) ||
     normalizeText(item?.videoTitle);
   const channel =
     normalizeText(item?.channel) ||
+    normalizeText(item?.channelName) ||
     normalizeText(item?.uploader) ||
     normalizeText(item?.ownerChannelName) ||
     normalizeText(item?.author) ||
@@ -126,7 +129,8 @@ const normalizeVideoResult = (item: any): VideoResult | null => {
     item?.lengthText ??
     item?.length ??
     item?.durationSeconds ??
-    item?.lengthSeconds
+    item?.lengthSeconds ??
+    item?.duration_string
   );
 
   return {
@@ -157,6 +161,7 @@ const normalizeResults = (data: unknown): VideoResult[] => {
     if (Array.isArray(objectData.items)) items = objectData.items;
     else if (Array.isArray(objectData.results)) items = objectData.results;
     else if (Array.isArray(objectData.entries)) items = objectData.entries;
+    else if (Array.isArray(objectData.data)) items = objectData.data;
     else if (objectData.video) items = coerceArray(objectData.video);
     else if (objectData.item) items = coerceArray(objectData.item);
     else items = [objectData];
@@ -177,7 +182,11 @@ export const api = {
     });
     if (!res.ok) throw new Error('Search failed');
     const data = await res.json();
-    return normalizeResults(data);
+    const normalized = normalizeResults(data);
+    if (import.meta.env.DEV && normalized.length > 0) {
+      console.debug('[apiService] normalized result', normalized[0]);
+    }
+    return normalized;
   },
 
   startSingleDownload: async (videoId: string, format: VideoFormat, title?: string) => {

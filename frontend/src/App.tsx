@@ -185,7 +185,7 @@ const App: React.FC = () => {
             {/* Ad Slot: Below Search Bar (strict policy) */}
             {showAds && <AdSlotSearch />}
 
-            <div className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 animate-fadeIn">
+            <div className="grid gap-5 sm:gap-6 grid-cols-[repeat(auto-fit,minmax(280px,1fr))] justify-items-center animate-fadeIn">
               {results.map((video, index) => (
                 <React.Fragment key={video.id}>
                   <VideoCard
