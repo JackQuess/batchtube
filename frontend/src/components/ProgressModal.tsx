@@ -26,6 +26,17 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
   const [isPolling, setIsPolling] = useState(true);
   const [itemProgress, setItemProgress] = useState<Record<number, ItemProgress>>({});
 
+  const safeParse = (payload: unknown) => {
+    if (typeof payload !== 'string') return null;
+    const trimmed = payload.trim();
+    if (!trimmed || trimmed === 'undefined') return null;
+    try {
+      return JSON.parse(trimmed);
+    } catch {
+      return null;
+    }
+  };
+
   // Subscribe to SSE stream for live progress
   useEffect(() => {
     let eventSource: EventSource | null = null;
@@ -34,74 +45,52 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
       eventSource = new EventSource(`${API_BASE_URL}/api/batch/${jobId}/events`);
 
       eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.items) {
-            // Update per-item progress with full item data
-            const progressMap: Record<number, { percent: number; title: string; thumbnail: string | null }> = {};
-            data.items.forEach((item: { index: number; percent: number; title?: string; thumbnail?: string | null }) => {
-              progressMap[item.index] = {
-                percent: item.percent,
-                title: item.title || `${t.itemLabel} ${item.index + 1}`,
-                thumbnail: item.thumbnail || null
-              };
-            });
-            setItemProgress(prev => ({ ...prev, ...progressMap }));
-          }
-        } catch (err) {
-          console.error('[ProgressModal] SSE parse error:', err);
-        }
+        const data = safeParse(event.data);
+        if (!data?.items) return;
+        const progressMap: Record<number, { percent: number; title: string; thumbnail: string | null }> = {};
+        data.items.forEach((item: { index: number; percent: number; title?: string; thumbnail?: string | null }) => {
+          progressMap[item.index] = {
+            percent: item.percent,
+            title: item.title || `${t.itemLabel} ${item.index + 1}`,
+            thumbnail: item.thumbnail || null
+          };
+        });
+        setItemProgress(prev => ({ ...prev, ...progressMap }));
       };
 
       eventSource.addEventListener('progress', (event: MessageEvent) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.items) {
-            // Update per-item progress with full item data
-            const progressMap: Record<number, { percent: number; title: string; thumbnail: string | null }> = {};
-            data.items.forEach((item: { index: number; percent: number; title?: string; thumbnail?: string | null }) => {
-              progressMap[item.index] = {
-                percent: item.percent,
-                title: item.title || `${t.itemLabel} ${item.index + 1}`,
-                thumbnail: item.thumbnail || null
-              };
-            });
-            setItemProgress(prev => ({ ...prev, ...progressMap }));
-          }
-        } catch (err) {
-          console.error('[ProgressModal] SSE progress error:', err);
-        }
+        const data = safeParse(event.data);
+        if (!data?.items) return;
+        const progressMap: Record<number, { percent: number; title: string; thumbnail: string | null }> = {};
+        data.items.forEach((item: { index: number; percent: number; title?: string; thumbnail?: string | null }) => {
+          progressMap[item.index] = {
+            percent: item.percent,
+            title: item.title || `${t.itemLabel} ${item.index + 1}`,
+            thumbnail: item.thumbnail || null
+          };
+        });
+        setItemProgress(prev => ({ ...prev, ...progressMap }));
       });
 
       eventSource.addEventListener('completed', (event: MessageEvent) => {
-        try {
-          const data = JSON.parse(event.data);
-          setIsPolling(false);
-          // Fetch final status
-          batchAPI.getStatus(jobId).then(setStatus);
-        } catch (err) {
-          console.error('[ProgressModal] SSE completed error:', err);
-        }
+        const data = safeParse(event.data);
+        if (!data) return;
+        setIsPolling(false);
+        batchAPI.getStatus(jobId).then(setStatus);
       });
 
       eventSource.addEventListener('failed', (event: MessageEvent) => {
-        try {
-          const data = JSON.parse(event.data);
-          setIsPolling(false);
-          setError(data.error || t.batchFailed);
-        } catch (err) {
-          console.error('[ProgressModal] SSE failed error:', err);
-        }
+        const data = safeParse(event.data);
+        if (!data) return;
+        setIsPolling(false);
+        setError(data.error || t.batchFailed);
       });
 
       eventSource.addEventListener('error', (event: MessageEvent) => {
-        try {
-          const data = JSON.parse(event.data);
-          setError(data.error || t.error);
-          setIsPolling(false);
-        } catch (err) {
-          console.error('[ProgressModal] SSE error event:', err);
-        }
+        const data = safeParse(event.data);
+        if (!data) return;
+        setError(data.error || t.error);
+        setIsPolling(false);
       });
 
       eventSource.onerror = () => {
