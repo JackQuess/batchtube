@@ -1,4 +1,5 @@
 [phases.setup]
+<<<<<<< HEAD
 nixPkgs = ["nodejs_20", "python3", "ffmpeg"]
 
 [phases.install]
@@ -13,3 +14,20 @@ cmd = "node src/server.js"
 [variables]
 NODE_ENV = "production"
 
+=======
+nixPkgs = ["nodejs_20", "python3", "pip"]
+
+[phases.install]
+cmds = [
+  "npm ci",
+  "pip3 install --upgrade yt-dlp || echo 'Warning: yt-dlp installation failed, some features may not work'"
+]
+
+[phases.build]
+cmds = [
+  "npm run build"
+]
+
+[start]
+cmd = "npm start"
+>>>>>>> 69f9136 (Initial commit)

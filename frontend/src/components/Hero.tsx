@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Search, Link as LinkIcon, Loader2 } from 'lucide-react';
 import { Translations } from '../types';
@@ -21,7 +20,6 @@ export const Hero: React.FC<HeroProps> = ({ onSearch, loading, t }) => {
     try {
       const text = await navigator.clipboard.readText();
       setQuery(text);
-      // Optional: Auto-search if valid URL
       if (text.startsWith('http')) {
         onSearch(text);
       }
@@ -34,7 +32,10 @@ export const Hero: React.FC<HeroProps> = ({ onSearch, loading, t }) => {
     <div className="w-full flex flex-col items-center justify-center py-8 sm:py-12 md:py-16 text-center space-y-4 sm:space-y-6 animate-fadeIn">
       <div className="space-y-3 sm:space-y-4 max-w-2xl w-full px-4">
         <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white tracking-tight leading-tight">
-          {t.heroTitle.split('.')[0]}. <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">{t.heroTitle.split('.')[1] || 'Free.'}</span>
+          {t.heroTitle.split('.')[0]}.{' '}
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">
+            {t.heroTitle.split('.')[1] || 'Free.'}
+          </span>
         </h1>
         <p className="text-sm sm:text-base text-neutral-400 font-light max-w-md mx-auto">
           {t.heroSubtitle}
@@ -46,7 +47,7 @@ export const Hero: React.FC<HeroProps> = ({ onSearch, loading, t }) => {
         <form onSubmit={handleSubmit} className="relative flex flex-col sm:flex-row items-stretch sm:items-center bg-[#0b0b10] rounded-2xl p-2 border border-white/10 shadow-2xl gap-3 sm:gap-2">
           <div className="flex items-center flex-1">
             <Search className="text-gray-500 ml-4 flex-shrink-0" size={20} />
-            
+
             <input
               type="text"
               value={query}
@@ -58,17 +59,17 @@ export const Hero: React.FC<HeroProps> = ({ onSearch, loading, t }) => {
 
           <div className="flex items-center gap-2 pr-2">
             {!query && (
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={handlePaste}
                 className="hidden sm:flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-400 bg-white/5 hover:bg-white/10 rounded-lg transition-colors"
               >
                 <LinkIcon size={12} /> {t.pasteLink}
               </button>
             )}
-            
-            <button 
-              type="submit" 
+
+            <button
+              type="submit"
               disabled={loading}
               className="w-full sm:w-auto bg-primary hover:bg-red-600 text-white px-6 py-3 rounded-xl font-bold text-sm sm:text-base transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center min-w-[100px]"
             >

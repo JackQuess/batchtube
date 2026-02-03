@@ -1,15 +1,6 @@
 {
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
-<<<<<<< HEAD
-    "builder": "NIXPACKS"
-  },
-  "deploy": {
-    "startCommand": "node src/server.js"
-  }
-}
-
-=======
     "builder": "NIXPACKS",
     "buildCommand": "npm install && npm run build"
   },
@@ -19,4 +10,4 @@
     "restartPolicyMaxRetries": 10
   }
 }
->>>>>>> 69f9136 (Initial commit)
+

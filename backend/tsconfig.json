@@ -3,6 +3,7 @@
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
+<<<<<<< HEAD
     "rootDir": "./src",
     "outDir": "./dist",
     "esModuleInterop": true,
@@ -11,4 +12,18 @@
     "forceConsistentCasingInFileNames": true
   },
   "include": ["src/**/*"]
+=======
+    "rootDir": ".",
+    "outDir": ".",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "allowImportingTsExtensions": false
+  },
+  "include": ["server.ts", "src/**/*"],
+  "ts-node": {
+    "esm": true
+  }
+>>>>>>> 69f9136 (Initial commit)
 }

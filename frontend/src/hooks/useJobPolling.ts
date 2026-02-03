@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { BatchProgressResponse } from '../types';
 import { api } from '../services/apiService';
@@ -35,10 +34,7 @@ export const useJobPolling = (jobId: string | null) => {
       }
     };
 
-    // Initial fetch
     fetchProgress();
-    
-    // Poll every 1 second
     pollInterval.current = setInterval(fetchProgress, 1000);
 
     return stopPolling;

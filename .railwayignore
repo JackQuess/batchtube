@@ -1,4 +1,17 @@
+<<<<<<< HEAD
 Dockerfile
 .dockerignore
 docker-compose.yml
+=======
+node_modules
+.git
+.env.local
+.env.*.local
+dist
+*.log
+.DS_Store
+downloads
+temp_downloads
+*.zip
+>>>>>>> 69f9136 (Initial commit)
 

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Translations } from '../types';
 import { loadAdSense } from '../lib/adLoader';
@@ -30,10 +29,8 @@ export const CookieConsent: React.FC<CookieConsentProps> = ({ t }) => {
     const consent = localStorage.getItem(STORAGE_KEY);
     if (!consent) {
       setShow(true);
-      // Trigger fade-in animation
       setTimeout(() => setIsVisible(true), 10);
     } else {
-      // Load ads if accepted
       if (consent === 'accepted') {
         loadAdSense();
       }
@@ -45,7 +42,6 @@ export const CookieConsent: React.FC<CookieConsentProps> = ({ t }) => {
     setShow(false);
     setIsVisible(false);
 
-    // Load AdSense only if accepted
     if (status === 'accepted') {
       loadAdSense();
     }
@@ -54,7 +50,7 @@ export const CookieConsent: React.FC<CookieConsentProps> = ({ t }) => {
   if (!show) return null;
 
   return (
-    <div 
+    <div
       className={`fixed bottom-4 right-4 z-[60] max-w-md transition-all duration-500 ${
         isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
       }`}
@@ -63,7 +59,7 @@ export const CookieConsent: React.FC<CookieConsentProps> = ({ t }) => {
         <p className="text-sm text-gray-300 mb-4 leading-relaxed">
           {t.cookie.message}
         </p>
-        
+
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => handleConsent('accepted')}
@@ -71,14 +67,14 @@ export const CookieConsent: React.FC<CookieConsentProps> = ({ t }) => {
           >
             {t.cookie.accept}
           </button>
-          
+
           <button
             onClick={() => handleConsent('rejected')}
             className="px-4 py-2 rounded-full bg-white/10 text-gray-300 text-xs font-medium hover:bg-white/20 transition-colors"
           >
             {t.cookie.reject}
           </button>
-          
+
           <button
             onClick={() => handleConsent('essential')}
             className="px-4 py-2 rounded-full bg-white/5 text-gray-400 text-xs font-medium hover:bg-white/10 transition-colors"

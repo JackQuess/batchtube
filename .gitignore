@@ -11,8 +11,11 @@ node_modules
 dist
 dist-ssr
 *.local
+<<<<<<< HEAD
 backend/src/bin/
 backend/bin/
+=======
+>>>>>>> 69f9136 (Initial commit)
 
 # Editor directories and files
 .vscode/*

@@ -1,6 +1,5 @@
-
-import React, { useState, useEffect } from 'react';
-import { VideoResult, VideoFormat, SupportedLanguage, SelectionItem, LegalDocType, VideoQuality } from './types';
+import React, { useEffect, useState } from 'react';
+import { VideoResult, VideoFormat, SelectionItem, LegalDocType, VideoQuality } from './types';
 import { TRANSLATIONS } from './constants';
 import { api } from './services/apiService';
 
@@ -17,21 +16,21 @@ import { AdSlotSearch } from './components/AdSlotSearch';
 import { AdSlotGrid } from './components/AdSlotGrid';
 import { loadAdSense } from './lib/adLoader';
 import { batchAPI } from './services/batchAPI';
+import { useLanguage } from './context/LanguageContext';
 
 const App: React.FC = () => {
-  // Global State
-  const [lang, setLang] = useState<SupportedLanguage>('en');
+  const { lang, setLang } = useLanguage();
   const t = TRANSLATIONS[lang];
-  
+
   // Search State
   const [results, setResults] = useState<VideoResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  
+
   // Selection/Batch State
   const [selectedItems, setSelectedItems] = useState<SelectionItem[]>([]);
   const [batchFormat, setBatchFormat] = useState<VideoFormat>('mp3');
   const [batchQuality, setBatchQuality] = useState<VideoQuality>('320k');
-  
+
   // Job/Modal State
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [legalModalType, setLegalModalType] = useState<LegalDocType | null>(null);
@@ -39,7 +38,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     document.title = `BatchTube | ${t.heroTitle}`;
-  }, [lang, t.heroTitle]);
+  }, [t.heroTitle]);
 
   // Load AdSense if consent is accepted
   useEffect(() => {
@@ -60,6 +59,7 @@ const App: React.FC = () => {
 
   // Handlers
   const handleSearch = async (query: string) => {
+    if (!query.trim()) return;
     setIsSearching(true);
     setResults([]);
     try {
@@ -76,12 +76,10 @@ const App: React.FC = () => {
     setSelectedItems(prev => {
       const exists = prev.find(i => i.video.id === video.id);
       if (exists) {
-        // Remove from selection
         return prev.filter(i => i.video.id !== video.id);
       }
-      // Add to selection with format and quality
-      return [...prev, { 
-        video, 
+      return [...prev, {
+        video,
         format: format || batchFormat,
         quality: quality || batchQuality
       }];
@@ -95,16 +93,14 @@ const App: React.FC = () => {
   const handleBatchDownload = async () => {
     if (selectedItems.length === 0) return;
     try {
-      // Map to new API format
       const items = selectedItems.map(item => ({
         url: `https://www.youtube.com/watch?v=${item.video.id}`,
-        title: item.video.title || 'Unknown',
+        title: item.video.title || undefined,
         thumbnail: item.video.thumbnail || `https://i.ytimg.com/vi/${item.video.id}/hqdefault.jpg`,
       }));
 
-      // Map quality: '320k' -> '1080p' for MP3, keep as is for MP4
-      const quality = batchFormat === 'mp3' 
-        ? '1080p' // MP3 doesn't use quality, but API expects it
+      const quality = batchFormat === 'mp3'
+        ? '1080p'
         : (batchQuality === '4K' ? '4k' : '1080p');
 
       const { jobId } = await batchAPI.createJob({
@@ -112,22 +108,21 @@ const App: React.FC = () => {
         format: batchFormat,
         quality: batchFormat === 'mp4' ? quality : undefined
       });
-      
+
       setActiveJobId(jobId);
     } catch (e) {
-      console.error("Batch start failed", e);
+      console.error('Batch start failed', e);
       alert('Failed to start batch download. Please try again.');
     }
   };
 
   return (
     <div className="min-h-screen flex flex-col bg-[#050509] text-white font-sans selection:bg-primary/30 overflow-x-hidden">
-      
       <Navbar lang={lang} setLang={setLang} />
-      
+
       <main className="flex-grow pt-8 sm:pt-12 md:pt-16 pb-16 sm:pb-20 w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <Hero onSearch={handleSearch} loading={isSearching} t={t} />
-        
+
         {/* Ad Slot: Below Search Bar */}
         {results.length > 0 && <AdSlotSearch />}
 
@@ -140,7 +135,6 @@ const App: React.FC = () => {
                 onSelect={(format, quality) => toggleSelection(video, format, quality)}
                 t={t}
               />
-              {/* Ad Slot: After every 8th video card */}
               {(index + 1) % 8 === 0 && (
                 <AdSlotGrid index={Math.floor((index + 1) / 8)} />
               )}
@@ -149,7 +143,7 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      <SelectionBar 
+      <SelectionBar
         count={selectedItems.length}
         format={batchFormat}
         setFormat={setBatchFormat}
@@ -172,17 +166,19 @@ const App: React.FC = () => {
       />
 
       {activeJobId && (
-        <ProgressModal 
-          jobId={activeJobId} 
-          onClose={() => setActiveJobId(null)} 
+        <ProgressModal
+          jobId={activeJobId}
+          onClose={() => setActiveJobId(null)}
           totalItems={selectedItems.length}
+          t={t}
         />
       )}
 
-      <LegalModal 
-        type={legalModalType} 
-        onClose={() => setLegalModalType(null)} 
+      <LegalModal
+        type={legalModalType}
+        onClose={() => setLegalModalType(null)}
         t={t}
+        lang={lang}
       />
 
       <CookieConsent t={t} />

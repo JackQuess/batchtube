@@ -1,5 +1,9 @@
 /** @type {import('tailwindcss').Config} */
+<<<<<<< HEAD
 export default {
+=======
+module.exports = {
+>>>>>>> 69f9136 (Initial commit)
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
@@ -15,6 +19,13 @@ export default {
         surface: '#0b0b10',
         primary: '#e53935',
         secondary: '#ff6b81',
+<<<<<<< HEAD
+=======
+        text: {
+          primary: '#f9fafb',
+          secondary: '#9ca3af'
+        }
+>>>>>>> 69f9136 (Initial commit)
       },
       animation: {
         'fadeIn': 'fadeIn 0.5s ease-out forwards',
@@ -34,4 +45,8 @@ export default {
     },
   },
   plugins: [],
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> 69f9136 (Initial commit)
