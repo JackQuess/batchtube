@@ -4,7 +4,6 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "node src/server.js"
+    "startCommand": "sh -c 'node src/${SERVICE_ENTRY:-server}.js'"
   }
 }
-

@@ -2,6 +2,5 @@
 builder = "NIXPACKS"
 
 [deploy]
-start = "node src/server.js"
+start = "sh -c 'node src/${SERVICE_ENTRY:-server}.js'"
 restart = true
-

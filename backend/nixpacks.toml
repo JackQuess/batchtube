@@ -8,8 +8,7 @@ cmds = [
 ]
 
 [start]
-cmd = "node src/server.js"
+cmd = "sh -c 'node src/${SERVICE_ENTRY:-server}.js'"
 
 [variables]
 NODE_ENV = "production"
-
