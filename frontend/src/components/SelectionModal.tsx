@@ -19,6 +19,22 @@ export const SelectionModal: React.FC<SelectionModalProps> = ({
 }) => {
   if (!isOpen) return null;
   const getSelectionKey = (item: SelectionItem, index: number) => `${item.video.url || item.video.id}-${index}`;
+  const getPlatformLabel = (item: SelectionItem) => (item.video.platform || 'media').toUpperCase();
+  const getPlatformPlaceholder = (item: SelectionItem) =>
+    `data:image/svg+xml,${encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
+        <defs>
+          <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#0f172a"/>
+            <stop offset="100%" stop-color="#1f2937"/>
+          </linearGradient>
+        </defs>
+        <rect width="640" height="360" fill="url(#g)"/>
+        <circle cx="320" cy="172" r="48" fill="rgba(255,255,255,0.14)"/>
+        <polygon points="306,146 306,198 350,172" fill="#ffffff"/>
+        <text x="320" y="288" text-anchor="middle" fill="#e5e7eb" font-family="Arial,sans-serif" font-size="22">${getPlatformLabel(item)}</text>
+      </svg>`
+    )}`;
   const isYouTubeLike = (item: SelectionItem) =>
     (item.video.platform || '').toLowerCase() === 'youtube'
     || /youtube|youtu\.be/i.test(item.video.url || '')
@@ -105,14 +121,14 @@ export const SelectionModal: React.FC<SelectionModalProps> = ({
                   {/* Thumbnail */}
                   <div className="flex-shrink-0 w-full sm:w-24 md:w-28 h-20 sm:h-16 rounded-xl overflow-hidden bg-[#1a1a20] shadow-lg">
                     <img
-                      src={item.video.thumbnail || (isYouTubeLike(item) ? `https://img.youtube.com/vi/${item.video.id}/hqdefault.jpg` : 'data:image/svg+xml,%3Csvg xmlns=\"http://www.w3.org/2000/svg\" width=\"640\" height=\"360\"%3E%3Crect fill=\"%23111\" width=\"640\" height=\"360\"/%3E%3Ctext fill=\"%23999\" font-family=\"sans-serif\" font-size=\"20\" x=\"50%25\" y=\"50%25\" text-anchor=\"middle\" dy=\".3em\"%3ENo thumbnail%3C/text%3E%3C/svg%3E')}
+                      src={item.video.thumbnail || (isYouTubeLike(item) ? `https://img.youtube.com/vi/${item.video.id}/hqdefault.jpg` : getPlatformPlaceholder(item))}
                       alt={item.video.title || t.metadataUnavailable}
                       className="w-full h-full object-cover"
                       onError={(e) => {
                         const target = e.target as HTMLImageElement;
                         target.src = isYouTubeLike(item)
                           ? `https://img.youtube.com/vi/${item.video.id}/mqdefault.jpg`
-                          : 'data:image/svg+xml,%3Csvg xmlns=\"http://www.w3.org/2000/svg\" width=\"640\" height=\"360\"%3E%3Crect fill=\"%23111\" width=\"640\" height=\"360\"/%3E%3Ctext fill=\"%23999\" font-family=\"sans-serif\" font-size=\"20\" x=\"50%25\" y=\"50%25\" text-anchor=\"middle\" dy=\".3em\"%3ENo thumbnail%3C/text%3E%3C/svg%3E';
+                          : getPlatformPlaceholder(item);
                       }}
                     />
                   </div>

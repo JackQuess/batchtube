@@ -32,6 +32,29 @@ function formatDuration(durationSeconds) {
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
+function getFallbackTitle(providerId, url) {
+  if (providerId === 'twitter') return 'Twitter/X post';
+  if (providerId === 'instagram') return 'Instagram media';
+  if (providerId === 'tiktok') return 'TikTok video';
+  if (providerId === 'youtube') return 'YouTube video';
+
+  try {
+    const parsed = new URL(url);
+    const name = decodeURIComponent((parsed.pathname || '').split('/').filter(Boolean).pop() || '');
+    return name || 'Direct media';
+  } catch (_) {
+    return 'Direct media';
+  }
+}
+
+function getFallbackChannel(providerId) {
+  if (providerId === 'twitter') return 'X/Twitter';
+  if (providerId === 'instagram') return 'Instagram';
+  if (providerId === 'tiktok') return 'TikTok';
+  if (providerId === 'youtube') return 'YouTube';
+  return 'Direct link';
+}
+
 /**
  * GET /api/search?q=<query>
  * POST /api/search with body: { query: string }
@@ -62,7 +85,15 @@ const handleSearch = async (req, res) => {
         }]);
       } catch (error) {
         console.warn('[Search] URL metadata failed:', error.message || error);
-        return res.json([]);
+        return res.json([{
+          id: query,
+          title: getFallbackTitle(provider.id, query),
+          thumbnail: null,
+          duration: '0:00',
+          channel: getFallbackChannel(provider.id),
+          platform: provider.id,
+          url: query
+        }]);
       }
     }
 

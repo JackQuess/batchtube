@@ -14,6 +14,20 @@ function isTwitterUrl(url) {
   }
 }
 
+function normalizeTwitterUrl(url) {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    if (host.includes('x.com')) {
+      parsed.hostname = 'twitter.com';
+      return parsed.toString();
+    }
+    return url;
+  } catch (_) {
+    return url;
+  }
+}
+
 function mapTwitterError(error, fallbackCode) {
   const text = String(error?.message || error || '');
   const lower = text.toLowerCase();
@@ -82,10 +96,11 @@ const twitterProvider = {
 
   async getMetadata(url) {
     try {
-      const info = await ytAdapter.getInfo(url);
+      const normalizedUrl = normalizeTwitterUrl(url);
+      const info = await ytAdapter.getInfo(normalizedUrl);
       return {
         platform: 'twitter',
-        url,
+        url: normalizedUrl,
         id: info.id,
         title: info.title,
         channel: info.channel,
@@ -98,6 +113,7 @@ const twitterProvider = {
   },
 
   async download(url, opts) {
+    const normalizedUrl = normalizeTwitterUrl(url);
     const outDir = opts.outDir;
     const format = opts.format === 'audio' ? 'audio' : 'video';
     const ext = format === 'audio' ? 'mp3' : 'mp4';
@@ -105,7 +121,7 @@ const twitterProvider = {
     const expectedPath = path.join(outDir, `${baseName}.${ext}`);
 
     try {
-      await ytAdapter.download(url, {
+      await ytAdapter.download(normalizedUrl, {
         outDir,
         format,
         quality: opts.quality,
