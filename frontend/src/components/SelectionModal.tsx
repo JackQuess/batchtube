@@ -18,6 +18,11 @@ export const SelectionModal: React.FC<SelectionModalProps> = ({
   t
 }) => {
   if (!isOpen) return null;
+  const getSelectionKey = (item: SelectionItem, index: number) => `${item.video.url || item.video.id}-${index}`;
+  const isYouTubeLike = (item: SelectionItem) =>
+    (item.video.platform || '').toLowerCase() === 'youtube'
+    || /youtube|youtu\.be/i.test(item.video.url || '')
+    || !/^https?:\/\//i.test(item.video.id);
 
   const formatDuration = (duration: string | number): string => {
     if (!duration) return '';
@@ -94,18 +99,20 @@ export const SelectionModal: React.FC<SelectionModalProps> = ({
             ) : (
               items.map((item, index) => (
                 <div
-                  key={`${item.video.id}-${index}`}
+                  key={getSelectionKey(item, index)}
                   className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full p-4 rounded-xl bg-[#0b0b10]/80 border border-white/5 hover:border-white/10 hover:bg-[#0b0b10] transition-all backdrop-blur-sm"
                 >
                   {/* Thumbnail */}
                   <div className="flex-shrink-0 w-full sm:w-24 md:w-28 h-20 sm:h-16 rounded-xl overflow-hidden bg-[#1a1a20] shadow-lg">
                     <img
-                      src={item.video.thumbnail || `https://img.youtube.com/vi/${item.video.id}/hqdefault.jpg`}
+                      src={item.video.thumbnail || (isYouTubeLike(item) ? `https://img.youtube.com/vi/${item.video.id}/hqdefault.jpg` : 'data:image/svg+xml,%3Csvg xmlns=\"http://www.w3.org/2000/svg\" width=\"640\" height=\"360\"%3E%3Crect fill=\"%23111\" width=\"640\" height=\"360\"/%3E%3Ctext fill=\"%23999\" font-family=\"sans-serif\" font-size=\"20\" x=\"50%25\" y=\"50%25\" text-anchor=\"middle\" dy=\".3em\"%3ENo thumbnail%3C/text%3E%3C/svg%3E')}
                       alt={item.video.title || t.metadataUnavailable}
                       className="w-full h-full object-cover"
                       onError={(e) => {
                         const target = e.target as HTMLImageElement;
-                        target.src = `https://img.youtube.com/vi/${item.video.id}/mqdefault.jpg`;
+                        target.src = isYouTubeLike(item)
+                          ? `https://img.youtube.com/vi/${item.video.id}/mqdefault.jpg`
+                          : 'data:image/svg+xml,%3Csvg xmlns=\"http://www.w3.org/2000/svg\" width=\"640\" height=\"360\"%3E%3Crect fill=\"%23111\" width=\"640\" height=\"360\"/%3E%3Ctext fill=\"%23999\" font-family=\"sans-serif\" font-size=\"20\" x=\"50%25\" y=\"50%25\" text-anchor=\"middle\" dy=\".3em\"%3ENo thumbnail%3C/text%3E%3C/svg%3E';
                       }}
                     />
                   </div>

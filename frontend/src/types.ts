@@ -8,6 +8,8 @@ export type JobStatus = 'queued' | 'downloading' | 'processing' | 'completed' | 
 
 export interface VideoResult {
   id: string;
+  url?: string;
+  platform?: string;
   title?: string;
   thumbnail?: string;
   duration?: string | null;

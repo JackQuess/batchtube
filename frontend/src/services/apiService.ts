@@ -75,6 +75,34 @@ const normalizeText = (value: unknown): string | undefined => {
   return trimmed;
 };
 
+const normalizePlatform = (value: unknown): string | undefined => {
+  const normalized = normalizeText(value);
+  if (!normalized) return undefined;
+  return normalized.toLowerCase();
+};
+
+const toCanonicalUrl = (item: any, id: string): string | undefined => {
+  const direct =
+    normalizeText(item?.url) ||
+    normalizeText(item?.webpage_url) ||
+    normalizeText(item?.link) ||
+    normalizeText(item?.href);
+  if (direct) return direct;
+
+  if (!id) return undefined;
+
+  try {
+    const maybeUrl = new URL(id);
+    if (maybeUrl.protocol === 'http:' || maybeUrl.protocol === 'https:') {
+      return maybeUrl.toString();
+    }
+  } catch {
+    // Not a URL, continue.
+  }
+
+  return `https://www.youtube.com/watch?v=${id}`;
+};
+
 const extractVideoId = (value: unknown): string | undefined => {
   if (!isNonEmptyString(value)) return undefined;
   const raw = value.trim();
@@ -166,9 +194,12 @@ const normalizeVideoResult = (item: any): VideoResult | null => {
     item?.duration_string ??
     item?.contentDetails?.duration
   );
+  const url = toCanonicalUrl(item, id);
 
   return {
     id,
+    url,
+    platform: normalizePlatform(item?.platform),
     title,
     channel,
     thumbnail,

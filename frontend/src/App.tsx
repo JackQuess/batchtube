@@ -76,6 +76,8 @@ const App: React.FC = () => {
   }, [batchFormat]);
 
   // Handlers
+  const getSelectionKey = (video: VideoResult) => video.url || video.id;
+
   const handleSearch = async (query: string) => {
     setIsSearching(true);
     setResults([]);
@@ -94,10 +96,11 @@ const App: React.FC = () => {
 
   const toggleSelection = (video: VideoResult, format?: VideoFormat, quality?: VideoQuality) => {
     setSelectedItems(prev => {
-      const exists = prev.find(i => i.video.id === video.id);
+      const key = getSelectionKey(video);
+      const exists = prev.find(i => getSelectionKey(i.video) === key);
       if (exists) {
         // Remove from selection
-        return prev.filter(i => i.video.id !== video.id);
+        return prev.filter(i => getSelectionKey(i.video) !== key);
       }
       // Add to selection with format and quality
       return [...prev, { 
@@ -109,7 +112,8 @@ const App: React.FC = () => {
   };
 
   const handleRemoveFromSelection = (itemToRemove: SelectionItem) => {
-    setSelectedItems(prev => prev.filter(item => item.video.id !== itemToRemove.video.id));
+    const removeKey = getSelectionKey(itemToRemove.video);
+    setSelectedItems(prev => prev.filter(item => getSelectionKey(item.video) !== removeKey));
   };
 
   const handleBatchDownload = async () => {
@@ -117,9 +121,9 @@ const App: React.FC = () => {
     try {
       // Map to new API format
       const items = selectedItems.map(item => ({
-        url: `https://www.youtube.com/watch?v=${item.video.id}`,
+        url: item.video.url || `https://www.youtube.com/watch?v=${item.video.id}`,
         title: item.video.title || t.metadataUnavailable,
-        thumbnail: item.video.thumbnail || `https://i.ytimg.com/vi/${item.video.id}/hqdefault.jpg`,
+        thumbnail: item.video.thumbnail || (/youtube|youtu\.be/i.test(item.video.url || '') ? `https://i.ytimg.com/vi/${item.video.id}/hqdefault.jpg` : null),
       }));
 
       // Map quality: '320k' -> '1080p' for MP3, keep as is for MP4
@@ -187,10 +191,10 @@ const App: React.FC = () => {
 
             <div className="grid gap-5 sm:gap-6 grid-cols-[repeat(auto-fit,minmax(280px,1fr))] place-items-start animate-fadeIn">
               {results.map((video, index) => (
-                <React.Fragment key={video.id}>
+                <React.Fragment key={getSelectionKey(video)}>
                   <VideoCard
                     video={video}
-                    isSelected={!!selectedItems.find(i => i.video.id === video.id)}
+                    isSelected={!!selectedItems.find(i => getSelectionKey(i.video) === getSelectionKey(video))}
                     onSelect={(format, quality) => toggleSelection(video, format, quality)}
                     t={t}
                   />

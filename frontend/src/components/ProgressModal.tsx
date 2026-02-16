@@ -20,7 +20,16 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
   totalItems,
   t
 }) => {
-  type ItemProgress = { percent: number; title: string; thumbnail: string | null };
+  type ItemProgress = {
+    percent: number;
+    title: string;
+    thumbnail: string | null;
+    provider?: string | null;
+    status?: string;
+    errorCode?: string;
+    error?: string;
+    hint?: string;
+  };
   const [status, setStatus] = useState<BatchJobStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState(true);
@@ -47,12 +56,25 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
       eventSource.onmessage = (event) => {
         const data = safeParse(event.data);
         if (!data?.items) return;
-        const progressMap: Record<number, { percent: number; title: string; thumbnail: string | null }> = {};
-        data.items.forEach((item: { index: number; percent: number; title?: string; thumbnail?: string | null }) => {
+        const progressMap: Record<number, ItemProgress> = {};
+        data.items.forEach((item: {
+          index: number;
+          percent: number;
+          title?: string;
+          thumbnail?: string | null;
+          provider?: string;
+          status?: string;
+          error?: { code?: string; message?: string; hint?: string };
+        }) => {
           progressMap[item.index] = {
             percent: item.percent,
             title: item.title || `${t.itemLabel} ${item.index + 1}`,
-            thumbnail: item.thumbnail || null
+            thumbnail: item.thumbnail || null,
+            provider: item.provider || null,
+            status: item.status,
+            errorCode: item.error?.code,
+            error: item.error?.message,
+            hint: item.error?.hint
           };
         });
         setItemProgress(prev => ({ ...prev, ...progressMap }));
@@ -61,12 +83,25 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
       eventSource.addEventListener('progress', (event: MessageEvent) => {
         const data = safeParse(event.data);
         if (!data?.items) return;
-        const progressMap: Record<number, { percent: number; title: string; thumbnail: string | null }> = {};
-        data.items.forEach((item: { index: number; percent: number; title?: string; thumbnail?: string | null }) => {
+        const progressMap: Record<number, ItemProgress> = {};
+        data.items.forEach((item: {
+          index: number;
+          percent: number;
+          title?: string;
+          thumbnail?: string | null;
+          provider?: string;
+          status?: string;
+          error?: { code?: string; message?: string; hint?: string };
+        }) => {
           progressMap[item.index] = {
             percent: item.percent,
             title: item.title || `${t.itemLabel} ${item.index + 1}`,
-            thumbnail: item.thumbnail || null
+            thumbnail: item.thumbnail || null,
+            provider: item.provider || null,
+            status: item.status,
+            errorCode: item.error?.code,
+            error: item.error?.message,
+            hint: item.error?.hint
           };
         });
         setItemProgress(prev => ({ ...prev, ...progressMap }));
@@ -171,6 +206,7 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
   const isWaiting = status?.state === 'waiting';
 
   const result = status?.result;
+  const hasCompletedWithErrors = result?.batchStatus === 'completed_with_errors';
 
   // Calculate overall progress from itemProgress or fallback to status.progress
   const itemProgressValues = Object.values(itemProgress) as ItemProgress[];
@@ -242,7 +278,9 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
                 .map(([indexStr, itemData]) => {
                   const index = parseInt(indexStr);
                   const item = itemData as ItemProgress;
-                  const isItemDownloading = isActive && item.percent < 100;
+                  const isItemDownloading = isActive && item.percent < 100 && item.status !== 'failed';
+                  const isItemFailedLive = item.status === 'failed';
+                  const providerLabel = (item.provider || 'unknown').toUpperCase();
                   
                   return (
                     <div 
@@ -276,6 +314,9 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
                         <div className="text-xs sm:text-sm font-medium text-gray-200 truncate flex-1 min-w-0">
                           {item.title}
                         </div>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-gray-300">
+                          {providerLabel}
+                        </span>
                         {isItemDownloading && (
                           <span className="text-xs text-gray-400 font-mono flex-shrink-0">
                             {item.percent}%
@@ -292,6 +333,11 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
                           />
                         </div>
                       )}
+                      {isItemFailedLive && (
+                        <div className="mt-1 text-[11px] text-red-400 line-clamp-2">
+                          {item.errorCode ? `[${item.errorCode}] ` : ''}{item.error || t.failed}
+                        </div>
+                      )}
                     </div>
                     
                     {/* Status Badge */}
@@ -299,6 +345,10 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
                       {isItemDownloading ? (
                         <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-500/20 text-gray-400">
                           {t.downloading}
+                        </span>
+                      ) : isItemFailedLive ? (
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-500/20 text-red-400">
+                          {t.failed}
                         </span>
                       ) : item.percent >= 100 ? (
                         <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-500/20 text-green-400">
@@ -321,6 +371,7 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
               const itemStatus = resultItem?.status || item.status;
               const isItemCompleted = itemStatus === 'success';
               const isItemFailed = itemStatus === 'failed';
+              const providerLabel = (resultItem?.provider || item.provider || 'unknown').toUpperCase();
               
               return (
                 <div 
@@ -353,11 +404,21 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
                       <div className="text-xs sm:text-sm font-medium text-gray-200 truncate flex-1 min-w-0">
                         {displayName}
                       </div>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-gray-300">
+                        {providerLabel}
+                      </span>
                     </div>
                     
                     {/* Error Message */}
                     {isItemFailed && resultItem?.error && (
-                      <div className="text-xs text-red-400 mt-1 line-clamp-2">{resultItem.error}</div>
+                      <div className="text-xs text-red-400 mt-1 line-clamp-2">
+                        {resultItem.errorCode ? `[${resultItem.errorCode}] ` : ''}{resultItem.error}
+                      </div>
+                    )}
+                    {isItemFailed && resultItem?.hint && (
+                      <div className="text-[11px] text-amber-300/90 mt-1 line-clamp-2">
+                        {resultItem.hint}
+                      </div>
                     )}
                   </div>
                   
@@ -393,6 +454,11 @@ export const ProgressModal: React.FC<ProgressModalProps> = ({
 
         {/* Footer Actions */}
         <div className="p-4 sm:p-6 border-t border-white/5 bg-[#0e0e11] flex flex-col gap-3 sm:flex-row sm:justify-end">
+          {isCompleted && hasCompletedWithErrors && (
+            <div className="w-full sm:mr-auto sm:w-auto text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+              Batch tamamlandı ama bazı öğeler indirilemedi.
+            </div>
+          )}
           <button 
             onClick={onClose}
             className="w-full sm:w-auto px-4 py-2.5 rounded-xl font-medium text-sm text-gray-400 hover:bg-white/5 hover:text-white transition-colors"

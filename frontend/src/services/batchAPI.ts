@@ -23,6 +23,7 @@ export interface BatchJobStatus {
   state: 'waiting' | 'active' | 'completed' | 'failed';
   progress: number;
   result?: {
+    batchStatus?: 'completed' | 'completed_with_errors';
     total: number;
     succeeded: number;
     failed: number;
@@ -30,13 +31,30 @@ export interface BatchJobStatus {
       id: number;
       title: string;
       thumbnail: string | null;
+      provider?: string;
+      meta?: {
+        title?: string;
+        channel?: string;
+        durationSeconds?: number;
+        thumbnail?: string;
+      };
       status: 'success' | 'failed';
     }>;
     results: Array<{
       id: number;
       status: 'success' | 'failed';
+      provider?: string;
+      meta?: {
+        title?: string;
+        channel?: string;
+        durationSeconds?: number;
+        thumbnail?: string;
+      };
       fileName?: string | null;
+      bytes?: number;
       error?: string;
+      errorCode?: string;
+      hint?: string;
     }>;
   };
   error?: string;

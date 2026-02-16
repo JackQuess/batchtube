@@ -15,13 +15,33 @@ export const VideoCard: React.FC<VideoCardProps> = ({
   onSelect,
   t
 }) => {
+  const platformLabel = (video.platform || 'youtube').toUpperCase();
+
+  const isLikelyHttpUrl = (value?: string) => {
+    if (!value) return false;
+    return /^https?:\/\//i.test(value);
+  };
+
+  const isYouTubeLike =
+    (video.platform || '').toLowerCase() === 'youtube'
+    || /youtube|youtu\.be/i.test(video.url || '')
+    || (!isLikelyHttpUrl(video.id) && !video.url);
+
   const getThumbnailUrl = () => {
     if (video.thumbnail) return video.thumbnail;
-    return `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`;
+    if (isYouTubeLike) {
+      return `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`;
+    }
+    return 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="640" height="360"%3E%3Crect fill="%23111" width="640" height="360"/%3E%3Ctext fill="%23999" font-family="sans-serif" font-size="20" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3ENo thumbnail%3C/text%3E%3C/svg%3E';
   };
 
   const handleThumbnailError = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const target = e.target as HTMLImageElement;
+    if (!isYouTubeLike) {
+      target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="640" height="360"%3E%3Crect fill="%23111" width="640" height="360"/%3E%3Ctext fill="%23999" font-family="sans-serif" font-size="20" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3ENo thumbnail%3C/text%3E%3C/svg%3E';
+      return;
+    }
+
     const videoId = video.id;
 
     if (target.dataset.fallbackAttempted === 'true') {
@@ -100,6 +120,9 @@ export const VideoCard: React.FC<VideoCardProps> = ({
               {formattedDuration}
             </span>
           )}
+          <span className="absolute top-2 left-2 bg-black/80 text-[10px] text-gray-100 px-2 py-0.5 rounded font-semibold tracking-wide">
+            {platformLabel}
+          </span>
         </div>
       </div>
 
