@@ -6,9 +6,10 @@
  */
 const { Worker } = require('bullmq');
 const redisConnection = require('./utils/redis');
-const { downloadWithYtDlp } = require('./utils/ytService');
 const { createZipParts } = require('./utils/zip');
 const { sanitizeFilename } = require('./utils/helpers');
+const { getProviderForUrl } = require('./providers');
+const { ProviderError } = require('./providers/shared');
 const path = require('path');
 const fs = require('fs-extra');
 const os = require('os');
@@ -53,112 +54,94 @@ async function uploadZipPart(jobId, part) {
 /**
  * Download a single video item
  */
-async function downloadItem(item, tempDir, job, onProgress) {
+function toStandardError(error, fallbackCode) {
+  if (error instanceof ProviderError) {
+    return {
+      code: error.code,
+      message: error.message || 'Provider error',
+      hint: error.hint
+    };
+  }
+
+  if (error && typeof error === 'object' && error.code && error.message) {
+    return {
+      code: error.code,
+      message: error.message,
+      hint: error.hint
+    };
+  }
+
+  return {
+    code: fallbackCode || 'UNKNOWN',
+    message: error?.message || 'Unknown error'
+  };
+}
+
+async function downloadItem(item, tempDir, onProgress) {
   const { url, format, quality = '1080p', title, index } = item;
-  
-  const safeTitle = sanitizeFilename(title || `item_${index}`);
-  const ext = format === 'mp3' ? 'mp3' : 'mp4';
-  const outputPath = path.join(tempDir, `${safeTitle}.${ext}`);
+  const provider = getProviderForUrl(url);
+  const safeTitle = sanitizeFilename(title || `item_${index + 1}`);
+  const providerFormat = format === 'mp3' ? 'audio' : 'video';
+  let meta = null;
+  let metadataError = null;
 
   try {
-    await downloadWithYtDlp({
-      url,
-      format,
-      quality,
-      outputPath,
-      onProgress: (percent, textLine) => {
-        onProgress(index, percent);
-      }
+    onProgress(index, {
+      status: 'downloading',
+      provider: provider.id,
+      percent: 0,
+      meta: null
     });
 
-    // Wait for file system sync
-    await new Promise(resolve => setTimeout(resolve, 500));
+    try {
+      meta = await provider.getMetadata(url);
+      onProgress(index, {
+        provider: provider.id,
+        meta
+      });
+    } catch (metaErr) {
+      metadataError = toStandardError(metaErr, 'METADATA_FAILED');
+      onProgress(index, {
+        provider: provider.id,
+        meta: null
+      });
+    }
 
-    // Find actual downloaded file
-    let actualFile = null;
-    let actualPath = null;
-
-    for (let attempt = 0; attempt < 5; attempt++) {
-      if (attempt > 0) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-
-      try {
-        if (!fs.existsSync(tempDir)) continue;
-
-        const files = fs.readdirSync(tempDir);
-        const mediaExtensions = format === 'mp3' 
-          ? ['.mp3', '.m4a', '.opus', '.webm', '.ogg']
-          : ['.mp4', '.mkv', '.webm', '.m4v', '.mov'];
-
-        const mediaFiles = files.filter(f => {
-          const ext = path.extname(f).toLowerCase();
-          return mediaExtensions.includes(ext);
+    const downloadResult = await provider.download(url, {
+      outDir: tempDir,
+      format: providerFormat,
+      quality,
+      baseName: safeTitle,
+      onProgress: (percent) => {
+        onProgress(index, {
+          status: 'downloading',
+          provider: provider.id,
+          meta,
+          percent: Math.round(percent || 0)
         });
-
-        if (mediaFiles.length === 0) continue;
-
-        const filesWithStats = mediaFiles.map(f => {
-          const filePath = path.join(tempDir, f);
-          try {
-            const stats = fs.statSync(filePath);
-            return { path: filePath, name: f, size: stats.size, mtime: stats.mtime };
-          } catch (e) {
-            return null;
-          }
-        }).filter(f => f !== null && f.size >= 100 * 1024);
-
-        if (filesWithStats.length === 0) continue;
-
-        filesWithStats.sort((a, b) => {
-          if (b.mtime.getTime() !== a.mtime.getTime()) {
-            return b.mtime.getTime() - a.mtime.getTime();
-          }
-          return b.size - a.size;
-        });
-
-        const found = filesWithStats.find(f => 
-          f.name.startsWith(safeTitle) || f.path === outputPath
-        ) || filesWithStats[0];
-
-        if (found && found.size >= 100 * 1024) {
-          actualFile = found.name;
-          actualPath = found.path;
-          break;
-        }
-      } catch (err) {
-        console.error(`[Worker] Error scanning directory (attempt ${attempt + 1}):`, err.message);
       }
-    }
-
-    if (!actualFile || !actualPath) {
-      throw new Error('Output file not found after download');
-    }
-
-    // Rename to expected name if different
-    if (actualFile !== `${safeTitle}.${ext}`) {
-      const expectedPath = path.join(tempDir, `${safeTitle}.${ext}`);
-      if (fs.existsSync(expectedPath) && expectedPath !== actualPath) {
-        fs.unlinkSync(expectedPath);
-      }
-      if (actualPath !== expectedPath) {
-        fs.moveSync(actualPath, expectedPath);
-        actualPath = expectedPath;
-      }
-    }
+    });
 
     return {
       id: index,
       status: 'success',
-      fileName: `${safeTitle}.${ext}`,
-      filePath: actualPath
+      provider: provider.id,
+      fileName: downloadResult.fileName,
+      filePath: downloadResult.filePath,
+      bytes: downloadResult.bytes,
+      meta,
+      metadataError
     };
   } catch (error) {
-    console.error(`[Worker] Item ${index} failed:`, error);
+    const stdError = toStandardError(error, 'DOWNLOAD_FAILED');
+    console.error(`[Worker] Item ${index} failed:`, stdError.message);
     return {
       id: index,
       status: 'failed',
-      error: error.message || 'Download failed'
+      provider: provider.id,
+      meta,
+      error: stdError,
+      metadataError
     };
   }
 }
@@ -181,35 +164,61 @@ const worker = new Worker(
     const results = [];
     const progressMap = new Map();
 
-    // Update progress callback - emit per-item progress with title and thumbnail
-    const updateProgress = (index, percent) => {
-      progressMap.set(index, percent);
-      
-      // Calculate overall percent
+    const updateProgress = (index, patch) => {
+      const existing = progressMap.get(index) || {
+        index,
+        percent: 0,
+        status: 'downloading',
+        provider: null,
+        meta: null,
+        error: null
+      };
+
+      const next = {
+        ...existing,
+        ...patch
+      };
+      progressMap.set(index, next);
+
       const overallPercent = Math.round(
-        Array.from(progressMap.values()).reduce((a, b) => a + b, 0) / items.length
+        Array.from(progressMap.values()).reduce((sum, state) => {
+          return sum + Math.max(0, Math.min(100, Number(state.percent) || 0));
+        }, 0) / items.length
       );
-      
-      // Emit per-item progress as object with title and thumbnail
+
       const progressData = {
         overall: overallPercent,
-        items: Array.from(progressMap.entries()).map(([idx, pct]) => {
-          const item = items[idx];
+        items: items.map((item, idx) => {
+          const state = progressMap.get(idx) || {};
+          const meta = state.meta || null;
           return {
             index: idx,
-            percent: Math.round(pct),
-            title: item?.title || `Item ${idx + 1}`,
-            thumbnail: item?.thumbnail || null
+            percent: Math.round(state.percent || 0),
+            status: state.status || 'downloading',
+            provider: state.provider || null,
+            meta,
+            error: state.error || undefined,
+            title: meta?.title || item?.title || `Item ${idx + 1}`,
+            thumbnail: meta?.thumbnail || item?.thumbnail || null
           };
         })
       };
-      
+
       job.updateProgress(progressData);
     };
 
+    items.forEach((item, index) => {
+      updateProgress(index, {
+        status: 'downloading',
+        provider: null,
+        percent: 0,
+        meta: null
+      });
+    });
+
     // Download all items in parallel with concurrency limit
     const downloadTasks = items.map((item, index) =>
-      limit(() => downloadItem(item, tempDir, job, updateProgress))
+      limit(() => downloadItem(item, tempDir, updateProgress))
     );
 
     const downloadResults = await Promise.allSettled(downloadTasks);
@@ -217,12 +226,30 @@ const worker = new Worker(
     // Process results
     downloadResults.forEach((result, index) => {
       if (result.status === 'fulfilled') {
-        results.push(result.value);
+        const value = result.value;
+        results.push(value);
+        updateProgress(index, {
+          status: value.status === 'success' ? 'done' : 'failed',
+          provider: value.provider || null,
+          percent: 100,
+          meta: value.meta || null,
+          error: value.error || undefined
+        });
       } else {
-        results.push({
+        const failed = {
           id: index,
           status: 'failed',
-          error: result.reason?.message || 'Download failed'
+          provider: getProviderForUrl(items[index]?.url || '').id,
+          error: toStandardError(result.reason, 'DOWNLOAD_FAILED'),
+          meta: null
+        };
+        results.push(failed);
+        updateProgress(index, {
+          status: 'failed',
+          provider: failed.provider,
+          percent: 100,
+          meta: null,
+          error: failed.error
         });
       }
     });
@@ -231,7 +258,15 @@ const worker = new Worker(
     const successful = results.filter(r => r.status === 'success' && r.filePath);
     
     if (successful.length === 0) {
-      throw new Error('No items downloaded successfully');
+      const codes = Array.from(
+        new Set(
+          results
+            .filter((r) => r.status === 'failed' && r.error?.code)
+            .map((r) => r.error.code)
+        )
+      );
+      const codeSuffix = codes.length ? ` [codes: ${codes.join(', ')}]` : '';
+      throw new Error(`No items downloaded successfully${codeSuffix}`);
     }
 
     // Prepare files for ZIP creation (map to {path, filename})
@@ -269,20 +304,28 @@ const worker = new Worker(
     return {
       jobId,
       result: {
+        batchStatus: successful.length < items.length ? 'completed_with_errors' : 'completed',
         total: items.length,
         succeeded: successful.length,
         failed: items.length - successful.length,
         items: items.map((item, index) => ({
           id: index,
-          title: item.title || `Item ${index + 1}`,
-          thumbnail: item.thumbnail || null,
+          title: results[index]?.meta?.title || item.title || `Item ${index + 1}`,
+          thumbnail: results[index]?.meta?.thumbnail || item.thumbnail || null,
+          provider: results[index]?.provider || getProviderForUrl(item.url).id,
+          meta: results[index]?.meta || undefined,
           status: results[index]?.status || 'failed'
         })),
         results: results.map(r => ({
           id: r.id,
+          provider: r.provider || null,
+          meta: r.meta || undefined,
           status: r.status,
           fileName: r.fileName || null, // ⭐ Real video filename
-          error: r.error || undefined
+          bytes: r.bytes || undefined,
+          error: r.error?.message || r.error || undefined,
+          errorCode: r.error?.code || undefined,
+          hint: r.error?.hint || undefined
         }))
       }
     };

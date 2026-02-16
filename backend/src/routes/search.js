@@ -5,6 +5,26 @@
 const express = require('express');
 const router = express.Router();
 const { searchYouTube } = require('../core/searchService');
+const { getProviderForUrl } = require('../providers');
+
+function isLikelyUrl(value) {
+  if (typeof value !== 'string') return false;
+  return /^https?:\/\//i.test(value.trim());
+}
+
+function formatDuration(durationSeconds) {
+  if (!Number.isFinite(durationSeconds)) return '0:00';
+  const total = Math.max(0, Math.round(durationSeconds));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
 
 /**
  * GET /api/search?q=<query>
@@ -20,20 +40,24 @@ const handleSearch = async (req, res) => {
 
     console.log(`[Search] Query: ${query}`);
 
-    // Handle direct YouTube URL
-    if (query.startsWith('http')) {
-      const videoIdMatch = query.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/);
-      if (videoIdMatch) {
-        const videoId = videoIdMatch[1];
+    // Handle direct URL through provider metadata
+    if (isLikelyUrl(query)) {
+      const provider = getProviderForUrl(query.trim());
+      try {
+        const meta = await provider.getMetadata(query.trim());
         return res.json([{
-          id: videoId,
-          title: 'Video',
-          thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-          duration: '0:00',
-          channel: 'Unknown'
+          id: meta.id || query.trim(),
+          title: meta.title || 'Video',
+          thumbnail: meta.thumbnail || null,
+          duration: formatDuration(meta.durationSeconds),
+          channel: meta.channel || 'Unknown',
+          platform: meta.platform,
+          url: meta.url
         }]);
+      } catch (error) {
+        console.warn('[Search] URL metadata failed:', error.message || error);
+        return res.json([]);
       }
-      return res.json([]);
     }
 
     // Perform HTML-based search
