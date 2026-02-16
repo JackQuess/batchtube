@@ -12,6 +12,12 @@ function isLikelyUrl(value) {
   return /^https?:\/\//i.test(value.trim());
 }
 
+function normalizeQueryInput(value) {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  return trimmed.replace(/^['"`]+|['"`]+$/g, '').trim();
+}
+
 function formatDuration(durationSeconds) {
   if (!Number.isFinite(durationSeconds)) return '0:00';
   const total = Math.max(0, Math.round(durationSeconds));
@@ -32,7 +38,7 @@ function formatDuration(durationSeconds) {
  */
 const handleSearch = async (req, res) => {
   try {
-    const query = req.query.q || req.body.query;
+    const query = normalizeQueryInput(req.query.q || req.body.query);
 
     if (!query || query.trim() === '') {
       return res.status(400).json({ error: 'Query parameter required' });
@@ -42,17 +48,17 @@ const handleSearch = async (req, res) => {
 
     // Handle direct URL through provider metadata
     if (isLikelyUrl(query)) {
-      const provider = getProviderForUrl(query.trim());
+      const provider = getProviderForUrl(query);
       try {
-        const meta = await provider.getMetadata(query.trim());
+        const meta = await provider.getMetadata(query);
         return res.json([{
-          id: meta.id || query.trim(),
+          id: meta.id || query,
           title: meta.title || 'Video',
           thumbnail: meta.thumbnail || null,
           duration: formatDuration(meta.durationSeconds),
           channel: meta.channel || 'Unknown',
           platform: meta.platform,
-          url: meta.url
+          url: meta.url || query
         }]);
       } catch (error) {
         console.warn('[Search] URL metadata failed:', error.message || error);
