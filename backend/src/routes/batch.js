@@ -129,6 +129,28 @@ router.get('/batch/:jobId/status', async (req, res) => {
       progress: progressValue
     };
 
+    // If job stays in waiting state and no worker is connected, surface explicit error
+    if ((status === 'waiting' || status === 'active') && batchQueue) {
+      try {
+        const workersCount = await batchQueue.getWorkersCount();
+        const queuedForMs = Date.now() - (job.timestamp || Date.now());
+        const stuckThresholdMs = 20 * 1000;
+
+        if (status === 'waiting' && workersCount === 0 && queuedForMs > stuckThresholdMs) {
+          response.state = 'failed';
+          response.error = 'Worker unavailable. Queue is waiting but no active worker is connected.';
+          response.errorCode = 'WORKER_UNAVAILABLE';
+          response.workers = workersCount;
+          response.queuedForMs = queuedForMs;
+          return res.json(response);
+        }
+
+        response.workers = workersCount;
+      } catch (_) {
+        // Ignore worker count errors to avoid breaking status endpoint
+      }
+    }
+
     // Add result if completed
     if (returnValue && state === 'completed') {
       response.result = returnValue.result;
@@ -194,6 +216,22 @@ router.get('/batch/:jobId/events', async (req, res) => {
 
         const state = await currentJob.getState();
         const progress = currentJob.progress || 0;
+
+        // Early fail event if queue is waiting but no worker is connected for a while
+        if (state === 'waiting') {
+          try {
+            const workersCount = await batchQueue.getWorkersCount();
+            const queuedForMs = Date.now() - (currentJob.timestamp || Date.now());
+            if (workersCount === 0 && queuedForMs > 20 * 1000) {
+              clearInterval(pollInterval);
+              res.write(`event: failed\ndata: ${JSON.stringify({ error: 'Worker unavailable. No active worker is connected.', errorCode: 'WORKER_UNAVAILABLE' })}\n\n`);
+              res.end();
+              return;
+            }
+          } catch (_) {
+            // Keep normal polling flow if worker count cannot be read
+          }
+        }
 
         // Send progress update (full object with items, title, thumbnail)
         const progressData = typeof progress === 'object' && progress.items
