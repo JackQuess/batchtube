@@ -18,6 +18,14 @@ function mapRedditError(error, fallbackCode) {
   const text = String(error?.message || error || '');
   const lower = text.toLowerCase();
 
+  if (lower.includes('requested format is not available') || lower.includes('no video formats found')) {
+    return new ProviderError(
+      'UNSUPPORTED_URL',
+      text || 'This Reddit URL has no downloadable video stream',
+      'Use a Reddit post that contains video (v.redd.it).'
+    );
+  }
+
   if (lower.includes('private') || lower.includes('quarantined')) {
     return new ProviderError(
       'RESTRICTED',

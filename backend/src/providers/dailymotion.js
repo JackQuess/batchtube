@@ -18,6 +18,14 @@ function mapDailymotionError(error, fallbackCode) {
   const text = String(error?.message || error || '');
   const lower = text.toLowerCase();
 
+  if (lower.includes('extractor is attempting impersonation') || lower.includes('none of these impersonate targets are available')) {
+    return new ProviderError(
+      'NEEDS_VERIFICATION',
+      text || 'Server missing impersonation capability for Dailymotion',
+      'Redeploy backend with yt-dlp curl-cffi extras enabled.'
+    );
+  }
+
   if (lower.includes('geo') || lower.includes('country')) {
     return new ProviderError(
       'RESTRICTED',
