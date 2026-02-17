@@ -37,6 +37,11 @@ function getFallbackTitle(providerId, url) {
   if (providerId === 'instagram') return 'Instagram media';
   if (providerId === 'tiktok') return 'TikTok video';
   if (providerId === 'youtube') return 'YouTube video';
+  if (providerId === 'facebook') return 'Facebook video';
+  if (providerId === 'vimeo') return 'Vimeo video';
+  if (providerId === 'dailymotion') return 'Dailymotion video';
+  if (providerId === 'twitch') return 'Twitch clip/VOD';
+  if (providerId === 'reddit') return 'Reddit video';
 
   try {
     const parsed = new URL(url);
@@ -52,6 +57,11 @@ function getFallbackChannel(providerId) {
   if (providerId === 'instagram') return 'Instagram';
   if (providerId === 'tiktok') return 'TikTok';
   if (providerId === 'youtube') return 'YouTube';
+  if (providerId === 'facebook') return 'Facebook';
+  if (providerId === 'vimeo') return 'Vimeo';
+  if (providerId === 'dailymotion') return 'Dailymotion';
+  if (providerId === 'twitch') return 'Twitch';
+  if (providerId === 'reddit') return 'Reddit';
   return 'Direct link';
 }
 

@@ -1,4 +1,14 @@
-export type ProviderId = 'youtube' | 'tiktok' | 'instagram' | 'twitter' | 'generic';
+export type ProviderId =
+  | 'youtube'
+  | 'tiktok'
+  | 'instagram'
+  | 'twitter'
+  | 'facebook'
+  | 'vimeo'
+  | 'dailymotion'
+  | 'twitch'
+  | 'reddit'
+  | 'generic';
 
 export type ProviderErrorCode =
   | 'UNSUPPORTED_URL'

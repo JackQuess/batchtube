@@ -7,6 +7,11 @@ const { youtubeProvider } = require('./youtube');
 const { tiktokProvider } = require('./tiktok');
 const { instagramProvider } = require('./instagram');
 const { twitterProvider } = require('./twitter');
+const { facebookProvider } = require('./facebook');
+const { vimeoProvider } = require('./vimeo');
+const { dailymotionProvider } = require('./dailymotion');
+const { twitchProvider } = require('./twitch');
+const { redditProvider } = require('./reddit');
 const { genericProvider } = require('./generic');
 
 const PROVIDERS = [
@@ -14,6 +19,11 @@ const PROVIDERS = [
   tiktokProvider,
   instagramProvider,
   twitterProvider,
+  facebookProvider,
+  vimeoProvider,
+  dailymotionProvider,
+  twitchProvider,
+  redditProvider,
   genericProvider
 ];
 

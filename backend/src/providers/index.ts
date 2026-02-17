@@ -8,6 +8,11 @@ import { youtubeProvider } from './youtube';
 import { tiktokProvider } from './tiktok';
 import { instagramProvider } from './instagram';
 import { twitterProvider } from './twitter';
+import { facebookProvider } from './facebook';
+import { vimeoProvider } from './vimeo';
+import { dailymotionProvider } from './dailymotion';
+import { twitchProvider } from './twitch';
+import { redditProvider } from './reddit';
 import { genericProvider } from './generic';
 
 export const PROVIDERS: Provider[] = [
@@ -15,6 +20,11 @@ export const PROVIDERS: Provider[] = [
   tiktokProvider,
   instagramProvider,
   twitterProvider,
+  facebookProvider,
+  vimeoProvider,
+  dailymotionProvider,
+  twitchProvider,
+  redditProvider,
   genericProvider
 ];
 
