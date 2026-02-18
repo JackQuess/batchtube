@@ -19,7 +19,7 @@ import { AdSlotGrid } from './components/AdSlotGrid';
 import { loadAdSense, unloadAdSense } from './lib/adLoader';
 import { batchAPI } from './services/batchAPI';
 import { useCookieConsent } from './components/CookieConsent';
-import { AppLink, getSearchParam, navigate, usePathname, useSearch } from './lib/simpleRouter';
+import { getSearchParam, navigate, usePathname, useSearch } from './lib/simpleRouter';
 import { shouldShowAds } from './lib/adsPolicy';
 import { HowItWorks } from './pages/HowItWorks';
 import { Faq } from './pages/Faq';
@@ -269,19 +269,7 @@ const App: React.FC = () => {
         {isHome ? (
           <>
             <Hero onSearch={handleSearch} loading={isSearching} t={t} />
-            <SupportedSitesTeaser t={t} />
-            <div className="mt-2 mb-2 flex items-center justify-center gap-3 text-xs sm:text-sm text-neutral-400">
-              <AppLink to="/pricing" className="hover:text-primary transition-colors">
-                {t.seePricing}
-              </AppLink>
-              <span className="text-neutral-600">·</span>
-              <AppLink
-                to={user ? '/account' : '/login?returnUrl=/'}
-                className="hover:text-primary transition-colors"
-              >
-                {t.upgrade}
-              </AppLink>
-            </div>
+            <SupportedSitesTeaser t={t} upgradeHref={user ? '/account' : '/login?returnUrl=/'} />
 
             {planError && (
               <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
