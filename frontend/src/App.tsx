@@ -6,6 +6,7 @@ import { api } from './services/apiService';
 
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
+import { SupportedSitesTeaser } from './components/SupportedSitesTeaser';
 import { VideoCard } from './components/VideoCard';
 import { SelectionBar } from './components/SelectionBar';
 import { SelectionModal } from './components/SelectionModal';
@@ -27,10 +28,15 @@ import { LegalPage } from './pages/LegalPage';
 import { NotFound } from './pages/NotFound';
 import { applySeoMeta } from './lib/seo';
 import { AccountPage } from './pages/AccountPage';
+import { BillingCancelPage } from './pages/BillingCancelPage';
+import { BillingSuccessPage } from './pages/BillingSuccessPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { LoginPage } from './pages/LoginPage';
 import { PricingPage } from './pages/PricingPage';
+import { ProfilePage } from './pages/ProfilePage';
 import { SignupPage } from './pages/SignupPage';
-import { AUTH_CHANGE_EVENT, clearUser, generateUserId, getStoredUser, saveUser } from './lib/auth';
+import { AUTH_CHANGE_EVENT, clearUser, getStoredUser } from './lib/auth';
+import { accountAPI } from './services/accountAPI';
 
 const App: React.FC = () => {
   const route = usePathname();
@@ -39,6 +45,7 @@ const App: React.FC = () => {
   // Global State
   const [lang, setLang] = useState<SupportedLanguage>('en');
   const [user, setUser] = useState(() => getStoredUser());
+  const [planError, setPlanError] = useState<string | null>(null);
   const isProPlan = user?.plan === 'pro';
   const t = TRANSLATIONS[lang];
   const consent = useCookieConsent();
@@ -61,7 +68,11 @@ const App: React.FC = () => {
   const [isPlanLimitModalOpen, setIsPlanLimitModalOpen] = useState(false);
 
   useEffect(() => {
-    if (route !== '/') return;
+    if (selectedItems.length <= 3) setPlanError(null);
+  }, [selectedItems.length]);
+
+  useEffect(() => {
+    if (route !== '/' && route !== '/app') return;
     applySeoMeta({
       title: `BatchTube | ${t.heroTitle}`,
       description: t.heroSubtitle
@@ -87,8 +98,27 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (route === '/account' && !user) {
-      navigate('/login?returnUrl=/account', { replace: true });
+    if (!user) return;
+
+    let mounted = true;
+    accountAPI
+      .getSummary()
+      .then((summary) => {
+        if (!mounted) return;
+        setUser((prev) => (prev ? { ...prev, plan: summary.plan, renewalDate: summary.renewalDate, batchesCount: summary.usage.batchesCount, itemsCount: summary.usage.itemsCount, maxPerBatch: summary.usage.maxPerBatch } : prev));
+      })
+      .catch(() => {
+        // Keep current fallback values
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
+    if ((route === '/account' || route === '/profile') && !user) {
+      navigate(`/login?returnUrl=${route}`, { replace: true });
     }
   }, [route, user]);
 
@@ -116,21 +146,7 @@ const App: React.FC = () => {
   }, [batchFormat, batchQuality, isProPlan]);
 
   // Handlers
-  const handleLogin = (email: string) => {
-    saveUser({
-      id: generateUserId(),
-      email,
-      plan: 'free'
-    });
-    setUser(getStoredUser());
-  };
-
-  const handleSignup = (email: string) => {
-    saveUser({
-      id: generateUserId(),
-      email,
-      plan: 'free'
-    });
+  const handleAuthChanged = () => {
     setUser(getStoredUser());
   };
 
@@ -184,6 +200,7 @@ const App: React.FC = () => {
     if (selectedItems.length === 0) return;
     if (!isProPlan && selectedItems.length > 3) {
       setIsPlanLimitModalOpen(true);
+      setPlanError(t.limitMaxItems);
       return;
     }
     try {
@@ -208,11 +225,20 @@ const App: React.FC = () => {
       setActiveJobId(jobId);
     } catch (e) {
       console.error("Batch start failed", e);
-      alert(t.batchStartFailed);
+      const message = e instanceof Error ? e.message : '';
+      if (message.includes('PROVIDER_RESTRICTED')) {
+        alert(t.limitProviderRestricted);
+      } else if (message.includes('LIMIT_MAX_ITEMS')) {
+        alert(t.limitMaxItems);
+      } else if (message.includes('USAGE_LIMIT_REACHED')) {
+        alert(t.limitUsageReached);
+      } else {
+        alert(t.batchStartFailed);
+      }
     }
   };
 
-  const isHome = route === '/';
+  const isHome = route === '/' || route === '/app';
   const returnUrlParam = getSearchParam(search, 'returnUrl');
   const returnUrl = returnUrlParam && returnUrlParam.startsWith('/') ? returnUrlParam : undefined;
   const isModalOpen = isSelectionModalOpen || !!activeJobId;
@@ -243,6 +269,7 @@ const App: React.FC = () => {
         {isHome ? (
           <>
             <Hero onSearch={handleSearch} loading={isSearching} t={t} />
+            <SupportedSitesTeaser t={t} />
             <div className="mt-2 mb-2 flex items-center justify-center gap-3 text-xs sm:text-sm text-neutral-400">
               <AppLink to="/pricing" className="hover:text-primary transition-colors">
                 {t.seePricing}
@@ -255,6 +282,12 @@ const App: React.FC = () => {
                 {t.upgrade}
               </AppLink>
             </div>
+
+            {planError && (
+              <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+                {planError}
+              </div>
+            )}
 
             {searchError && (
               <div className="mt-6 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
@@ -296,12 +329,20 @@ const App: React.FC = () => {
           <SupportedSites lang={lang} t={t} />
         ) : route === '/pricing' ? (
           <PricingPage t={t} user={user} />
+        ) : route === '/profile' ? (
+          user ? <ProfilePage t={t} user={user} /> : <LoginPage t={t} onAuthChanged={handleAuthChanged} returnUrl="/profile" />
         ) : route === '/account' ? (
-          user ? <AccountPage t={t} user={user} /> : <LoginPage t={t} onLogin={handleLogin} returnUrl="/account" />
+          user ? <AccountPage t={t} user={user} /> : <LoginPage t={t} onAuthChanged={handleAuthChanged} returnUrl="/account" />
         ) : route === '/login' ? (
-          <LoginPage t={t} onLogin={handleLogin} returnUrl={returnUrl} />
+          <LoginPage t={t} onAuthChanged={handleAuthChanged} returnUrl={returnUrl} />
         ) : route === '/signup' ? (
-          <SignupPage t={t} onSignup={handleSignup} returnUrl={returnUrl} />
+          <SignupPage t={t} onAuthChanged={handleAuthChanged} returnUrl={returnUrl} />
+        ) : route === '/forgot-password' ? (
+          <ForgotPasswordPage t={t} />
+        ) : route === '/billing/success' ? (
+          <BillingSuccessPage t={t} />
+        ) : route === '/billing/cancel' ? (
+          <BillingCancelPage t={t} />
         ) : route === '/legal' ? (
           <LegalPage type="legal" lang={lang} t={t} />
         ) : route === '/terms' ? (
