@@ -19,7 +19,7 @@ const parseJson = async (res: Response): Promise<any> => {
 
 export const subscriptionAPI = {
   createCheckout: async (returnUrl: string): Promise<string | null> => {
-    const res = await fetch(`${API_BASE_URL}/api/subscription/checkout`, {
+    const res = await fetch(`${API_BASE_URL}/api/billing/checkout`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -38,7 +38,7 @@ export const subscriptionAPI = {
   },
 
   createPortal: async (returnUrl: string): Promise<string | null> => {
-    const res = await fetch(`${API_BASE_URL}/api/subscription/portal`, {
+    const res = await fetch(`${API_BASE_URL}/api/billing/portal`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

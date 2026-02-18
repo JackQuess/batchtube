@@ -83,7 +83,9 @@ export const batchAPI = {
 
     if (!res.ok) {
       const error = await res.json().catch(() => ({ error: 'Failed to create batch job' }));
-      throw new Error(error.error || 'Failed to create batch job');
+      const code = error.code || '';
+      const message = error.error || 'Failed to create batch job';
+      throw new Error(code ? `${code}: ${message}` : message);
     }
 
     return res.json();

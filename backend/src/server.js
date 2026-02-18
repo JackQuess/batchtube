@@ -5,6 +5,8 @@
 const express = require('express');
 const cors = require('cors');
 const batchRoutes = require('./routes/batch');
+const accountRoutes = require('./routes/account');
+const { billingRouter, handleBillingWebhookRaw } = require('./routes/billing');
 const { handleSearch } = require('./routes/search');
 
 // Initialize queue (will fail gracefully if Redis is not available)
@@ -40,7 +42,7 @@ app.use(cors({
     }
   },
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Job-Id'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Job-Id', 'x-user-id', 'x-user-email', 'paddle-signature'],
   credentials: false
 }));
 
@@ -48,6 +50,9 @@ app.use(cors({
 app.options('*', (req, res) => {
   res.status(204).end();
 });
+
+// Paddle webhook requires raw body for signature verification
+app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), handleBillingWebhookRaw);
 
 app.use(express.json());
 
@@ -62,6 +67,8 @@ app.post('/api/search', handleSearch);
 
 // Batch routes
 app.use('/api', batchRoutes);
+app.use('/api', accountRoutes);
+app.use('/api', billingRouter);
 
 // 404 handler
 app.use((req, res) => {

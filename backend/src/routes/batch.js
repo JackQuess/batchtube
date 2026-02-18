@@ -9,6 +9,9 @@ const path = require('path');
 const fs = require('fs-extra');
 const AdmZip = require('adm-zip');
 const archiver = require('archiver');
+const { getRequestUser } = require('../utils/auth');
+const { ensureProfile, getSubscription, getUsageMonthly, incrementUsage, monthKey } = require('../utils/supabaseAdmin');
+const { getPlanFromSubscription, checkProviderAccess, checkBatchLimits } = require('../utils/planLimits');
 
 const router = express.Router();
 
@@ -26,6 +29,7 @@ router.post('/batch', async (req, res) => {
     }
 
     const { items, format, quality = '1080p' } = req.body;
+    const requestUser = getRequestUser(req);
 
     // Validation
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -55,6 +59,46 @@ router.post('/batch', async (req, res) => {
       }
     }
 
+    let plan = 'free';
+    let usage = null;
+    if (requestUser?.id) {
+      await ensureProfile(requestUser.id, requestUser.email);
+      const [subscription, usageRow] = await Promise.all([
+        getSubscription(requestUser.id),
+        getUsageMonthly(requestUser.id, monthKey())
+      ]);
+      plan = getPlanFromSubscription(subscription);
+      usage = usageRow
+        ? {
+            batchesCount: Number(usageRow.batches_count || 0),
+            itemsCount: Number(usageRow.items_count || 0)
+          }
+        : { batchesCount: 0, itemsCount: 0 };
+    }
+
+    const providerError = checkProviderAccess(items, plan);
+    if (providerError) {
+      return res.status(403).json({
+        error: 'Provider restricted for current plan',
+        code: providerError.code,
+        provider: providerError.provider
+      });
+    }
+
+    const limitError = checkBatchLimits({
+      userId: requestUser?.id || null,
+      plan,
+      itemsCount: items.length,
+      usage
+    });
+    if (limitError) {
+      return res.status(403).json({
+        error: 'Plan usage limit reached',
+        code: limitError.code,
+        details: limitError
+      });
+    }
+
     // Add job to queue
     const job = await batchQueue.add('batch-download', {
       items: items.map((item, index) => ({
@@ -66,10 +110,16 @@ router.post('/batch', async (req, res) => {
         index
       })),
       format,
-      quality
+      quality,
+      userId: requestUser?.id || null,
+      plan
     }, {
       jobId: `batch-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
     });
+
+    if (requestUser?.id) {
+      await incrementUsage(requestUser.id, items.length);
+    }
 
     console.log(`[Batch] Created job ${job.id} with ${items.length} items`);
 
