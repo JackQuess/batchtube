@@ -8,8 +8,13 @@ interface OnboardingScreenProps {
 
 export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNavigate }) => {
   const [step, setStep] = useState(1);
+  const [selectedRole, setSelectedRole] = useState<string | null>(null);
+  const [selectedFormat, setSelectedFormat] = useState<'mp4' | 'mkv' | 'mp3' | null>('mp4');
 
   const handleContinue = () => {
+    if (step === 1 && !selectedRole) return;
+    if (step === 2 && !selectedFormat) return;
+
     if (step < 3) {
       setStep(step + 1);
     } else {
@@ -35,7 +40,16 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNavigate }
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {['Content Creator', 'Video Editor', 'Archivist', 'Student', 'Developer', 'Other'].map((role) => (
-                <button key={role} className="p-4 rounded-xl bg-white/5 border border-white/5 hover:border-primary/50 hover:bg-white/10 text-left transition-all group">
+                <button
+                  key={role}
+                  type="button"
+                  onClick={() => setSelectedRole(role)}
+                  className={`p-4 rounded-xl text-left transition-all group ${
+                    selectedRole === role
+                      ? 'bg-primary/15 border border-primary/60 shadow-lg shadow-primary/15'
+                      : 'bg-white/5 border border-white/5 hover:border-primary/50 hover:bg-white/10'
+                  }`}
+                >
                   <span className="font-medium text-white group-hover:text-primary transition-colors">{role}</span>
                 </button>
               ))}
@@ -49,7 +63,15 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNavigate }
             <p className="text-gray-400 mb-8">We can auto-convert everything to your liking.</p>
             
             <div className="space-y-4">
-              <label className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-primary/50 cursor-pointer">
+              <button
+                type="button"
+                onClick={() => setSelectedFormat('mp4')}
+                className={`w-full flex items-center justify-between p-4 rounded-xl cursor-pointer text-left ${
+                  selectedFormat === 'mp4'
+                    ? 'bg-white/5 border border-primary/50'
+                    : 'bg-white/5 border border-white/5 hover:bg-white/10'
+                }`}
+              >
                 <div className="flex items-center gap-4">
                   <div className="p-2 bg-primary/20 text-primary rounded-lg">
                     <span className="material-symbols-outlined">movie</span>
@@ -59,10 +81,18 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNavigate }
                     <p className="text-xs text-gray-400">Best compatibility, standard quality.</p>
                   </div>
                 </div>
-                <input type="radio" name="format" defaultChecked className="accent-primary w-5 h-5" />
-              </label>
+                <input type="radio" name="format" checked={selectedFormat === 'mp4'} readOnly className="accent-primary w-5 h-5" />
+              </button>
 
-              <label className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 cursor-pointer">
+              <button
+                type="button"
+                onClick={() => setSelectedFormat('mkv')}
+                className={`w-full flex items-center justify-between p-4 rounded-xl cursor-pointer text-left ${
+                  selectedFormat === 'mkv'
+                    ? 'bg-white/5 border border-primary/50'
+                    : 'bg-white/5 border border-white/5 hover:bg-white/10'
+                }`}
+              >
                 <div className="flex items-center gap-4">
                   <div className="p-2 bg-gray-800 text-gray-400 rounded-lg">
                     <span className="material-symbols-outlined">high_quality</span>
@@ -72,10 +102,18 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNavigate }
                     <p className="text-xs text-gray-400">Best for archiving, supports multiple streams.</p>
                   </div>
                 </div>
-                <input type="radio" name="format" className="accent-primary w-5 h-5" />
-              </label>
+                <input type="radio" name="format" checked={selectedFormat === 'mkv'} readOnly className="accent-primary w-5 h-5" />
+              </button>
 
-               <label className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 cursor-pointer">
+               <button
+                type="button"
+                onClick={() => setSelectedFormat('mp3')}
+                className={`w-full flex items-center justify-between p-4 rounded-xl cursor-pointer text-left ${
+                  selectedFormat === 'mp3'
+                    ? 'bg-white/5 border border-primary/50'
+                    : 'bg-white/5 border border-white/5 hover:bg-white/10'
+                }`}
+               >
                 <div className="flex items-center gap-4">
                   <div className="p-2 bg-gray-800 text-gray-400 rounded-lg">
                     <span className="material-symbols-outlined">headphones</span>
@@ -85,8 +123,8 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNavigate }
                     <p className="text-xs text-gray-400">Extract audio automatically.</p>
                   </div>
                 </div>
-                <input type="radio" name="format" className="accent-primary w-5 h-5" />
-              </label>
+                <input type="radio" name="format" checked={selectedFormat === 'mp3'} readOnly className="accent-primary w-5 h-5" />
+              </button>
             </div>
           </div>
         )}
@@ -110,7 +148,11 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNavigate }
           >
             Back
           </button>
-          <Button onClick={handleContinue} className="w-32">
+          <Button
+            onClick={handleContinue}
+            className="w-32"
+            disabled={(step === 1 && !selectedRole) || (step === 2 && !selectedFormat)}
+          >
             {step === 3 ? 'Launch' : 'Continue'}
           </Button>
         </div>
