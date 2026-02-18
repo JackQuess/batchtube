@@ -18,6 +18,9 @@ const { streamableProvider } = require('./streamable');
 const { bilibiliProvider } = require('./bilibili');
 const { vkProvider } = require('./vk');
 const { bandcampProvider } = require('./bandcamp');
+const { okruProvider } = require('./okru');
+const { rutubeProvider } = require('./rutube');
+const { coubProvider } = require('./coub');
 const { genericProvider } = require('./generic');
 
 const PROVIDERS = [
@@ -36,6 +39,9 @@ const PROVIDERS = [
   bilibiliProvider,
   vkProvider,
   bandcampProvider,
+  okruProvider,
+  rutubeProvider,
+  coubProvider,
   genericProvider
 ];
 

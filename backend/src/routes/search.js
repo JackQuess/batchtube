@@ -48,6 +48,9 @@ function getFallbackTitle(providerId, url) {
   if (providerId === 'bilibili') return 'Bilibili video';
   if (providerId === 'vk') return 'VK video';
   if (providerId === 'bandcamp') return 'Bandcamp track';
+  if (providerId === 'okru') return 'OK.ru video';
+  if (providerId === 'rutube') return 'RuTube video';
+  if (providerId === 'coub') return 'Coub video';
 
   try {
     const parsed = new URL(url);
@@ -74,6 +77,9 @@ function getFallbackChannel(providerId) {
   if (providerId === 'bilibili') return 'Bilibili';
   if (providerId === 'vk') return 'VK';
   if (providerId === 'bandcamp') return 'Bandcamp';
+  if (providerId === 'okru') return 'OK.ru';
+  if (providerId === 'rutube') return 'RuTube';
+  if (providerId === 'coub') return 'Coub';
   return 'Direct link';
 }
 

@@ -14,6 +14,9 @@ export type ProviderId =
   | 'bilibili'
   | 'vk'
   | 'bandcamp'
+  | 'okru'
+  | 'rutube'
+  | 'coub'
   | 'generic';
 
 export type ProviderErrorCode =

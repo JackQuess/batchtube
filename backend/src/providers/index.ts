@@ -19,6 +19,9 @@ import { streamableProvider } from './streamable';
 import { bilibiliProvider } from './bilibili';
 import { vkProvider } from './vk';
 import { bandcampProvider } from './bandcamp';
+import { okruProvider } from './okru';
+import { rutubeProvider } from './rutube';
+import { coubProvider } from './coub';
 import { genericProvider } from './generic';
 
 export const PROVIDERS: Provider[] = [
@@ -37,6 +40,9 @@ export const PROVIDERS: Provider[] = [
   bilibiliProvider,
   vkProvider,
   bandcampProvider,
+  okruProvider,
+  rutubeProvider,
+  coubProvider,
   genericProvider
 ];
 
