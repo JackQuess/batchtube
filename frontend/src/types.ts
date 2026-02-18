@@ -83,7 +83,7 @@ export interface BatchProgressResponse {
 
 export type SupportedLanguage = 'en' | 'es' | 'fr' | 'de' | 'tr' | 'pt' | 'ar';
 
-export type LegalDocType = 'terms' | 'privacy' | 'cookies' | 'legal';
+export type LegalDocType = 'terms' | 'privacy' | 'cookies' | 'legal' | 'refund';
 export type InfoDocType = 'howItWorks' | 'faq' | 'supportedSites';
 
 export interface Translations {
@@ -126,6 +126,7 @@ export interface Translations {
   privacy: string;
   cookies: string;
   legal: string;
+  refundPolicy: string;
   howItWorks: string;
   faq: string;
   supportedSites: string;

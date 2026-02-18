@@ -15,7 +15,8 @@ export const LegalPage: React.FC<LegalPageProps> = ({ type, lang, t }) => {
     legal: t.legal,
     terms: t.terms,
     privacy: t.privacy,
-    cookies: t.cookies
+    cookies: t.cookies,
+    refund: t.refundPolicy
   };
 
   const content = LEGAL_TEXTS[lang]?.[type] || LEGAL_TEXTS.en[type];
@@ -55,6 +56,9 @@ export const LegalPage: React.FC<LegalPageProps> = ({ type, lang, t }) => {
           </AppLink>
           <AppLink to="/cookies" className="px-4 py-2 rounded-full bg-white/10 hover:bg-white/15 transition-colors text-sm">
             {t.cookies}
+          </AppLink>
+          <AppLink to="/refund" className="px-4 py-2 rounded-full bg-white/10 hover:bg-white/15 transition-colors text-sm">
+            {t.refundPolicy}
           </AppLink>
         </div>
       </div>

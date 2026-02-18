@@ -310,6 +310,8 @@ const App: React.FC = () => {
           <LegalPage type="privacy" lang={lang} t={t} />
         ) : route === '/cookies' ? (
           <LegalPage type="cookies" lang={lang} t={t} />
+        ) : route === '/refund' ? (
+          <LegalPage type="refund" lang={lang} t={t} />
         ) : (
           <NotFound t={t} />
         )}

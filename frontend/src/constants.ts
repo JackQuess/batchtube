@@ -36,6 +36,7 @@ const BASE_TRANSLATIONS: Translations = {
   privacy: 'Privacy Policy',
   cookies: 'Cookie Policy',
   legal: 'Legal Notice',
+  refundPolicy: 'Refund Policy',
   howItWorks: 'How it works',
   faq: 'FAQ',
   supportedSites: 'Supported sites',
@@ -148,6 +149,7 @@ export const TRANSLATIONS: Record<SupportedLanguage, Translations> = {
     privacy: 'Política de Privacidad',
     cookies: 'Política de Cookies',
     legal: 'Aviso Legal',
+    refundPolicy: 'Política de Reembolso',
     howItWorks: 'Cómo funciona',
     faq: 'Preguntas frecuentes',
     supportedSites: 'Sitios compatibles',
@@ -250,6 +252,7 @@ export const TRANSLATIONS: Record<SupportedLanguage, Translations> = {
     privacy: 'Politique de confidentialité',
     cookies: 'Politique de cookies',
     legal: 'Mentions légales',
+    refundPolicy: 'Politique de Remboursement',
     howItWorks: 'Comment ça marche',
     faq: 'FAQ',
     supportedSites: 'Sites pris en charge',
@@ -352,6 +355,7 @@ export const TRANSLATIONS: Record<SupportedLanguage, Translations> = {
     privacy: 'Datenschutz',
     cookies: 'Cookie-Richtlinie',
     legal: 'Rechtliche Hinweise',
+    refundPolicy: 'Rückerstattungsrichtlinie',
     howItWorks: 'So funktioniert es',
     faq: 'FAQ',
     supportedSites: 'Unterstützte Seiten',
@@ -460,6 +464,7 @@ export const TRANSLATIONS: Record<SupportedLanguage, Translations> = {
     privacy: 'Gizlilik Politikası',
     cookies: 'Çerez Politikası',
     legal: 'Yasal Uyarı',
+    refundPolicy: 'İade Politikası',
     howItWorks: 'Nasıl çalışır',
     faq: 'SSS',
     supportedSites: 'Desteklenen siteler',
@@ -562,6 +567,7 @@ export const TRANSLATIONS: Record<SupportedLanguage, Translations> = {
     privacy: 'Privacidade',
     cookies: 'Cookies',
     legal: 'Aviso Legal',
+    refundPolicy: 'Política de Reembolso',
     howItWorks: 'Como funciona',
     faq: 'Perguntas frequentes',
     supportedSites: 'Sites suportados',
@@ -669,6 +675,7 @@ export const TRANSLATIONS: Record<SupportedLanguage, Translations> = {
     privacy: 'سياسة الخصوصية',
     cookies: 'سياسة ملفات تعريف الارتباط',
     legal: 'إشعار قانوني',
+    refundPolicy: 'سياسة الاسترداد',
     howItWorks: 'كيف يعمل',
     faq: 'الأسئلة الشائعة',
     supportedSites: 'المواقع المدعومة',
@@ -753,43 +760,50 @@ export const LEGAL_TEXTS: Record<SupportedLanguage, Record<LegalDocType, string>
     terms: `BatchTube Terms of Service\n\n1. Acceptance\nBy using BatchTube, you agree to these terms.\n\n2. Usage\nThis tool is for personal, educational use only. You must comply with YouTube's Terms of Service.\n\n3. Liability\nBatchTube is not responsible for copyright infringement caused by users.`,
     privacy: `Privacy Policy\n\n1. Data Collection\nWe do not store user data permanently. Download logs are cleared regularly.\n\n2. Third Parties\nWe use Google AdSense which may collect anonymous usage data.`,
     cookies: `Cookie Policy\n\nWe use essential cookies to manage your session and preferences. AdSense uses cookies to serve relevant ads.`,
-    legal: `Legal Notice\n\nBatchTube is not affiliated with Google LLC or YouTube. All trademarks belong to their respective owners.`
+    legal: `Legal Notice\n\nBatchTube is not affiliated with Google LLC or YouTube. All trademarks belong to their respective owners.`,
+    refund: `Refund Policy\n\n1. Subscription Billing\nPro plans are billed monthly and renew automatically unless canceled.\n\n2. Refund Eligibility\nIf you were charged by mistake or experienced a billing issue, contact support within 7 days of the charge.\n\n3. Non-refundable Cases\nPartial-month usage and normal service usage are generally non-refundable.\n\n4. Cancellation\nYou can cancel renewal anytime from your account billing settings.`
   },
   es: {
     terms: `Términos de Servicio de BatchTube\n\n1. Aceptación\nAl usar BatchTube, aceptas estos términos.\n\n2. Uso\nEsta herramienta es solo para uso personal y educativo. Debes cumplir con los Términos de Servicio de YouTube.\n\n3. Responsabilidad\nBatchTube no es responsable de infracciones de copyright causadas por los usuarios.`,
     privacy: `Política de Privacidad\n\n1. Recolección de datos\nNo almacenamos datos de usuario de forma permanente. Los registros de descarga se eliminan regularmente.\n\n2. Terceros\nUsamos Google AdSense, que puede recopilar datos de uso anónimos.`,
     cookies: `Política de Cookies\n\nUsamos cookies esenciales para gestionar tu sesión y preferencias. AdSense usa cookies para anuncios relevantes.`,
-    legal: `Aviso Legal\n\nBatchTube no está afiliado con Google LLC ni YouTube. Todas las marcas pertenecen a sus propietarios.`
+    legal: `Aviso Legal\n\nBatchTube no está afiliado con Google LLC ni YouTube. Todas las marcas pertenecen a sus propietarios.`,
+    refund: `Política de Reembolso\n\n1. Facturación de suscripción\nLos planes Pro se cobran mensualmente y se renuevan automáticamente salvo cancelación.\n\n2. Elegibilidad de reembolso\nSi hubo un cobro por error o un problema de facturación, contacta soporte dentro de 7 días desde el cobro.\n\n3. Casos no reembolsables\nEl uso normal del servicio y períodos parciales generalmente no son reembolsables.\n\n4. Cancelación\nPuedes cancelar la renovación en cualquier momento desde la configuración de facturación de tu cuenta.`
   },
   fr: {
     terms: `Conditions d'utilisation de BatchTube\n\n1. Acceptation\nEn utilisant BatchTube, vous acceptez ces conditions.\n\n2. Utilisation\nCet outil est réservé à un usage personnel et éducatif. Vous devez respecter les Conditions d'utilisation de YouTube.\n\n3. Responsabilité\nBatchTube n'est pas responsable des violations de copyright causées par les utilisateurs.`,
     privacy: `Politique de confidentialité\n\n1. Collecte des données\nNous ne stockons pas les données utilisateur de façon permanente. Les journaux de téléchargement sont supprimés régulièrement.\n\n2. Tiers\nNous utilisons Google AdSense, qui peut collecter des données d'utilisation anonymes.`,
     cookies: `Politique de cookies\n\nNous utilisons des cookies essentiels pour gérer votre session et vos préférences. AdSense utilise des cookies pour des annonces pertinentes.`,
-    legal: `Mentions légales\n\nBatchTube n'est pas affilié à Google LLC ou YouTube. Toutes les marques appartiennent à leurs propriétaires.`
+    legal: `Mentions légales\n\nBatchTube n'est pas affilié à Google LLC ou YouTube. Toutes les marques appartiennent à leurs propriétaires.`,
+    refund: `Politique de Remboursement\n\n1. Facturation de l'abonnement\nLes offres Pro sont facturées mensuellement et renouvelées automatiquement sauf annulation.\n\n2. Éligibilité au remboursement\nEn cas de facturation erronée ou de problème de paiement, contactez le support dans les 7 jours suivant le débit.\n\n3. Cas non remboursables\nL'utilisation normale du service et les périodes partielles ne sont généralement pas remboursables.\n\n4. Annulation\nVous pouvez annuler le renouvellement à tout moment depuis les paramètres de facturation de votre compte.`
   },
   de: {
     terms: `BatchTube Nutzungsbedingungen\n\n1. Akzeptanz\nDurch die Nutzung von BatchTube akzeptierst du diese Bedingungen.\n\n2. Nutzung\nDieses Tool ist nur für den persönlichen und bildungsbezogenen Gebrauch bestimmt. Du musst die YouTube-Nutzungsbedingungen einhalten.\n\n3. Haftung\nBatchTube ist nicht verantwortlich für Urheberrechtsverletzungen durch Nutzer.`,
     privacy: `Datenschutz\n\n1. Datenerhebung\nWir speichern keine Nutzerdaten dauerhaft. Download-Protokolle werden regelmäßig gelöscht.\n\n2. Drittanbieter\nWir verwenden Google AdSense, das anonyme Nutzungsdaten erfassen kann.`,
     cookies: `Cookie-Richtlinie\n\nWir verwenden essentielle Cookies zur Verwaltung deiner Sitzung und Präferenzen. AdSense verwendet Cookies für relevante Anzeigen.`,
-    legal: `Rechtliche Hinweise\n\nBatchTube ist nicht mit Google LLC oder YouTube verbunden. Alle Marken gehören ihren jeweiligen Eigentümern.`
+    legal: `Rechtliche Hinweise\n\nBatchTube ist nicht mit Google LLC oder YouTube verbunden. Alle Marken gehören ihren jeweiligen Eigentümern.`,
+    refund: `Rückerstattungsrichtlinie\n\n1. Abonnement-Abrechnung\nPro-Pläne werden monatlich berechnet und automatisch verlängert, sofern nicht gekündigt.\n\n2. Erstattungsberechtigung\nBei Fehlabbuchung oder Abrechnungsproblem kontaktiere den Support innerhalb von 7 Tagen nach der Belastung.\n\n3. Nicht erstattungsfähige Fälle\nNormale Nutzung und Teilmonate sind in der Regel nicht erstattungsfähig.\n\n4. Kündigung\nDu kannst die Verlängerung jederzeit in den Abrechnungseinstellungen deines Kontos kündigen.`
   },
   tr: {
     terms: `BatchTube Kullanım Şartları\n\n1. Kabul\nBatchTube'u kullanarak bu şartları kabul etmiş olursunuz.\n\n2. Kullanım\nBu araç yalnızca kişisel ve eğitim amaçlıdır. YouTube Kullanım Şartlarına uymalısınız.\n\n3. Sorumluluk\nBatchTube, kullanıcıların yaptığı telif ihlallerinden sorumlu değildir.`,
     privacy: `Gizlilik Politikası\n\n1. Veri Toplama\nKullanıcı verilerini kalıcı olarak saklamıyoruz. İndirme kayıtları düzenli olarak temizlenir.\n\n2. Üçüncü Taraflar\nGoogle AdSense kullanıyoruz; anonim kullanım verileri toplayabilir.`,
     cookies: `Çerez Politikası\n\nOturum ve tercihleri yönetmek için gerekli çerezler kullanılır. AdSense, ilgili reklamlar için çerez kullanır.`,
-    legal: `Yasal Uyarı\n\nBatchTube, Google LLC veya YouTube ile bağlantılı değildir. Tüm markalar sahiplerine aittir.`
+    legal: `Yasal Uyarı\n\nBatchTube, Google LLC veya YouTube ile bağlantılı değildir. Tüm markalar sahiplerine aittir.`,
+    refund: `İade Politikası\n\n1. Abonelik Faturalandırması\nPro planlar aylık olarak ücretlendirilir ve iptal edilmediği sürece otomatik yenilenir.\n\n2. İade Uygunluğu\nYanlış ücretlendirme veya faturalandırma sorunu yaşarsanız, ödeme tarihinden itibaren 7 gün içinde destekle iletişime geçin.\n\n3. İade Yapılmayan Durumlar\nKısmi dönem kullanımı ve hizmetin normal kullanımı genellikle iade kapsamına girmez.\n\n4. İptal\nYenilemeyi hesap faturalandırma ayarlarından istediğiniz zaman iptal edebilirsiniz.`
   },
   pt: {
     terms: `Termos de Serviço do BatchTube\n\n1. Aceitação\nAo usar o BatchTube, você concorda com estes termos.\n\n2. Uso\nEsta ferramenta é apenas para uso pessoal e educacional. Você deve cumprir os Termos de Serviço do YouTube.\n\n3. Responsabilidade\nO BatchTube não é responsável por violações de direitos autorais causadas pelos usuários.`,
     privacy: `Política de Privacidade\n\n1. Coleta de dados\nNão armazenamos dados do usuário permanentemente. Os registros de download são limpos regularmente.\n\n2. Terceiros\nUsamos o Google AdSense, que pode coletar dados de uso anônimos.`,
     cookies: `Política de Cookies\n\nUsamos cookies essenciais para gerenciar sua sessão e preferências. O AdSense usa cookies para anúncios relevantes.`,
-    legal: `Aviso Legal\n\nO BatchTube não é afiliado ao Google LLC ou ao YouTube. Todas as marcas pertencem aos seus proprietários.`
+    legal: `Aviso Legal\n\nO BatchTube não é afiliado ao Google LLC ou ao YouTube. Todas as marcas pertencem aos seus proprietários.`,
+    refund: `Política de Reembolso\n\n1. Cobrança de assinatura\nOs planos Pro são cobrados mensalmente e renovam automaticamente, salvo cancelamento.\n\n2. Elegibilidade de reembolso\nSe houver cobrança incorreta ou problema de faturamento, contate o suporte em até 7 dias após a cobrança.\n\n3. Casos não reembolsáveis\nUso normal do serviço e períodos parciais geralmente não são reembolsáveis.\n\n4. Cancelamento\nVocê pode cancelar a renovação a qualquer momento nas configurações de cobrança da conta.`
   },
   ar: {
     terms: `شروط استخدام BatchTube\n\n1. القبول\nباستخدام BatchTube فإنك توافق على هذه الشروط.\n\n2. الاستخدام\nهذه الأداة للاستخدام الشخصي والتعليمي فقط. يجب الالتزام بشروط خدمة YouTube.\n\n3. المسؤولية\nBatchTube غير مسؤول عن انتهاكات حقوق النشر التي يقوم بها المستخدمون.`,
     privacy: `سياسة الخصوصية\n\n1. جمع البيانات\nلا نقوم بتخزين بيانات المستخدم بشكل دائم. يتم حذف سجلات التنزيل بشكل دوري.\n\n2. أطراف ثالثة\nنستخدم Google AdSense الذي قد يجمع بيانات استخدام مجهولة.`,
     cookies: `سياسة ملفات تعريف الارتباط\n\nنستخدم ملفات تعريف الارتباط الأساسية لإدارة الجلسة والتفضيلات. يستخدم AdSense ملفات تعريف الارتباط للإعلانات المناسبة.`,
-    legal: `إشعار قانوني\n\nBatchTube غير تابع لـ Google LLC أو YouTube. جميع العلامات التجارية تعود لأصحابها.`
+    legal: `إشعار قانوني\n\nBatchTube غير تابع لـ Google LLC أو YouTube. جميع العلامات التجارية تعود لأصحابها.`,
+    refund: `سياسة الاسترداد\n\n1. فوترة الاشتراك\nيتم تحصيل رسوم خطة برو شهريًا وتتجدد تلقائيًا ما لم يتم الإلغاء.\n\n2. أهلية الاسترداد\nإذا حدثت عملية تحصيل خاطئة أو مشكلة في الفوترة، تواصل مع الدعم خلال 7 أيام من تاريخ الدفع.\n\n3. الحالات غير القابلة للاسترداد\nالاستخدام العادي للخدمة والفترات الجزئية غالبًا غير قابلة للاسترداد.\n\n4. الإلغاء\nيمكنك إيقاف التجديد في أي وقت من إعدادات فوترة الحساب.`
   }
 };
 

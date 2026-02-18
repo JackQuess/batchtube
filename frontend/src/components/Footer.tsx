@@ -49,6 +49,10 @@ export const Footer: React.FC<FooterProps> = ({ t }) => {
           <AppLink to="/cookies" className="hover:text-primary transition-colors text-xs sm:text-sm">
             {t.cookies}
           </AppLink>
+          <span className="text-gray-600">·</span>
+          <AppLink to="/refund" className="hover:text-primary transition-colors text-xs sm:text-sm">
+            {t.refundPolicy}
+          </AppLink>
         </div>
       </div>
     </footer>
