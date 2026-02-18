@@ -4,7 +4,7 @@ import { prisma } from './db.js';
 export async function writeAuditLog(params: {
   request?: FastifyRequest;
   userId?: string;
-  action: 'batches.create' | 'batches.cancel' | 'files.download_link' | 'batches.zip_link' | 'account.usage';
+  action: string;
   resourceId?: string;
 }) {
   const ip = params.request?.ip ?? null;

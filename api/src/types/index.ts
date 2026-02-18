@@ -6,3 +6,7 @@ export interface AuthContext {
   token: string;
   plan: PlanTier;
 }
+
+export interface AdminSession {
+  email: string;
+}

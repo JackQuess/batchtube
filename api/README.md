@@ -14,6 +14,12 @@ docker compose up --build
 
 API base URL:
 - `http://localhost:8080/v1`
+- Admin API base URL: `http://localhost:8080/admin-api`
+
+Required admin envs (in `api/.env` or compose env):
+- `ADMIN_EMAIL`
+- `ADMIN_PASSWORD_HASH` (bcrypt hash)
+- `ADMIN_JWT_SECRET`
 
 ## Seed local API key
 
@@ -60,3 +66,15 @@ npm test
 - `GET /v1/batches/:id/zip`
 - `GET /v1/files/:id/download`
 - `GET /v1/account/usage`
+
+### Admin endpoints
+- `POST /admin-api/login`
+- `POST /admin-api/logout`
+- `GET /admin-api/health`
+- `GET /admin-api/kpis`
+- `GET /admin-api/users`
+- `GET /admin-api/users/:id`
+- `PATCH /admin-api/users/:id`
+- `POST /admin-api/users/:id/api-keys`
+- `DELETE /admin-api/api-keys/:id`
+- `GET /admin-api/audit-logs`

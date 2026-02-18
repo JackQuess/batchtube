@@ -67,6 +67,35 @@ TEMP_DIR=./temp_downloads
 MAX_CONCURRENT_JOBS=3
 ```
 
+## Admin Panel + API v1 (Current)
+
+This repository now also includes:
+- `api/` Fastify + Prisma + BullMQ + MinIO backend (`/v1/*` + `/admin-api/*`)
+- `admin/` internal owner dashboard frontend
+
+Run everything with Docker:
+
+```bash
+docker compose up --build
+```
+
+Run manually:
+
+```bash
+cd api
+npm install
+npm run prisma:generate
+npm run prisma:migrate
+npm run prisma:seed
+npm run dev
+```
+
+```bash
+cd admin
+npm install
+npm run dev
+```
+
 ## ⚖️ Legal
 
 This project is for educational purposes only. Users must comply with YouTube's Terms of Service. BatchTube is not affiliated with Google LLC.

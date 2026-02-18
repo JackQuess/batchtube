@@ -41,6 +41,9 @@ services:
       PORT: 8080
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/batchtube?schema=public
       REDIS_URL: redis://redis:6379
+      ADMIN_EMAIL: admin@batchtube.app
+      ADMIN_PASSWORD_HASH: $2a$10$wXK2Q8M7MVE1erYx8RJYvOQRo4IY4f1hg5d5SgN7EzWLKQEiC5v9m
+      ADMIN_JWT_SECRET: change_this_for_production
       S3_ENDPOINT: http://minio:9000
       S3_REGION: us-east-1
       S3_ACCESS_KEY: minio
@@ -50,6 +53,17 @@ services:
     ports:
       - "8080:8080"
     command: sh -c "npm run prisma:generate && npm run prisma:migrate && npm run start"
+
+  admin:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./admin:/app
+    depends_on:
+      - api
+    ports:
+      - "5174:5174"
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 5174"
 
 volumes:
   pgdata:

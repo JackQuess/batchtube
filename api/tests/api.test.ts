@@ -1,4 +1,5 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import bcrypt from 'bcryptjs';
 
 const mockState = vi.hoisted(() => {
   const user = {
@@ -6,6 +7,7 @@ const mockState = vi.hoisted(() => {
     email: 'demo@batchtube.app',
     password_hash: 'hash',
     plan: 'starter' as const,
+    disabled: false,
     stripe_customer_id: null,
     webhook_secret: 'whsec_demo',
     created_at: new Date(),
@@ -37,9 +39,25 @@ const mockState = vi.hoisted(() => {
   };
 
   const prisma = {
+    $queryRaw: vi.fn(async () => [{ count: 1n }]),
     apiKey: {
       findFirst: vi.fn(async () => ({ ...apiKey, user })),
-      update: vi.fn(async () => ({ ...apiKey }))
+      findUnique: vi.fn(async ({ where }: any) => (where.id ? apiKey : null)),
+      update: vi.fn(async () => ({ ...apiKey })),
+      delete: vi.fn(async () => ({})),
+      deleteMany: vi.fn(async () => ({ count: 1 })),
+      create: vi.fn(async () => ({ ...apiKey, id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' })),
+      findMany: vi.fn(async () => [{ ...apiKey }]),
+      groupBy: vi.fn(async () => [{ user_id: user.id, _max: { last_used_at: new Date('2026-01-02T00:00:00.000Z') } }])
+    },
+    user: {
+      count: vi.fn(async () => 1),
+      findMany: vi.fn(async () => [{ ...user }]),
+      findUnique: vi.fn(async ({ where }: any) => {
+        if (where?.id === user.id || where?.email?.toLowerCase?.() === user.email) return { ...user };
+        return null;
+      }),
+      update: vi.fn(async ({ data }: any) => ({ ...user, ...data }))
     },
     batch: {
       create: vi.fn(async () => ({ ...batch })),
@@ -68,6 +86,7 @@ const mockState = vi.hoisted(() => {
       }])
     },
     file: {
+      aggregate: vi.fn(async () => ({ _sum: { file_size_bytes: 123n } })),
       findMany: vi.fn(async () => [{
         id: '55555555-5555-4555-8555-555555555555',
         item_id: '44444444-4444-4444-8444-444444444444'
@@ -80,6 +99,12 @@ const mockState = vi.hoisted(() => {
         bandwidth_bytes: BigInt(0),
         items_processed: 0
       })),
+      findMany: vi.fn(async () => [{
+        user_id: user.id,
+        period_start: new Date('2026-01-01T00:00:00.000Z'),
+        bandwidth_bytes: BigInt(100),
+        items_processed: 7
+      }]),
       create: vi.fn(async () => ({
         user_id: user.id,
         period_start: new Date('2026-01-01T00:00:00.000Z'),
@@ -94,16 +119,23 @@ const mockState = vi.hoisted(() => {
       }))
     },
     auditLog: {
-      create: vi.fn(async () => ({}))
+      create: vi.fn(async () => ({})),
+      findMany: vi.fn(async () => []),
+      count: vi.fn(async () => 0)
     }
   };
 
-  return { prisma };
+  return { prisma, user };
 });
 
-vi.mock('../src/utils/crypto.js', () => ({
-  sha256: () => 'hash'
-}));
+vi.mock('../src/utils/crypto.js', async () => {
+  const actual = await vi.importActual('../src/utils/crypto.js');
+  return {
+    ...(actual as object),
+    sha256: () => 'hash',
+    generateApiKey: () => ({ plain: 'bt_live_mock_generated_key', hash: 'hash' })
+  };
+});
 
 vi.mock('../src/services/redis.js', () => {
   const kv = new Map<string, string>();
@@ -115,6 +147,7 @@ vi.mock('../src/services/redis.js', () => {
         return next;
       }),
       pexpire: vi.fn(async () => 1),
+      expire: vi.fn(async () => 1),
       get: vi.fn(async (key: string) => kv.get(key) ?? null),
       set: vi.fn(async (key: string, value: string) => {
         kv.set(key, value);
@@ -132,10 +165,16 @@ vi.mock('../src/queues/enqueue.js', () => ({
   enqueueBatch: vi.fn(async () => undefined)
 }));
 
-import { createApp } from '../src/app.js';
-
 describe('BatchTube API', () => {
-  const app = createApp();
+  let app: any;
+
+  beforeAll(async () => {
+    process.env.ADMIN_EMAIL = 'owner@batchtube.app';
+    process.env.ADMIN_PASSWORD_HASH = bcrypt.hashSync('admin123', 10);
+    process.env.ADMIN_JWT_SECRET = 'test_admin_secret';
+    const mod = await import('../src/app.js');
+    app = mod.createApp();
+  });
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -189,6 +228,45 @@ describe('BatchTube API', () => {
       method: 'GET',
       url: '/v1/batches/33333333-3333-4333-8333-333333333333/items?page=1&limit=50',
       headers: { authorization: 'Bearer bt_live_testkey' }
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toHaveProperty('data');
+    expect(res.json()).toHaveProperty('meta.total');
+  });
+
+  it('admin login success sets cookie', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin-api/login',
+      payload: { email: 'owner@batchtube.app', password: 'admin123' }
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ ok: true });
+    expect(res.cookies.some((c) => c.name === 'bt_admin_session')).toBe(true);
+  });
+
+  it('admin users requires auth', async () => {
+    const res = await app.inject({ method: 'GET', url: '/admin-api/users' });
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toHaveProperty('error.code', 'unauthorized');
+  });
+
+  it('admin users works with cookie', async () => {
+    const login = await app.inject({
+      method: 'POST',
+      url: '/admin-api/login',
+      payload: { email: 'owner@batchtube.app', password: 'admin123' }
+    });
+
+    const cookie = login.cookies.find((c) => c.name === 'bt_admin_session');
+    expect(cookie).toBeTruthy();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/admin-api/users?page=1&limit=20',
+      cookies: { bt_admin_session: cookie!.value }
     });
 
     expect(res.statusCode).toBe(200);

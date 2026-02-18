@@ -42,6 +42,10 @@ const authPlugin: FastifyPluginAsync = async (app) => {
       return sendError(request, reply, 401, 'unauthorized', 'Invalid API key');
     }
 
+    if (apiKey.user.disabled) {
+      return sendError(request, reply, 401, 'unauthorized', 'API key disabled');
+    }
+
     await prisma.apiKey.update({
       where: { id: apiKey.id },
       data: { last_used_at: new Date() }
