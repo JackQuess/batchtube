@@ -45,6 +45,9 @@ function getFallbackTitle(providerId, url) {
   if (providerId === 'soundcloud') return 'SoundCloud track';
   if (providerId === 'mixcloud') return 'Mixcloud show';
   if (providerId === 'streamable') return 'Streamable video';
+  if (providerId === 'bilibili') return 'Bilibili video';
+  if (providerId === 'vk') return 'VK video';
+  if (providerId === 'bandcamp') return 'Bandcamp track';
 
   try {
     const parsed = new URL(url);
@@ -68,6 +71,9 @@ function getFallbackChannel(providerId) {
   if (providerId === 'soundcloud') return 'SoundCloud';
   if (providerId === 'mixcloud') return 'Mixcloud';
   if (providerId === 'streamable') return 'Streamable';
+  if (providerId === 'bilibili') return 'Bilibili';
+  if (providerId === 'vk') return 'VK';
+  if (providerId === 'bandcamp') return 'Bandcamp';
   return 'Direct link';
 }
 

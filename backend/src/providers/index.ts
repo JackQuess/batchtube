@@ -16,6 +16,9 @@ import { redditProvider } from './reddit';
 import { soundcloudProvider } from './soundcloud';
 import { mixcloudProvider } from './mixcloud';
 import { streamableProvider } from './streamable';
+import { bilibiliProvider } from './bilibili';
+import { vkProvider } from './vk';
+import { bandcampProvider } from './bandcamp';
 import { genericProvider } from './generic';
 
 export const PROVIDERS: Provider[] = [
@@ -31,6 +34,9 @@ export const PROVIDERS: Provider[] = [
   soundcloudProvider,
   mixcloudProvider,
   streamableProvider,
+  bilibiliProvider,
+  vkProvider,
+  bandcampProvider,
   genericProvider
 ];
 

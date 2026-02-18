@@ -15,6 +15,9 @@ const { redditProvider } = require('./reddit');
 const { soundcloudProvider } = require('./soundcloud');
 const { mixcloudProvider } = require('./mixcloud');
 const { streamableProvider } = require('./streamable');
+const { bilibiliProvider } = require('./bilibili');
+const { vkProvider } = require('./vk');
+const { bandcampProvider } = require('./bandcamp');
 const { genericProvider } = require('./generic');
 
 const PROVIDERS = [
@@ -30,6 +33,9 @@ const PROVIDERS = [
   soundcloudProvider,
   mixcloudProvider,
   streamableProvider,
+  bilibiliProvider,
+  vkProvider,
+  bandcampProvider,
   genericProvider
 ];
 

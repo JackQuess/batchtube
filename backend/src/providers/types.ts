@@ -11,6 +11,9 @@ export type ProviderId =
   | 'soundcloud'
   | 'mixcloud'
   | 'streamable'
+  | 'bilibili'
+  | 'vk'
+  | 'bandcamp'
   | 'generic';
 
 export type ProviderErrorCode =
