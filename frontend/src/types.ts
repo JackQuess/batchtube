@@ -1,286 +1,72 @@
-export type VideoFormat = 'mp4' | 'mp3';
+export type ViewState = 
+  | 'landing' 
+  | 'pricing' 
+  | 'faq'
+  | 'supported-sites'
+  | 'legal'
+  | 'contact'
+  | 'status'
+  | 'signup' 
+  | 'login' 
+  | 'forgot-password'
+  | 'onboarding'
+  | 'dashboard'
+  | 'new-batch'
+  | 'queue'
+  | 'history'
+  | 'files'
+  | 'account'
+  | 'billing'
+  | 'settings'
+  | 'not-found';
 
-export type MP4Quality = '4K' | '1440p' | '1080p' | '720p' | '480p';
-export type MP3Quality = '320k' | '128k';
-export type VideoQuality = MP4Quality | MP3Quality;
-
-export type JobStatus = 'queued' | 'downloading' | 'processing' | 'completed' | 'failed';
-
-export interface VideoResult {
-  id: string;
-  url?: string;
-  platform?: string;
-  title?: string;
-  thumbnail?: string;
-  duration?: string | null;
-  channel?: string;
-  channelAvatar?: string;
-  views?: string;
-  description?: string;
-  publishedTime?: string;
-}
-
-export interface DownloadItem {
-  videoId: string;
-  format: VideoFormat;
-  status: JobStatus;
-  progress: number;
-  title?: string;
-}
-
-export interface DownloadTask {
-  id: string;
-  video: VideoResult;
-  format: VideoFormat;
-  status: JobStatus;
-  progress: number;
-}
-
-export interface JobProgressResponse {
-  id: string;
-  status: JobStatus;
-  progress: number;
-  resultReady: boolean;
-  items: DownloadItem[];
-  error?: string;
-}
-
-export interface SelectionItem {
-  video: VideoResult;
-  format: VideoFormat;
-  quality: VideoQuality;
-}
-
-export type UserPlan = 'free' | 'pro';
-
-export interface AuthUser {
-  id: string;
+export interface User {
   email: string;
-  plan: UserPlan;
-  renewalDate?: string | null;
-  batchesCount?: number;
-  itemsCount?: number;
-  maxPerBatch?: number;
+  name: string;
+  plan: 'free' | 'pro' | 'enterprise';
 }
 
-export interface BatchItem {
-  index: number;
+export interface BatchJob {
+  id: string;
+  name: string;
+  status: 'processing' | 'completed' | 'failed' | 'queued';
+  progress: number;
+  files: number;
+  totalSize?: string;
+  date: string;
+  providers: ('youtube' | 'instagram' | 'tiktok' | 'twitter' | 'soundcloud' | 'twitch' | 'mixed')[];
+}
+
+export interface QueueItem {
+  id: string;
   title: string;
-  percent: number;
-  status: JobStatus;
+  provider: 'youtube' | 'instagram' | 'tiktok' | 'twitter' | 'soundcloud' | 'twitch';
+  status: 'downloading' | 'processing' | 'completed' | 'failed' | 'queued';
+  progress: number;
   speed: string;
-  eta: string;
-  fileName: string | null;
-  error: string | null;
+  size: string;
 }
 
-export interface BatchProgressResponse {
-  jobId: string;
-  status: JobStatus;
-  totalItems: number;
-  completedItems: number;
-  overallPercent: number;
-  items: BatchItem[];
-  downloadUrl: string | null;
-  error: string | null;
+export interface FileItem {
+  id: string;
+  name: string;
+  type: string;
+  size: string;
+  date: string;
+  provider: string;
+  batchId: string;
 }
 
-export type SupportedLanguage = 'en' | 'es' | 'fr' | 'de' | 'tr' | 'pt' | 'ar';
+export interface PlanFeature {
+  text: string;
+  included: boolean;
+}
 
-export type LegalDocType = 'terms' | 'privacy' | 'cookies' | 'legal' | 'refund';
-export type InfoDocType = 'howItWorks' | 'faq' | 'supportedSites';
-
-export interface Translations {
-  heroTitle: string;
-  heroSubtitle: string;
-  searchPlaceholder: string;
-  searchButton: string;
-  pasteLink: string;
-
-  // Card
-  singleDownload: string;
-  addToBatch: string;
-  selected: string;
-
-  // Batch Bar
-  itemsSelected: string;
-  itemSelected: string;
-  clearAll: string;
-  downloadZip: string;
-  formatLabel: string;
-  formatShort: string;
-  qualityLabel: string;
-  qualityShort: string;
-  viewList: string;
-  readyToProcess: string;
-
-  // Status
-  downloading: string;
-  processing: string;
-  completed: string;
-  failed: string;
-  saveFile: string;
-  preparing: string;
-  waiting: string;
-  success: string;
-  error: string;
-
-  // Legal / Info
-  terms: string;
-  privacy: string;
-  cookies: string;
-  legal: string;
-  refundPolicy: string;
-  howItWorks: string;
-  faq: string;
-  supportedSites: string;
-  pricing: string;
-  seePricing: string;
-  upgrade: string;
-  login: string;
-  signup: string;
-  account: string;
-  logout: string;
-  supportedPlatformsTitle: string;
-  supportedPlatformsSubtitle: string;
-  availabilityNote: string;
-  plansTitle: string;
-  pricingSubtitle: string;
-  monthlyPrice: string;
-  freePlan: string;
-  proPlan: string;
-  upgradeNow: string;
-  currentPlan: string;
-  upToVideosPerBatch: string;
-  maxQuality: string;
-  adsEnabled: string;
-  limitedDailyUsage: string;
-  standardQueue: string;
-  noAds: string;
-  priorityQueue: string;
-  fasterZip: string;
-  retrySupport: string;
-  accountTitle: string;
-  accountSubtitle: string;
-  userIdLabel: string;
-  emailLabel: string;
-  currentPlanLabel: string;
-  planFreeLabel: string;
-  planProLabel: string;
-  manageSubscription: string;
-  manageSubscriptionSoon: string;
-  loginTitle: string;
-  loginSubtitle: string;
-  signupTitle: string;
-  signupSubtitle: string;
-  forgotPassword: string;
-  forgotPasswordTitle: string;
-  forgotPasswordSubtitle: string;
-  sendResetLink: string;
-  passwordLabel: string;
-  confirmPasswordLabel: string;
-  acceptTermsLabel: string;
-  authContinueWithMagicLink: string;
-  authCheckEmail: string;
-  profile: string;
-  billing: string;
-  renewalDateLabel: string;
-  usageThisMonth: string;
-  batchesRun: string;
-  itemsDownloaded: string;
-  maxPerBatchLabel: string;
-  chooseYourPlanTitle: string;
-  chooseYourPlanSubtitle: string;
-  pricingComparisonTitle: string;
-  pricingRowProviders: string;
-  pricingRowVideosPerBatch: string;
-  pricingRowMaxQuality: string;
-  pricingRowQueue: string;
-  pricingRowZipSpeed: string;
-  pricingRowAds: string;
-  pricingRowRetry: string;
-  pricingRowDailyLimits: string;
-  pricingRowCommercialNotice: string;
-  pricingFreeProviders: string;
-  pricingProProviders: string;
-  pricingFreeQueue: string;
-  pricingProQueue: string;
-  pricingFreeZip: string;
-  pricingProZip: string;
-  pricingFreeDaily: string;
-  pricingProDaily: string;
-  pricingCommercialNotice: string;
-  startPro: string;
-  getStarted: string;
-  getStartedFlowTitle: string;
-  stepCreateAccount: string;
-  stepPasteLinks: string;
-  stepSelect: string;
-  stepDownloadZip: string;
-  supportedSitesTeaserTitle: string;
-  viewAllSupportedSites: string;
-  providersSearchPlaceholder: string;
-  providersAllCategory: string;
-  categoryVideo: string;
-  categorySocial: string;
-  categoryAudio: string;
-  categoryOther: string;
-  categoryDirect: string;
-  freeBadge: string;
-  proBadge: string;
-  freePlanIncludesTitle: string;
-  freePlanIncludesBody: string;
-  proUnlocksAllProvidersNote: string;
-  billingSuccessTitle: string;
-  billingSuccessBody: string;
-  billingCancelTitle: string;
-  billingCancelBody: string;
-  limitsErrorTitle: string;
-  limitProviderRestricted: string;
-  limitMaxItems: string;
-  limitUsageReached: string;
-  continueButton: string;
-  createAccountButton: string;
-  noAccountYet: string;
-  alreadyHaveAccount: string;
-  upgradeForQualityTooltip: string;
-  freeBatchLimitMessage: string;
-  checkoutUnavailable: string;
-  loginToUpgrade: string;
-  close: string;
-  acceptCookies: string;
-  cookieMessage: string;
-  allRightsReserved: string;
-
-  // Messages
-  searchFailed: string;
-  noResultsFound: string;
-  noResultsAvailable: string;
-  backToSearch: string;
-  batchStartFailed: string;
-  notFoundTitle: string;
-  notFoundBody: string;
-
-  // Metadata
-  metadataUnavailable: string;
-  unknownChannel: string;
-  noItemsSelected: string;
-  itemsLabel: string;
-  itemLabel: string;
-
-  // Progress/Batch
-  batchCompleted: string;
-  batchFailed: string;
-  waitingInQueue: string;
-  preparingDownload: string;
-  succeededLabel: string;
-
-  // Cookie Consent
-  cookie: {
-    message: string;
-    accept: string;
-    reject: string;
-    essential: string;
-    reset: string;
-  };
+export interface PricingPlan {
+  name: string;
+  price: string;
+  period: string;
+  description: string;
+  features: PlanFeature[];
+  highlight?: boolean;
 }
