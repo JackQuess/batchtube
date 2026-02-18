@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { GlassInput } from '../components/GlassInput';
 import { Button } from '../components/Button';
+import { Logo } from '../components/Logo';
 import { ViewState } from '../types';
 
 interface LoginScreenProps {
@@ -17,6 +18,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
 
   return (
     <div className="w-full max-w-[440px] glass-card rounded-2xl p-8 sm:p-10 transform transition-all animate-in fade-in zoom-in duration-300">
+      <div className="mb-6 flex items-center justify-center gap-2">
+        <Logo className="size-6" />
+        <span className="text-lg font-semibold tracking-tight text-white">BatchTube</span>
+      </div>
+
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">Welcome back</h1>
         <p className="text-gray-400 text-sm">Enter your credentials to access your workspace.</p>

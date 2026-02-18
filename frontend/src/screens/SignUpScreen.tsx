@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { GlassInput } from '../components/GlassInput';
 import { Button } from '../components/Button';
+import { Logo } from '../components/Logo';
 import { ViewState } from '../types';
 
 interface SignUpScreenProps {
@@ -19,6 +20,11 @@ export const SignUpScreen: React.FC<SignUpScreenProps> = ({ onNavigate }) => {
 
   return (
     <div className="w-full max-w-[440px] glass-card rounded-2xl p-8 sm:p-10 transform transition-all animate-in fade-in zoom-in duration-300 border border-white/10 shadow-2xl shadow-black/50">
+      <div className="mb-6 flex items-center justify-center gap-2">
+        <Logo className="size-6" />
+        <span className="text-lg font-semibold tracking-tight text-white">BatchTube</span>
+      </div>
+
       {/* Header */}
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">Create your account</h1>
