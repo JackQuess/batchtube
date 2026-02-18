@@ -74,7 +74,9 @@ const App: React.FC = () => {
 
   return (
     <Layout activeView={currentView} onNavigate={setCurrentView}>
-      {renderView()}
+      <div key={currentView} className="view-transition">
+        {renderView()}
+      </div>
     </Layout>
   );
 };

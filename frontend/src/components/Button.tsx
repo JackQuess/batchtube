@@ -24,10 +24,11 @@ export const Button: React.FC<ButtonProps> = ({
   };
 
   const widthClass = fullWidth ? "w-full" : "";
+  const motionClass = variant === 'primary' && !props.disabled ? "btn-shimmer pulse-glow" : "";
 
   return (
     <button 
-      className={`${baseStyles} ${variants[variant]} ${widthClass} ${className}`}
+      className={`${baseStyles} ${variants[variant]} ${motionClass} ${widthClass} ${className}`}
       {...props}
     >
       {variant === 'google' && (
