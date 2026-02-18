@@ -1,0 +1,328 @@
+openapi: 3.0.3
+info:
+  title: BatchTube API
+  description: Multi-provider batch media processing API.
+  version: 1.0.0
+servers:
+  - url: https://api.batchtube.app/v1
+    description: Production Server
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: Enter your API key (starts with bt_live_)
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            request_id:
+              type: string
+            details:
+              type: object
+
+    Batch:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [created, queued, processing, completed, failed, cancelled]
+        progress:
+          type: number
+          format: float
+          description: Percentage 0-100
+        item_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    BatchItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        original_url:
+          type: string
+        provider:
+          type: string
+        status:
+          type: string
+          enum: [pending, queued, processing, completed, failed, cancelled]
+        file_id:
+          type: string
+          format: uuid
+          nullable: true
+        error:
+          type: string
+          nullable: true
+
+    CreateBatchRequest:
+      type: object
+      required: [urls]
+      properties:
+        name:
+          type: string
+        urls:
+          type: array
+          items:
+            type: string
+        auto_start:
+          type: boolean
+          default: false
+        callback_url:
+          type: string
+          format: uri
+        options:
+          type: object
+          properties:
+            format:
+              type: string
+              enum: [mp4, mp3, mkv]
+            quality:
+              type: string
+              enum: [best, 4k, 1080p, 720p]
+            archive_as_zip:
+              type: boolean
+
+    DownloadLink:
+      type: object
+      properties:
+        url:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+
+    Usage:
+      type: object
+      properties:
+        plan:
+          type: string
+        cycle_reset:
+          type: string
+          format: date-time
+        limits:
+          type: object
+          properties:
+            bandwidth_bytes:
+              type: integer
+              format: int64
+            monthly_downloads:
+              type: integer
+            concurrency:
+              type: integer
+        used:
+          type: object
+          properties:
+            bandwidth_bytes:
+              type: integer
+              format: int64
+            monthly_downloads:
+              type: integer
+
+security:
+  - BearerAuth: []
+
+paths:
+  /batches:
+    post:
+      summary: Create a new batch
+      operationId: createBatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBatchRequest'
+      responses:
+        '201':
+          description: Batch created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Batch'
+        '400':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      summary: List batches
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of batches
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Batch'
+                  meta:
+                    type: object
+                    properties:
+                      page: { type: integer }
+                      limit: { type: integer }
+                      total: { type: integer }
+
+  /batches/{id}:
+    get:
+      summary: Get batch details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Batch details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Batch'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /batches/{id}/cancel:
+    post:
+      summary: Cancel a batch
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Batch cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Batch'
+
+  /batches/{id}/items:
+    get:
+      summary: List items in a batch
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Batch items list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BatchItem'
+                  meta:
+                    type: object
+                    properties:
+                      page: { type: integer }
+                      total: { type: integer }
+
+  /batches/{id}/zip:
+    get:
+      summary: Get batch ZIP download link
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Signed download URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DownloadLink'
+
+  /files/{id}/download:
+    get:
+      summary: Get file download link
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Signed download URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DownloadLink'
+
+  /account/usage:
+    get:
+      summary: Get account usage and limits
+      responses:
+        '200':
+          description: Usage details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Usage'
