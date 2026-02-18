@@ -17,6 +17,9 @@ export type ProviderId =
   | 'okru'
   | 'rutube'
   | 'coub'
+  | 'archive'
+  | '9gag'
+  | 'loom'
   | 'generic';
 
 export type ProviderErrorCode =

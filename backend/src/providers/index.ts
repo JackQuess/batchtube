@@ -22,6 +22,9 @@ import { bandcampProvider } from './bandcamp';
 import { okruProvider } from './okru';
 import { rutubeProvider } from './rutube';
 import { coubProvider } from './coub';
+import { archiveProvider } from './archive';
+import { ninegagProvider } from './ninegag';
+import { loomProvider } from './loom';
 import { genericProvider } from './generic';
 
 export const PROVIDERS: Provider[] = [
@@ -43,6 +46,9 @@ export const PROVIDERS: Provider[] = [
   okruProvider,
   rutubeProvider,
   coubProvider,
+  archiveProvider,
+  ninegagProvider,
+  loomProvider,
   genericProvider
 ];
 

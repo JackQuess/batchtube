@@ -51,6 +51,9 @@ function getFallbackTitle(providerId, url) {
   if (providerId === 'okru') return 'OK.ru video';
   if (providerId === 'rutube') return 'RuTube video';
   if (providerId === 'coub') return 'Coub video';
+  if (providerId === 'archive') return 'Archive.org media';
+  if (providerId === '9gag') return '9GAG video';
+  if (providerId === 'loom') return 'Loom recording';
 
   try {
     const parsed = new URL(url);
@@ -80,6 +83,9 @@ function getFallbackChannel(providerId) {
   if (providerId === 'okru') return 'OK.ru';
   if (providerId === 'rutube') return 'RuTube';
   if (providerId === 'coub') return 'Coub';
+  if (providerId === 'archive') return 'Archive.org';
+  if (providerId === '9gag') return '9GAG';
+  if (providerId === 'loom') return 'Loom';
   return 'Direct link';
 }
 

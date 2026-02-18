@@ -21,6 +21,9 @@ const { bandcampProvider } = require('./bandcamp');
 const { okruProvider } = require('./okru');
 const { rutubeProvider } = require('./rutube');
 const { coubProvider } = require('./coub');
+const { archiveProvider } = require('./archive');
+const { ninegagProvider } = require('./ninegag');
+const { loomProvider } = require('./loom');
 const { genericProvider } = require('./generic');
 
 const PROVIDERS = [
@@ -42,6 +45,9 @@ const PROVIDERS = [
   okruProvider,
   rutubeProvider,
   coubProvider,
+  archiveProvider,
+  ninegagProvider,
+  loomProvider,
   genericProvider
 ];
 
