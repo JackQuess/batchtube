@@ -9,23 +9,23 @@ interface LoginScreenProps {
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
   const [email, setEmail] = useState('');
-
+  
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onNavigate('dashboard');
   };
 
   return (
-    <div className="w-full max-w-[460px] glass-card rounded-2xl p-8 sm:p-10 border border-white/10 animate-in fade-in zoom-in duration-300">
-      <div className="mb-8 text-center">
-        <h1 className="text-3xl font-bold text-white tracking-tight">Sign in to BatchTube</h1>
-        <p className="text-sm text-gray-400 mt-2">Continue to your queue, files, and account settings.</p>
+    <div className="w-full max-w-[440px] glass-card rounded-2xl p-8 sm:p-10 transform transition-all animate-in fade-in zoom-in duration-300">
+      <div className="text-center mb-8">
+        <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">Welcome back</h1>
+        <p className="text-gray-400 text-sm">Enter your credentials to access your workspace.</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        <GlassInput
+        <GlassInput 
           id="email"
-          label="Email"
+          label="Email Address"
           icon="mail"
           type="email"
           placeholder="name@company.com"
@@ -33,33 +33,47 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
-
+        
         <div>
-          <GlassInput id="password" label="Password" icon="lock" isPassword required placeholder="Your password" />
-          <div className="mt-2 flex justify-end">
-            <button type="button" onClick={() => onNavigate('forgot-password')} className="text-xs text-gray-500 hover:text-primary transition-colors">
-              Forgot password?
-            </button>
+          <GlassInput 
+            id="password"
+            label="Password"
+            icon="lock"
+            isPassword
+            placeholder="Enter your password"
+            required
+          />
+          <div className="flex justify-end mt-2">
+            <a href="#" className="text-xs text-gray-500 hover:text-primary transition-colors">Forgot password?</a>
           </div>
         </div>
 
-        <Button type="submit" fullWidth icon="login">Sign In</Button>
+        <Button type="submit" fullWidth icon="login">
+          Sign In
+        </Button>
 
-        <div className="relative flex items-center py-1">
-          <div className="flex-1 border-t border-white/10" />
-          <span className="px-3 text-xs text-gray-500">Or continue with</span>
-          <div className="flex-1 border-t border-white/10" />
+        <div className="relative flex py-2 items-center">
+          <div className="flex-grow border-t border-white/10"></div>
+          <span className="flex-shrink-0 mx-4 text-gray-500 text-xs">Or continue with</span>
+          <div className="flex-grow border-t border-white/10"></div>
         </div>
 
-        <Button type="button" variant="google" fullWidth>Continue with Google</Button>
+        <Button type="button" variant="google" fullWidth>
+          Log in with Google
+        </Button>
       </form>
 
-      <p className="text-sm text-gray-400 mt-7 text-center">
-        New here?{' '}
-        <button onClick={() => onNavigate('signup')} className="text-primary hover:text-red-400 font-medium transition-colors">
-          Create account
-        </button>
-      </p>
+      <div className="mt-8 text-center">
+        <p className="text-sm text-gray-400">
+          Don't have an account?{' '}
+          <button 
+            onClick={() => onNavigate('signup')} 
+            className="text-primary hover:text-red-400 font-medium transition-colors"
+          >
+            Create account
+          </button>
+        </p>
+      </div>
     </div>
   );
 };

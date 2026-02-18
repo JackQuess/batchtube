@@ -1,6 +1,6 @@
 import React from 'react';
-import { Button } from '../components/Button';
 import { ViewState } from '../types';
+import { Button } from '../components/Button';
 
 interface NotFoundScreenProps {
   onNavigate: (view: ViewState) => void;
@@ -8,13 +8,18 @@ interface NotFoundScreenProps {
 
 export const NotFoundScreen: React.FC<NotFoundScreenProps> = ({ onNavigate }) => {
   return (
-    <div className="min-h-[65vh] w-full flex items-center justify-center px-6 animate-in fade-in duration-300">
-      <div className="glass-card rounded-2xl p-10 border border-white/10 text-center max-w-md w-full">
-        <p className="text-6xl font-bold text-white tracking-tight">404</p>
-        <p className="text-xl font-semibold text-white mt-4">Page not found</p>
-        <p className="text-sm text-gray-400 mt-2">The page you requested doesn&apos;t exist in this workspace.</p>
-        <Button className="mt-6" fullWidth icon="home" onClick={() => onNavigate('landing')}>Back to Home</Button>
-      </div>
+    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-6 animate-in fade-in zoom-in duration-300">
+      <h1 className="text-6xl md:text-8xl font-bold text-white tracking-tighter mb-4">
+        404
+      </h1>
+      <div className="h-1 w-24 bg-primary rounded-full mb-8"></div>
+      <h2 className="text-2xl font-bold text-white mb-2">Page not found</h2>
+      <p className="text-gray-400 mb-8 max-w-md">
+        The page you are looking for doesn't exist or has been moved.
+      </p>
+      <Button onClick={() => onNavigate('dashboard')} icon="home" className="px-8">
+        Back to home
+      </Button>
     </div>
   );
 };

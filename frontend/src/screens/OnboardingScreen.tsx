@@ -10,25 +10,33 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNavigate }
   const [step, setStep] = useState(1);
 
   const handleContinue = () => {
-    if (step < 3) setStep((s) => s + 1);
-    else onNavigate('dashboard');
+    if (step < 3) {
+      setStep(step + 1);
+    } else {
+      onNavigate('dashboard');
+    }
   };
 
   return (
-    <div className="w-full max-w-[640px] glass-card rounded-2xl border border-white/10 overflow-hidden animate-in fade-in zoom-in duration-300">
-      <div className="h-1 bg-white/10">
-        <div className="h-full bg-primary transition-all duration-500" style={{ width: `${(step / 3) * 100}%` }} />
+    <div className="w-full max-w-[600px] glass-card rounded-2xl overflow-hidden animate-in fade-in zoom-in duration-300">
+      {/* Progress Bar */}
+      <div className="h-1 bg-gray-800 w-full">
+        <div 
+          className="h-full bg-primary transition-all duration-500 ease-out"
+          style={{ width: `${(step / 3) * 100}%` }}
+        ></div>
       </div>
 
-      <div className="p-8 md:p-10 min-h-[420px] flex flex-col">
+      <div className="p-10 min-h-[400px] flex flex-col">
         {step === 1 && (
-          <div className="flex-1">
-            <h2 className="text-2xl font-bold text-white">What best describes your use case?</h2>
-            <p className="text-gray-400 mt-2">We will pre-configure your workspace defaults.</p>
-            <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="flex-1 animate-in slide-in-from-right-8 fade-in duration-300">
+            <h2 className="text-2xl font-bold text-white mb-2">How do you plan to use BatchTube?</h2>
+            <p className="text-gray-400 mb-8">This helps us customize your default settings.</p>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {['Content Creator', 'Video Editor', 'Archivist', 'Student', 'Developer', 'Other'].map((role) => (
-                <button key={role} className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left text-sm text-gray-200 hover:border-primary/40 hover:text-white transition-colors">
-                  {role}
+                <button key={role} className="p-4 rounded-xl bg-white/5 border border-white/5 hover:border-primary/50 hover:bg-white/10 text-left transition-all group">
+                  <span className="font-medium text-white group-hover:text-primary transition-colors">{role}</span>
                 </button>
               ))}
             </div>
@@ -36,33 +44,75 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNavigate }
         )}
 
         {step === 2 && (
-          <div className="flex-1">
-            <h2 className="text-2xl font-bold text-white">Select default format</h2>
-            <p className="text-gray-400 mt-2">This can be changed any time from Settings.</p>
-            <div className="mt-6 space-y-3">
-              {['MP4 (Recommended)', 'MP3 (Audio only)', 'MKV (Archive quality)'].map((format, idx) => (
-                <label key={format} className={`flex items-center justify-between rounded-xl border px-4 py-3 ${idx === 0 ? 'border-primary/50 bg-primary/10' : 'border-white/10 bg-white/5'}`}>
-                  <span className="text-sm text-white">{format}</span>
-                  <input type="radio" name="format" defaultChecked={idx === 0} className="accent-primary" />
-                </label>
-              ))}
+          <div className="flex-1 animate-in slide-in-from-right-8 fade-in duration-300">
+            <h2 className="text-2xl font-bold text-white mb-2">Preferred Output Format</h2>
+            <p className="text-gray-400 mb-8">We can auto-convert everything to your liking.</p>
+            
+            <div className="space-y-4">
+              <label className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-primary/50 cursor-pointer">
+                <div className="flex items-center gap-4">
+                  <div className="p-2 bg-primary/20 text-primary rounded-lg">
+                    <span className="material-symbols-outlined">movie</span>
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-white">MP4 (H.264)</h4>
+                    <p className="text-xs text-gray-400">Best compatibility, standard quality.</p>
+                  </div>
+                </div>
+                <input type="radio" name="format" defaultChecked className="accent-primary w-5 h-5" />
+              </label>
+
+              <label className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 cursor-pointer">
+                <div className="flex items-center gap-4">
+                  <div className="p-2 bg-gray-800 text-gray-400 rounded-lg">
+                    <span className="material-symbols-outlined">high_quality</span>
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-white">MKV (High Bitrate)</h4>
+                    <p className="text-xs text-gray-400">Best for archiving, supports multiple streams.</p>
+                  </div>
+                </div>
+                <input type="radio" name="format" className="accent-primary w-5 h-5" />
+              </label>
+
+               <label className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 cursor-pointer">
+                <div className="flex items-center gap-4">
+                  <div className="p-2 bg-gray-800 text-gray-400 rounded-lg">
+                    <span className="material-symbols-outlined">headphones</span>
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-white">MP3 (Audio Only)</h4>
+                    <p className="text-xs text-gray-400">Extract audio automatically.</p>
+                  </div>
+                </div>
+                <input type="radio" name="format" className="accent-primary w-5 h-5" />
+              </label>
             </div>
           </div>
         )}
 
         {step === 3 && (
-          <div className="flex-1 flex flex-col items-center justify-center text-center">
-            <div className="w-16 h-16 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
-              <span className="material-symbols-outlined">check</span>
-            </div>
-            <h2 className="text-2xl font-bold text-white mt-5">Workspace ready</h2>
-            <p className="text-gray-400 mt-2 max-w-sm">You can now create your first batch and monitor all items in queue.</p>
+          <div className="flex-1 animate-in slide-in-from-right-8 fade-in duration-300 text-center flex flex-col items-center justify-center">
+             <div className="w-20 h-20 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mb-6 animate-pulse">
+               <span className="material-symbols-outlined text-4xl">check</span>
+             </div>
+             <h2 className="text-2xl font-bold text-white mb-2">You're all set!</h2>
+             <p className="text-gray-400 max-w-sm">
+               Your workspace is ready. You have 50 free credits to start processing media today.
+             </p>
           </div>
         )}
 
-        <div className="mt-8 flex items-center justify-between">
-          <button onClick={() => step > 1 && setStep((s) => s - 1)} className={`text-sm text-gray-500 hover:text-white ${step === 1 ? 'invisible' : ''}`}>Back</button>
-          <Button onClick={handleContinue} className="w-32">{step === 3 ? 'Launch' : 'Continue'}</Button>
+        <div className="mt-8 flex justify-between items-center">
+          <button 
+            onClick={() => step > 1 && setStep(step - 1)}
+            className={`text-sm text-gray-500 hover:text-white transition-colors ${step === 1 ? 'invisible' : ''}`}
+          >
+            Back
+          </button>
+          <Button onClick={handleContinue} className="w-32">
+            {step === 3 ? 'Launch' : 'Continue'}
+          </Button>
         </div>
       </div>
     </div>

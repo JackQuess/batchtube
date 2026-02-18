@@ -1,97 +1,126 @@
 import React, { useState } from 'react';
 import { Button } from '../components/Button';
-import { ViewState } from '../types';
+import { ViewState, PricingPlan } from '../types';
 
 interface PricingScreenProps {
   onNavigate: (view: ViewState) => void;
 }
 
-const rows = [
-  { label: 'Supported providers', free: 'Core set (YouTube, TikTok, X)', pro: 'All 30+ providers' },
-  { label: 'Videos per batch', free: 'Up to 10', pro: 'Unlimited' },
-  { label: 'Max quality', free: 'Up to 720p', pro: '1080p / 4K where available' },
-  { label: 'Parallel downloads', free: '2 workers', pro: '10 workers' },
-  { label: 'ZIP processing', free: 'Standard', pro: 'Priority speed' },
-  { label: 'Retry support', free: 'Basic', pro: 'Advanced retries' },
-  { label: 'Daily limits', free: 'Limited', pro: 'Higher limits' }
-];
-
 export const PricingScreen: React.FC<PricingScreenProps> = ({ onNavigate }) => {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
 
+  const plans: PricingPlan[] = [
+    {
+      name: 'Starter',
+      price: 'Free',
+      period: 'forever',
+      description: 'For casual batch downloading.',
+      features: [
+        { text: 'Core Providers (YouTube, TikTok)', included: true },
+        { text: 'Max 10 items per batch', included: true },
+        { text: '2 Parallel Downloads', included: true },
+        { text: 'Auto-ZIP Archiving', included: false },
+        { text: 'No Daily Limits', included: false },
+      ]
+    },
+    {
+      name: 'Power User',
+      price: billingCycle === 'monthly' ? '$12' : '$10',
+      period: 'per month',
+      description: 'Unlock all 30+ providers and speed.',
+      highlight: true,
+      features: [
+        { text: 'All 30+ Providers', included: true },
+        { text: 'Unlimited items per batch', included: true },
+        { text: '10 Parallel Downloads', included: true },
+        { text: 'One-Click ZIP', included: true },
+        { text: 'Retry & Resume', included: true },
+      ]
+    },
+    {
+      name: 'Archivist',
+      price: billingCycle === 'monthly' ? '$49' : '$39',
+      period: 'per month',
+      description: 'Massive throughput for data hoarders.',
+      features: [
+        { text: 'Everything in Power User', included: true },
+        { text: 'Priority Queue (Skip the line)', included: true },
+        { text: '50 Parallel Downloads', included: true },
+        { text: 'API Access', included: true },
+        { text: 'Dedicated Bandwidth', included: true },
+      ]
+    }
+  ];
+
   return (
-    <div className="w-full max-w-7xl mx-auto px-6 py-10 md:py-14 animate-in fade-in duration-500">
-      <section className="text-center max-w-3xl mx-auto">
-        <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-white">
-          Choose your <span className="text-primary">BatchTube plan</span>
+    <div className="w-full max-w-7xl mx-auto px-6 py-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      
+      <div className="text-center max-w-3xl mx-auto mb-16">
+        <h1 className="text-4xl md:text-5xl font-bold text-white mb-6 tracking-tight">
+          Simple pricing for <span className="text-primary">heavy downloading</span>.
         </h1>
-        <p className="text-gray-400 mt-4 text-base md:text-lg">
-          Built for creators, teams, and archivists that process media at scale.
+        <p className="text-gray-400 text-lg">
+          Choose the plan that fits your volume. Cancel anytime.
         </p>
-
-        <div className="mt-7 inline-flex items-center rounded-full border border-white/10 bg-white/5 p-1">
-          <button
-            onClick={() => setBillingCycle('monthly')}
-            className={`px-4 py-1.5 text-xs font-semibold rounded-full transition-colors ${billingCycle === 'monthly' ? 'bg-primary text-white' : 'text-gray-400 hover:text-white'}`}
+        
+        {/* Toggle */}
+        <div className="flex items-center justify-center mt-8 gap-4">
+          <span className={`text-sm font-medium ${billingCycle === 'monthly' ? 'text-white' : 'text-gray-500'}`}>Monthly</span>
+          <button 
+            onClick={() => setBillingCycle(billingCycle === 'monthly' ? 'yearly' : 'monthly')}
+            className="w-14 h-8 bg-white/10 rounded-full relative transition-colors hover:bg-white/20"
           >
-            Monthly
+            <div className={`absolute top-1 w-6 h-6 bg-primary rounded-full shadow-lg transition-all duration-300 ${billingCycle === 'monthly' ? 'left-1' : 'left-7'}`}></div>
           </button>
-          <button
-            onClick={() => setBillingCycle('yearly')}
-            className={`px-4 py-1.5 text-xs font-semibold rounded-full transition-colors ${billingCycle === 'yearly' ? 'bg-primary text-white' : 'text-gray-400 hover:text-white'}`}
+          <span className={`text-sm font-medium ${billingCycle === 'yearly' ? 'text-white' : 'text-gray-500'}`}>Yearly <span className="text-emerald-400 text-xs ml-1 font-bold">-20%</span></span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        {plans.map((plan, idx) => (
+          <div 
+            key={idx} 
+            className={`glass-card rounded-2xl p-8 flex flex-col relative ${plan.highlight ? 'border-primary/50 shadow-2xl shadow-primary/10' : 'border-white/5'}`}
           >
-            Yearly (save 20%)
-          </button>
-        </div>
-      </section>
+            {plan.highlight && (
+              <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-primary text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+                Best Value
+              </div>
+            )}
+            
+            <div className="mb-6">
+              <h3 className="text-xl font-bold text-white">{plan.name}</h3>
+              <p className="text-gray-400 text-sm mt-2 min-h-[40px]">{plan.description}</p>
+            </div>
+            
+            <div className="mb-8">
+              <span className="text-4xl font-bold text-white">{plan.price}</span>
+              <span className="text-gray-500 text-sm ml-2">{plan.period}</span>
+            </div>
 
-      <section className="mt-10 glass-card rounded-2xl border border-white/10 overflow-hidden">
-        <div className="grid grid-cols-3 border-b border-white/10 bg-white/5">
-          <div className="p-4 text-xs uppercase tracking-wider text-gray-500 font-semibold">Feature</div>
-          <div className="p-4 text-center text-sm font-semibold text-gray-300">Free</div>
-          <div className="p-4 text-center text-sm font-semibold text-primary">Pro</div>
-        </div>
+            <Button 
+              variant={plan.highlight ? 'primary' : 'secondary'} 
+              fullWidth
+              onClick={() => onNavigate('signup')}
+            >
+              {plan.price === 'Free' ? 'Get Started' : 'Start Trial'}
+            </Button>
 
-        {rows.map((row) => (
-          <div key={row.label} className="grid grid-cols-3 border-b border-white/5 last:border-b-0">
-            <div className="p-4 text-sm text-gray-200">{row.label}</div>
-            <div className="p-4 text-sm text-center text-gray-400">{row.free}</div>
-            <div className="p-4 text-sm text-center text-white">{row.pro}</div>
+            <ul className="mt-8 space-y-4 flex-1">
+              {plan.features.map((feature, fIdx) => (
+                <li key={fIdx} className="flex items-start gap-3 text-sm">
+                  <span className={`material-symbols-outlined text-[18px] ${feature.included ? 'text-emerald-400' : 'text-gray-700'}`}>
+                    {feature.included ? 'check_circle' : 'cancel'}
+                  </span>
+                  <span className={feature.included ? 'text-gray-300' : 'text-gray-600'}>
+                    {feature.text}
+                  </span>
+                </li>
+              ))}
+            </ul>
           </div>
         ))}
-      </section>
-
-      <section className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-5">
-        <div className="glass-card rounded-2xl p-6 border border-white/10">
-          <h3 className="text-white text-xl font-semibold">Free</h3>
-          <p className="text-3xl font-bold text-white mt-2">$0</p>
-          <p className="text-gray-500 text-sm mt-1">Great for trying the workflow.</p>
-          <Button className="mt-6" fullWidth variant="secondary" onClick={() => onNavigate('signup')}>
-            Get Started
-          </Button>
-        </div>
-
-        <div className="glass-card rounded-2xl p-6 border border-primary/40 shadow-2xl shadow-primary/10">
-          <h3 className="text-white text-xl font-semibold">Pro</h3>
-          <p className="text-3xl font-bold text-white mt-2">{billingCycle === 'monthly' ? '$12' : '$10'}<span className="text-base text-gray-500"> / month</span></p>
-          <p className="text-gray-400 text-sm mt-1">Priority queue, full providers, and faster delivery.</p>
-          <Button className="mt-6" fullWidth onClick={() => onNavigate('signup')} icon="rocket_launch">
-            Start Pro Trial
-          </Button>
-        </div>
-      </section>
-
-      <section className="mt-8 glass-card rounded-2xl p-5 border border-white/10">
-        <p className="text-xs uppercase tracking-wide text-gray-500 mb-3">Get started in 4 steps</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {['Create account', 'Paste links', 'Select format', 'Download ZIP'].map((step, index) => (
-            <div key={step} className="rounded-xl border border-white/10 bg-white/5 p-3">
-              <p className="text-primary text-xs font-bold">Step {index + 1}</p>
-              <p className="text-sm text-white mt-1">{step}</p>
-            </div>
-          ))}
-        </div>
-      </section>
+      </div>
     </div>
   );
 };

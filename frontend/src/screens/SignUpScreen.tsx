@@ -14,21 +14,23 @@ export const SignUpScreen: React.FC<SignUpScreenProps> = ({ onNavigate }) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password || password !== confirmPassword) return;
-    setTimeout(() => onNavigate('onboarding'), 300);
+    setTimeout(() => onNavigate('onboarding'), 500);
   };
 
   return (
-    <div className="w-full max-w-[460px] glass-card rounded-2xl p-8 sm:p-10 border border-white/10 animate-in fade-in zoom-in duration-300">
-      <div className="mb-8 text-center">
-        <h1 className="text-3xl font-bold text-white tracking-tight">Create your workspace</h1>
-        <p className="text-sm text-gray-400 mt-2">Set up your account and start your first batch in minutes.</p>
+    <div className="w-full max-w-[440px] glass-card rounded-2xl p-8 sm:p-10 transform transition-all animate-in fade-in zoom-in duration-300 border border-white/10 shadow-2xl shadow-black/50">
+      {/* Header */}
+      <div className="text-center mb-8">
+        <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">Create your account</h1>
+        <p className="text-gray-400 text-sm">Start your professional workflow today.</p>
       </div>
 
+      {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-5">
-        <GlassInput
-          id="signup-email"
-          label="Email"
+        
+        <GlassInput 
+          id="email"
+          label="Email Address"
           icon="mail"
           type="email"
           placeholder="name@company.com"
@@ -37,48 +39,63 @@ export const SignUpScreen: React.FC<SignUpScreenProps> = ({ onNavigate }) => {
           onChange={(e) => setEmail(e.target.value)}
         />
 
-        <GlassInput
-          id="signup-password"
-          label="Password"
-          icon="lock"
-          isPassword
-          placeholder="Minimum 8 characters"
-          required
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-
-        <GlassInput
-          id="signup-confirm"
-          label="Confirm Password"
-          icon="lock_reset"
-          isPassword
-          placeholder="Confirm your password"
-          required
-          value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
-        />
-
-        <Button type="submit" fullWidth icon="arrow_forward">Create Account</Button>
-
-        <div className="relative flex items-center py-1">
-          <div className="flex-1 border-t border-white/10" />
-          <span className="px-3 text-xs text-gray-500">Or continue with</span>
-          <div className="flex-1 border-t border-white/10" />
+        <div className="space-y-1.5">
+          <GlassInput 
+            id="password"
+            label="Password"
+            icon="lock"
+            isPassword
+            placeholder="Minimum 8 characters"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
         </div>
 
-        <Button type="button" variant="google" fullWidth>Continue with Google</Button>
+        <div className="space-y-1.5">
+          <GlassInput 
+            id="confirm-password"
+            label="Confirm Password"
+            icon="lock_reset"
+            isPassword
+            placeholder="Confirm your password"
+            required
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+          />
+        </div>
+
+        <Button type="submit" fullWidth icon="arrow_forward">
+          Create Account
+        </Button>
+
+        {/* Divider */}
+        <div className="relative flex py-2 items-center">
+          <div className="flex-grow border-t border-white/10"></div>
+          <span className="flex-shrink-0 mx-4 text-gray-500 text-xs">Or continue with</span>
+          <div className="flex-grow border-t border-white/10"></div>
+        </div>
+
+        <Button type="button" variant="google" fullWidth>
+          Continue with Google
+        </Button>
       </form>
 
-      <div className="mt-7 text-center space-y-3">
+      {/* Footer Links */}
+      <div className="mt-8 text-center space-y-4">
         <p className="text-sm text-gray-400">
           Already have an account?{' '}
-          <button onClick={() => onNavigate('login')} className="text-primary hover:text-red-400 font-medium transition-colors">
-            Sign in
+          <button 
+            onClick={() => onNavigate('login')} 
+            className="text-primary hover:text-red-400 font-medium transition-colors"
+          >
+            Log in
           </button>
         </p>
-        <p className="text-xs text-gray-600">
-          By continuing you agree to Terms and Privacy Policy.
+        <p className="text-xs text-gray-600 leading-relaxed px-4">
+          By clicking create account, you agree to our{' '}
+          <button onClick={() => onNavigate('legal')} className="hover:text-gray-400 underline decoration-gray-700">Terms</button> and{' '}
+          <button onClick={() => onNavigate('legal')} className="hover:text-gray-400 underline decoration-gray-700">Privacy Policy</button>.
         </p>
       </div>
     </div>

@@ -1,51 +1,97 @@
 import React from 'react';
-import { Button } from '../components/Button';
 import { ViewState } from '../types';
+import { Button } from '../components/Button';
 
 interface StatusScreenProps {
   onNavigate: (view: ViewState) => void;
 }
 
-const systems = [
-  { name: 'API Gateway', status: 'Operational', uptime: '99.99%' },
-  { name: 'Web Interface', status: 'Operational', uptime: '100%' },
-  { name: 'Worker Pool', status: 'Operational', uptime: '99.8%' },
-  { name: 'Object Storage', status: 'Operational', uptime: '100%' },
-  { name: 'Authentication', status: 'Degraded', uptime: '98.5%' }
-] as const;
-
 export const StatusScreen: React.FC<StatusScreenProps> = ({ onNavigate }) => {
-  return (
-    <div className="w-full max-w-5xl mx-auto px-6 py-10 space-y-6 animate-in fade-in duration-500">
-      <section className="glass-card rounded-2xl p-6 border border-emerald-500/30 bg-emerald-500/5">
-        <h1 className="text-2xl font-bold text-white">Platform status</h1>
-        <p className="text-emerald-400 mt-2 text-sm">All core systems operational</p>
-      </section>
+  const systems = [
+    { name: 'API Gateway', status: 'operational', uptime: '99.99%' },
+    { name: 'Web Interface', status: 'operational', uptime: '100%' },
+    { name: 'YouTube Worker Pool', status: 'operational', uptime: '99.8%' },
+    { name: 'TikTok/Instagram Workers', status: 'degraded', uptime: '98.5%' },
+    { name: 'Storage Systems (S3)', status: 'operational', uptime: '100%' },
+    { name: 'Authentication', status: 'operational', uptime: '100%' },
+  ];
 
-      <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {systems.map((system) => (
-          <div key={system.name} className="glass-card rounded-xl p-4 border border-white/10">
-            <div className="flex items-center justify-between">
-              <p className="text-white font-medium">{system.name}</p>
-              <span className={`text-[10px] px-2 py-0.5 rounded-full border ${system.status === 'Operational' ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10' : 'text-yellow-300 border-yellow-500/30 bg-yellow-500/10'}`}>
-                {system.status}
-              </span>
+  const incidents = [
+    { date: 'Oct 22, 2026', title: 'Increased latency on TikTok downloads', status: 'Resolved' },
+    { date: 'Sep 15, 2026', title: 'Scheduled Maintenance: Database Upgrade', status: 'Completed' },
+    { date: 'Aug 04, 2026', title: 'API Gateway Timeout Issues', status: 'Resolved' },
+  ];
+
+  return (
+    <div className="w-full max-w-4xl mx-auto px-6 py-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      
+      {/* Overall Status */}
+      <div className="glass-card p-8 rounded-2xl border-l-4 border-emerald-500 mb-12 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-white mb-2">All Systems Operational</h1>
+          <p className="text-gray-400">Last updated: Just now</p>
+        </div>
+        <div className="w-16 h-16 bg-emerald-500/10 rounded-full flex items-center justify-center text-emerald-500 animate-pulse">
+          <span className="material-symbols-outlined text-4xl">check_circle</span>
+        </div>
+      </div>
+
+      {/* System Grid */}
+      <h2 className="text-xl font-bold text-white mb-6">System Metrics</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-16">
+        {systems.map((sys, idx) => (
+          <div key={idx} className="glass-card p-5 rounded-xl border border-white/5 flex flex-col gap-4">
+            <div className="flex justify-between items-center">
+              <span className="font-semibold text-white">{sys.name}</span>
+              {sys.status === 'operational' ? (
+                <span className="px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-bold uppercase border border-emerald-500/20">Operational</span>
+              ) : (
+                <span className="px-2 py-1 rounded-full bg-yellow-500/10 text-yellow-400 text-xs font-bold uppercase border border-yellow-500/20">Degraded Perf</span>
+              )}
             </div>
-            <p className="text-xs text-gray-500 mt-2">Uptime: {system.uptime}</p>
+            
+            {/* Fake Uptime Bars */}
+            <div className="flex gap-1 h-8 items-end">
+              {[...Array(30)].map((_, i) => (
+                <div 
+                  key={i} 
+                  className={`flex-1 rounded-sm ${
+                    sys.status === 'degraded' && i > 25 ? 'bg-yellow-500/50 h-3/4' : 'bg-emerald-500/40 h-full'
+                  }`}
+                ></div>
+              ))}
+            </div>
+            
+            <div className="flex justify-between text-xs text-gray-500">
+              <span>90 days ago</span>
+              <span className="text-white font-mono">{sys.uptime}</span>
+              <span>Today</span>
+            </div>
           </div>
         ))}
-      </section>
+      </div>
 
-      <section className="glass-card rounded-2xl p-6 border border-white/10">
-        <h2 className="text-white font-semibold">Recent incidents</h2>
-        <div className="mt-3 space-y-2 text-sm text-gray-300">
-          <p>Oct 22, 2026 - Increased latency on Instagram provider (resolved)</p>
-          <p>Sep 15, 2026 - Scheduled maintenance completed</p>
-          <p>Aug 04, 2026 - API timeout spike (resolved)</p>
-        </div>
-      </section>
+      {/* Incidents */}
+      <h2 className="text-xl font-bold text-white mb-6">Past Incidents</h2>
+      <div className="space-y-4">
+        {incidents.map((inc, idx) => (
+          <div key={idx} className="glass-card p-6 rounded-xl border border-white/5">
+             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                   <h3 className="font-bold text-white">{inc.title}</h3>
+                   <p className="text-sm text-gray-400">{inc.date}</p>
+                </div>
+                <span className="px-3 py-1 rounded bg-white/5 text-gray-300 text-xs font-medium border border-white/10 w-fit">
+                   {inc.status}
+                </span>
+             </div>
+          </div>
+        ))}
+      </div>
 
-      <Button variant="secondary" onClick={() => onNavigate('contact')}>Report an issue</Button>
+      <div className="mt-12 text-center">
+        <Button variant="secondary" onClick={() => onNavigate('contact')}>Report an Issue</Button>
+      </div>
     </div>
   );
 };
