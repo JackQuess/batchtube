@@ -3,6 +3,7 @@
  * Clean API client for queue-based batch downloads
  */
 import { API_BASE_URL } from '../config/api';
+import { getAuthHeaders } from '../lib/auth';
 
 const isSafari = () => /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 
@@ -73,7 +74,10 @@ export const batchAPI = {
       method: 'POST',
       mode: 'cors',
       credentials: 'omit',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders()
+      },
       body: JSON.stringify({ ...request, format: formatToUse })
     });
 
@@ -93,7 +97,10 @@ export const batchAPI = {
       method: 'GET',
       mode: 'cors',
       credentials: 'omit',
-      headers: { 'Content-Type': 'application/json' }
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders()
+      }
     });
 
     if (!res.ok) {

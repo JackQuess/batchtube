@@ -7,7 +7,6 @@ import { api } from './services/apiService';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
 import { VideoCard } from './components/VideoCard';
-import { PlansSection } from './components/PlansSection';
 import { SelectionBar } from './components/SelectionBar';
 import { SelectionModal } from './components/SelectionModal';
 import { ProgressModal } from './components/ProgressModal';
@@ -19,7 +18,7 @@ import { AdSlotGrid } from './components/AdSlotGrid';
 import { loadAdSense, unloadAdSense } from './lib/adLoader';
 import { batchAPI } from './services/batchAPI';
 import { useCookieConsent } from './components/CookieConsent';
-import { usePathname } from './lib/simpleRouter';
+import { AppLink, getSearchParam, navigate, usePathname, useSearch } from './lib/simpleRouter';
 import { shouldShowAds } from './lib/adsPolicy';
 import { HowItWorks } from './pages/HowItWorks';
 import { Faq } from './pages/Faq';
@@ -27,13 +26,20 @@ import { SupportedSites } from './pages/SupportedSites';
 import { LegalPage } from './pages/LegalPage';
 import { NotFound } from './pages/NotFound';
 import { applySeoMeta } from './lib/seo';
+import { AccountPage } from './pages/AccountPage';
+import { LoginPage } from './pages/LoginPage';
+import { PricingPage } from './pages/PricingPage';
+import { SignupPage } from './pages/SignupPage';
+import { AUTH_CHANGE_EVENT, clearUser, generateUserId, getStoredUser, saveUser } from './lib/auth';
 
 const App: React.FC = () => {
   const route = usePathname();
+  const search = useSearch();
 
   // Global State
   const [lang, setLang] = useState<SupportedLanguage>('en');
-  const isProPlan = false; // Client-side plan simulation until backend plan API is ready.
+  const [user, setUser] = useState(() => getStoredUser());
+  const isProPlan = user?.plan === 'pro';
   const t = TRANSLATIONS[lang];
   const consent = useCookieConsent();
   const consentGranted = consent === 'accepted';
@@ -70,6 +76,29 @@ const App: React.FC = () => {
     }
   }, [route]);
 
+  useEffect(() => {
+    const syncUser = () => setUser(getStoredUser());
+    window.addEventListener('storage', syncUser);
+    window.addEventListener(AUTH_CHANGE_EVENT, syncUser as EventListener);
+    return () => {
+      window.removeEventListener('storage', syncUser);
+      window.removeEventListener(AUTH_CHANGE_EVENT, syncUser as EventListener);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (route === '/account' && !user) {
+      navigate('/login?returnUrl=/account', { replace: true });
+    }
+  }, [route, user]);
+
+  useEffect(() => {
+    if (!user) return;
+    if (route === '/login' || route === '/signup') {
+      navigate('/account', { replace: true });
+    }
+  }, [route, user]);
+
   // Update default quality when format changes
   useEffect(() => {
     if (batchFormat === 'mp3') {
@@ -87,6 +116,30 @@ const App: React.FC = () => {
   }, [batchFormat, batchQuality, isProPlan]);
 
   // Handlers
+  const handleLogin = (email: string) => {
+    saveUser({
+      id: generateUserId(),
+      email,
+      plan: 'free'
+    });
+    setUser(getStoredUser());
+  };
+
+  const handleSignup = (email: string) => {
+    saveUser({
+      id: generateUserId(),
+      email,
+      plan: 'free'
+    });
+    setUser(getStoredUser());
+  };
+
+  const handleLogout = () => {
+    clearUser();
+    setUser(null);
+    navigate('/');
+  };
+
   const getSelectionKey = (video: VideoResult) => video.url || video.id;
 
   const handleSearch = async (query: string) => {
@@ -160,6 +213,8 @@ const App: React.FC = () => {
   };
 
   const isHome = route === '/';
+  const returnUrlParam = getSearchParam(search, 'returnUrl');
+  const returnUrl = returnUrlParam && returnUrlParam.startsWith('/') ? returnUrlParam : undefined;
   const isModalOpen = isSelectionModalOpen || !!activeJobId;
   const isEmptyState = hasSearchedOnce && !isSearching && results.length === 0 && !searchError;
   const hasErrorOrEmpty = !!searchError || isEmptyState;
@@ -182,13 +237,24 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col bg-[#050509] text-white font-sans selection:bg-primary/30 overflow-x-hidden">
       
-      <Navbar lang={lang} setLang={setLang} />
+      <Navbar lang={lang} setLang={setLang} t={t} user={user} onLogout={handleLogout} />
       
       <main className="flex-grow pt-8 sm:pt-12 md:pt-16 pb-16 sm:pb-20 w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         {isHome ? (
           <>
             <Hero onSearch={handleSearch} loading={isSearching} t={t} />
-            <PlansSection t={t} />
+            <div className="mt-2 mb-2 flex items-center justify-center gap-3 text-xs sm:text-sm text-neutral-400">
+              <AppLink to="/pricing" className="hover:text-primary transition-colors">
+                {t.seePricing}
+              </AppLink>
+              <span className="text-neutral-600">·</span>
+              <AppLink
+                to={user ? '/account' : '/login?returnUrl=/'}
+                className="hover:text-primary transition-colors"
+              >
+                {t.upgrade}
+              </AppLink>
+            </div>
 
             {searchError && (
               <div className="mt-6 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
@@ -229,7 +295,13 @@ const App: React.FC = () => {
         ) : route === '/supported-sites' ? (
           <SupportedSites lang={lang} t={t} />
         ) : route === '/pricing' ? (
-          <PlansSection t={t} />
+          <PricingPage t={t} user={user} />
+        ) : route === '/account' ? (
+          user ? <AccountPage t={t} user={user} /> : <LoginPage t={t} onLogin={handleLogin} returnUrl="/account" />
+        ) : route === '/login' ? (
+          <LoginPage t={t} onLogin={handleLogin} returnUrl={returnUrl} />
+        ) : route === '/signup' ? (
+          <SignupPage t={t} onSignup={handleSignup} returnUrl={returnUrl} />
         ) : route === '/legal' ? (
           <LegalPage type="legal" lang={lang} t={t} />
         ) : route === '/terms' ? (

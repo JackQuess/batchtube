@@ -1,5 +1,6 @@
 import { VideoResult, VideoFormat, SelectionItem, JobProgressResponse } from '../types';
 import { API_BASE_URL } from '../constants';
+import { getAuthHeaders } from '../lib/auth';
 
 const base = API_BASE_URL.replace(/\/+$/, '');
 const apiBase = base.endsWith('/api') ? base : `${base}/api`;
@@ -243,7 +244,10 @@ export const api = {
       method: 'GET',
       mode: 'cors',
       credentials: 'omit',
-      headers: { 'Content-Type': 'application/json' }
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders()
+      }
     });
     if (!res.ok) throw new Error('Search failed');
     const data = await res.json();
@@ -259,7 +263,10 @@ export const api = {
       method: 'POST',
       mode: 'cors',
       credentials: 'omit',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders()
+      },
       body: JSON.stringify({
         videoId,
         format,
@@ -283,7 +290,10 @@ export const api = {
       method: 'POST',
       mode: 'cors',
       credentials: 'omit',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders()
+      },
       body: JSON.stringify({ items: payload })
     });
     if (!res.ok) throw new Error('Failed to start batch');
@@ -291,7 +301,9 @@ export const api = {
   },
 
   getJobProgress: async (jobId: string): Promise<JobProgressResponse> => {
-    const res = await fetch(`${apiBase}/progress/${jobId}`);
+    const res = await fetch(`${apiBase}/progress/${jobId}`, {
+      headers: getAuthHeaders()
+    });
     if (!res.ok) throw new Error('Progress check failed');
     return res.json();
   },

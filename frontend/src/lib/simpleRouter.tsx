@@ -1,14 +1,44 @@
 import React, { useEffect, useState } from 'react';
 
 function normalizePath(path: string): string {
-  const clean = (path || '/').split('?')[0].split('#')[0];
-  if (clean.length > 1 && clean.endsWith('/')) return clean.slice(0, -1);
-  return clean || '/';
+  const clean = (path || '/');
+  const pathname = clean.split('?')[0].split('#')[0];
+  if (pathname.length > 1 && pathname.endsWith('/')) return pathname.slice(0, -1);
+  return pathname || '/';
+}
+
+function normalizeUrl(path: string): string {
+  const clean = (path || '/').split('#')[0];
+  const [rawPathname, rawSearch = ''] = clean.split('?');
+  const pathname = normalizePath(rawPathname || '/');
+  const search = rawSearch ? `?${rawSearch}` : '';
+  return `${pathname}${search}`;
+}
+
+export function getCurrentPathWithSearch(): string {
+  return `${normalizePath(window.location.pathname)}${window.location.search || ''}`;
+}
+
+export function useSearch(): string {
+  const [search, setSearch] = useState(() => window.location.search || '');
+
+  useEffect(() => {
+    const handler = () => setSearch(window.location.search || '');
+    window.addEventListener('popstate', handler);
+    return () => window.removeEventListener('popstate', handler);
+  }, []);
+
+  return search;
+}
+
+export function getSearchParam(search: string, key: string): string | null {
+  const params = new URLSearchParams(search || '');
+  return params.get(key);
 }
 
 export function navigate(to: string, options?: { replace?: boolean }) {
-  const next = normalizePath(to);
-  const current = normalizePath(window.location.pathname);
+  const next = normalizeUrl(to);
+  const current = normalizeUrl(`${window.location.pathname}${window.location.search || ''}`);
   if (next === current) return;
 
   if (options?.replace) {
@@ -62,4 +92,3 @@ export const AppLink: React.FC<
     </a>
   );
 };
-

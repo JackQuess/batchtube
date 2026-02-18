@@ -1,13 +1,16 @@
 
 import React, { useState } from 'react';
-import { SupportedLanguage } from '../types';
+import { AuthUser, SupportedLanguage, Translations } from '../types';
 import { APP_VERSION } from '../constants';
 import { Globe } from 'lucide-react';
-import { navigate } from '../lib/simpleRouter';
+import { AppLink, navigate } from '../lib/simpleRouter';
 
 interface NavbarProps {
   lang: SupportedLanguage;
   setLang: (l: SupportedLanguage) => void;
+  t: Translations;
+  user: AuthUser | null;
+  onLogout: () => void;
 }
 
 const LANGUAGES: {code: SupportedLanguage, label: string}[] = [
@@ -20,7 +23,7 @@ const LANGUAGES: {code: SupportedLanguage, label: string}[] = [
   { code: 'ar', label: 'AR' },
 ];
 
-export const Navbar: React.FC<NavbarProps> = ({ lang, setLang }) => {
+export const Navbar: React.FC<NavbarProps> = ({ lang, setLang, t, user, onLogout }) => {
   const [showLangMenu, setShowLangMenu] = useState(false);
 
   return (
@@ -40,6 +43,41 @@ export const Navbar: React.FC<NavbarProps> = ({ lang, setLang }) => {
 
         {/* Right Actions */}
         <div className="flex items-center gap-3 min-w-fit">
+          <div className="hidden sm:flex items-center gap-2">
+            {user ? (
+              <>
+                <AppLink
+                  to="/account"
+                  className="px-3 py-1.5 text-xs font-semibold rounded-full border border-white/10 text-neutral-200 hover:border-primary hover:text-white transition-colors"
+                >
+                  {t.account}
+                </AppLink>
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-full border border-white/10 text-neutral-400 hover:text-white hover:border-white/20 transition-colors"
+                >
+                  {t.logout}
+                </button>
+              </>
+            ) : (
+              <>
+                <AppLink
+                  to="/login"
+                  className="px-3 py-1.5 text-xs font-semibold rounded-full border border-white/10 text-neutral-200 hover:border-primary hover:text-white transition-colors"
+                >
+                  {t.login}
+                </AppLink>
+                <AppLink
+                  to="/signup"
+                  className="px-3 py-1.5 text-xs font-semibold rounded-full bg-primary text-white hover:bg-red-600 transition-colors"
+                >
+                  {t.signup}
+                </AppLink>
+              </>
+            )}
+          </div>
+
           {/* Language Pill - Desktop */}
           <div className="hidden sm:flex bg-[#0b0b10] border border-white/10 rounded-full p-1 gap-1 overflow-x-auto">
             {LANGUAGES.map((l) => (
@@ -84,6 +122,35 @@ export const Navbar: React.FC<NavbarProps> = ({ lang, setLang }) => {
                   </button>
                 ))}
               </div>
+            )}
+          </div>
+
+          <div className="sm:hidden flex items-center gap-2">
+            {user ? (
+              <button
+                type="button"
+                onClick={() => navigate('/account')}
+                className="px-2.5 py-1 text-[11px] font-semibold rounded-full border border-white/10 text-neutral-200"
+              >
+                {t.account}
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => navigate('/login')}
+                  className="px-2.5 py-1 text-[11px] font-semibold rounded-full border border-white/10 text-neutral-200"
+                >
+                  {t.login}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/signup')}
+                  className="px-2.5 py-1 text-[11px] font-semibold rounded-full bg-primary text-white"
+                >
+                  {t.signup}
+                </button>
+              </>
             )}
           </div>
 

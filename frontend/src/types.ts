@@ -51,6 +51,14 @@ export interface SelectionItem {
   quality: VideoQuality;
 }
 
+export type UserPlan = 'free' | 'pro';
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  plan: UserPlan;
+}
+
 export interface BatchItem {
   index: number;
   title: string;
@@ -122,16 +130,52 @@ export interface Translations {
   faq: string;
   supportedSites: string;
   pricing: string;
+  seePricing: string;
+  upgrade: string;
+  login: string;
+  signup: string;
+  account: string;
+  logout: string;
   supportedPlatformsTitle: string;
   supportedPlatformsSubtitle: string;
   availabilityNote: string;
   plansTitle: string;
+  pricingSubtitle: string;
+  monthlyPrice: string;
   freePlan: string;
   proPlan: string;
   upgradeNow: string;
   currentPlan: string;
+  upToVideosPerBatch: string;
+  maxQuality: string;
+  adsEnabled: string;
+  limitedDailyUsage: string;
+  standardQueue: string;
+  noAds: string;
+  priorityQueue: string;
+  fasterZip: string;
+  retrySupport: string;
+  accountTitle: string;
+  accountSubtitle: string;
+  userIdLabel: string;
+  emailLabel: string;
+  currentPlanLabel: string;
+  planFreeLabel: string;
+  planProLabel: string;
+  manageSubscription: string;
+  manageSubscriptionSoon: string;
+  loginTitle: string;
+  loginSubtitle: string;
+  signupTitle: string;
+  signupSubtitle: string;
+  continueButton: string;
+  createAccountButton: string;
+  noAccountYet: string;
+  alreadyHaveAccount: string;
   upgradeForQualityTooltip: string;
   freeBatchLimitMessage: string;
+  checkoutUnavailable: string;
+  loginToUpgrade: string;
   close: string;
   acceptCookies: string;
   cookieMessage: string;
