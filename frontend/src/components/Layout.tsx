@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Logo } from './Logo';
 import { ViewState } from '../types';
+import { supabaseAuth } from '../lib/supabaseClient';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -10,6 +11,8 @@ interface LayoutProps {
 
 export const Layout: React.FC<LayoutProps> = ({ children, activeView, onNavigate }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const user = supabaseAuth.getUser();
+  const displayName = user?.email?.split('@')[0] || 'User';
 
   // Define which views are part of the "App" (Logged In) experience
   const appViews: ViewState[] = ['dashboard', 'new-batch', 'queue', 'history', 'files', 'settings', 'account', 'billing'];
@@ -68,10 +71,16 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeView, onNavigate
                 JD
               </div>
               <div className="flex-1 overflow-hidden">
-                <p className="text-sm font-medium truncate text-white">John Doe</p>
-                <p className="text-xs text-primary truncate">Pro Plan</p>
+                <p className="text-sm font-medium truncate text-white">{displayName}</p>
+                <p className="text-xs text-primary truncate">{user ? 'Authenticated' : 'Guest'}</p>
               </div>
-              <button onClick={() => onNavigate('landing')} className="text-gray-400 hover:text-white transition-colors">
+              <button
+                onClick={() => {
+                  supabaseAuth.signOut();
+                  onNavigate('landing');
+                }}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
                 <span className="material-symbols-outlined text-[18px]">logout</span>
               </button>
             </div>
@@ -125,7 +134,13 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeView, onNavigate
                </nav>
 
                <div className="p-4 border-t border-white/5">
-                  <button onClick={() => handleMobileNavigate('landing')} className="flex items-center gap-3 text-gray-400 hover:text-white w-full px-3 py-2">
+                  <button
+                    onClick={() => {
+                      supabaseAuth.signOut();
+                      handleMobileNavigate('landing');
+                    }}
+                    className="flex items-center gap-3 text-gray-400 hover:text-white w-full px-3 py-2"
+                  >
                     <span className="material-symbols-outlined">logout</span>
                     Sign Out
                   </button>

@@ -21,9 +21,10 @@ import { NotFoundScreen } from './screens/NotFoundScreen';
 import { QueueScreen } from './screens/QueueScreen';
 import { FilesScreen } from './screens/FilesScreen';
 import { ViewState } from './types';
+import { supabaseAuth } from './lib/supabaseClient';
 
 const App: React.FC = () => {
-  const [currentView, setCurrentView] = useState<ViewState>('landing');
+  const [currentView, setCurrentView] = useState<ViewState>(() => (supabaseAuth.getUser() ? 'dashboard' : 'landing'));
 
   const renderView = () => {
     switch (currentView) {

@@ -3,6 +3,7 @@ import { GlassInput } from '../components/GlassInput';
 import { Button } from '../components/Button';
 import { Logo } from '../components/Logo';
 import { ViewState } from '../types';
+import { supabaseAuth } from '../lib/supabaseClient';
 
 interface LoginScreenProps {
   onNavigate: (view: ViewState) => void;
@@ -10,10 +11,39 @@ interface LoginScreenProps {
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onNavigate('dashboard');
+    setLoading(true);
+    setError(null);
+    setInfo(null);
+    try {
+      await supabaseAuth.signInWithPassword(email.trim(), password);
+      onNavigate('dashboard');
+    } catch (err: any) {
+      setError(err?.message || 'Login failed.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMagicLink = async () => {
+    if (!email.trim()) return;
+    setLoading(true);
+    setError(null);
+    setInfo(null);
+    try {
+      await supabaseAuth.sendMagicLink(email.trim(), `${window.location.origin}/login`);
+      setInfo('Magic link sent. Check your inbox.');
+    } catch (err: any) {
+      setError(err?.message || 'Failed to send magic link.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -48,14 +78,28 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
             isPassword
             placeholder="Enter your password"
             required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
           />
           <div className="flex justify-end mt-2">
-            <a href="#" className="text-xs text-gray-500 hover:text-primary transition-colors">Forgot password?</a>
+            <button
+              type="button"
+              onClick={() => onNavigate('forgot-password')}
+              className="text-xs text-gray-500 hover:text-primary transition-colors"
+            >
+              Forgot password?
+            </button>
           </div>
         </div>
 
-        <Button type="submit" fullWidth icon="login">
-          Sign In
+        {(error || info) && (
+          <p className={`text-xs ${error ? 'text-red-400' : 'text-emerald-400'}`}>
+            {error || info}
+          </p>
+        )}
+
+        <Button type="submit" fullWidth icon="login" disabled={loading}>
+          {loading ? 'Signing in...' : 'Sign In'}
         </Button>
 
         <div className="relative flex py-2 items-center">
@@ -64,8 +108,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
           <div className="flex-grow border-t border-white/10"></div>
         </div>
 
-        <Button type="button" variant="google" fullWidth>
-          Log in with Google
+        <Button
+          type="button"
+          variant="secondary"
+          fullWidth
+          disabled={loading || !email.trim()}
+          onClick={handleMagicLink}
+        >
+          Send Magic Link
         </Button>
       </form>
 

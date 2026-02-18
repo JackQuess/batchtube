@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { GlassInput } from '../components/GlassInput';
 import { Button } from '../components/Button';
 import { ViewState } from '../types';
+import { supabaseAuth } from '../lib/supabaseClient';
 
 interface ForgotPasswordScreenProps {
   onNavigate: (view: ViewState) => void;
@@ -10,10 +11,21 @@ interface ForgotPasswordScreenProps {
 export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ onNavigate }) => {
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSent(true);
+    setLoading(true);
+    setError(null);
+    try {
+      await supabaseAuth.sendPasswordReset(email.trim(), `${window.location.origin}/login`);
+      setSent(true);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to send reset email.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (sent) {
@@ -52,8 +64,10 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ onNa
           onChange={(e) => setEmail(e.target.value)}
         />
 
-        <Button type="submit" fullWidth icon="send">
-          Send Reset Link
+        {error && <p className="text-xs text-red-400">{error}</p>}
+
+        <Button type="submit" fullWidth icon="send" disabled={loading}>
+          {loading ? 'Sending...' : 'Send Reset Link'}
         </Button>
       </form>
 

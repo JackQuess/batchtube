@@ -3,6 +3,7 @@ import { GlassInput } from '../components/GlassInput';
 import { Button } from '../components/Button';
 import { Logo } from '../components/Logo';
 import { ViewState } from '../types';
+import { supabaseAuth } from '../lib/supabaseClient';
 
 interface SignUpScreenProps {
   onNavigate: (view: ViewState) => void;
@@ -12,10 +13,48 @@ export const SignUpScreen: React.FC<SignUpScreenProps> = ({ onNavigate }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setTimeout(() => onNavigate('onboarding'), 500);
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setInfo(null);
+    try {
+      await supabaseAuth.signUp(email.trim(), password);
+      setInfo('Account created. Continue onboarding.');
+      onNavigate('onboarding');
+    } catch (err: any) {
+      setError(err?.message || 'Sign up failed.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMagicLink = async () => {
+    if (!email.trim()) return;
+    setLoading(true);
+    setError(null);
+    setInfo(null);
+    try {
+      await supabaseAuth.sendMagicLink(email.trim(), `${window.location.origin}/login`);
+      setInfo('Magic link sent. Check your inbox.');
+    } catch (err: any) {
+      setError(err?.message || 'Failed to send magic link.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -71,8 +110,14 @@ export const SignUpScreen: React.FC<SignUpScreenProps> = ({ onNavigate }) => {
           />
         </div>
 
-        <Button type="submit" fullWidth icon="arrow_forward">
-          Create Account
+        {(error || info) && (
+          <p className={`text-xs ${error ? 'text-red-400' : 'text-emerald-400'}`}>
+            {error || info}
+          </p>
+        )}
+
+        <Button type="submit" fullWidth icon="arrow_forward" disabled={loading}>
+          {loading ? 'Creating...' : 'Create Account'}
         </Button>
 
         {/* Divider */}
@@ -82,8 +127,14 @@ export const SignUpScreen: React.FC<SignUpScreenProps> = ({ onNavigate }) => {
           <div className="flex-grow border-t border-white/10"></div>
         </div>
 
-        <Button type="button" variant="google" fullWidth>
-          Continue with Google
+        <Button
+          type="button"
+          variant="secondary"
+          fullWidth
+          disabled={loading || !email.trim()}
+          onClick={handleMagicLink}
+        >
+          Continue with Magic Link
         </Button>
       </form>
 

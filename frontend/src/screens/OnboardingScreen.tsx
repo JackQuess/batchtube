@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '../components/Button';
 import { ViewState } from '../types';
+import { supabaseAuth } from '../lib/supabaseClient';
 
 interface OnboardingScreenProps {
   onNavigate: (view: ViewState) => void;
@@ -18,6 +19,16 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onNavigate }
     if (step < 3) {
       setStep(step + 1);
     } else {
+      const user = supabaseAuth.getUser();
+      const existing = localStorage.getItem('batchtube_onboarding_preferences');
+      const all = existing ? JSON.parse(existing) as Record<string, { role: string; format: string; completedAt: string }> : {};
+      const key = user?.id || user?.email || 'anonymous';
+      all[key] = {
+        role: selectedRole || 'Other',
+        format: selectedFormat || 'mp4',
+        completedAt: new Date().toISOString()
+      };
+      localStorage.setItem('batchtube_onboarding_preferences', JSON.stringify(all));
       onNavigate('dashboard');
     }
   };
