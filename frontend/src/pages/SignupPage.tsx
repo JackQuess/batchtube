@@ -1,22 +1,48 @@
 import React, { useState } from 'react';
 import { AppLink, navigate } from '../lib/simpleRouter';
 import { Translations } from '../types';
+import { supabaseAuth } from '../lib/supabaseClient';
 
 interface SignupPageProps {
   t: Translations;
-  onSignup: (email: string) => void;
+  onAuthChanged: () => void;
   returnUrl?: string;
 }
 
-export const SignupPage: React.FC<SignupPageProps> = ({ t, onSignup, returnUrl }) => {
+export const SignupPage: React.FC<SignupPageProps> = ({ t, onAuthChanged, returnUrl }) => {
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const clean = email.trim();
-    if (!clean) return;
-    onSignup(clean);
-    navigate(returnUrl || '/account', { replace: true });
+    if (!acceptedTerms) {
+      setError(t.acceptTermsLabel);
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError(`${t.confirmPasswordLabel} ${t.error.toLowerCase()}`);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setInfo(null);
+
+    try {
+      await supabaseAuth.signUp(email.trim(), password);
+      onAuthChanged();
+      setInfo(t.authCheckEmail);
+      navigate(returnUrl || '/account', { replace: true });
+    } catch (err: any) {
+      setError(err?.message || t.error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -37,11 +63,47 @@ export const SignupPage: React.FC<SignupPageProps> = ({ t, onSignup, returnUrl }
             />
           </label>
 
+          <label className="block">
+            <span className="text-xs text-neutral-400">{t.passwordLabel}</span>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-primary"
+            />
+          </label>
+
+          <label className="block">
+            <span className="text-xs text-neutral-400">{t.confirmPasswordLabel}</span>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-primary"
+            />
+          </label>
+
+          <label className="flex items-start gap-2 text-xs text-neutral-300">
+            <input
+              type="checkbox"
+              checked={acceptedTerms}
+              onChange={(e) => setAcceptedTerms(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>{t.acceptTermsLabel}</span>
+          </label>
+
+          {error && <div className="text-xs text-red-300">{error}</div>}
+          {info && <div className="text-xs text-emerald-300">{info}</div>}
+
           <button
             type="submit"
-            className="w-full py-2.5 rounded-xl bg-primary hover:bg-red-600 text-white text-sm font-semibold transition-colors"
+            disabled={loading}
+            className="w-full py-2.5 rounded-xl bg-primary hover:bg-red-600 text-white text-sm font-semibold transition-colors disabled:opacity-60"
           >
-            {t.createAccountButton}
+            {loading ? t.preparing : t.createAccountButton}
           </button>
         </form>
 
