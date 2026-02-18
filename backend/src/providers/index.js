@@ -24,6 +24,9 @@ const { coubProvider } = require('./coub');
 const { archiveProvider } = require('./archive');
 const { ninegagProvider } = require('./ninegag');
 const { loomProvider } = require('./loom');
+const { linkedinProvider } = require('./linkedin');
+const { pinterestProvider } = require('./pinterest');
+const { tumblrProvider } = require('./tumblr');
 const { genericProvider } = require('./generic');
 
 const PROVIDERS = [
@@ -48,6 +51,9 @@ const PROVIDERS = [
   archiveProvider,
   ninegagProvider,
   loomProvider,
+  linkedinProvider,
+  pinterestProvider,
+  tumblrProvider,
   genericProvider
 ];
 

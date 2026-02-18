@@ -54,6 +54,9 @@ function getFallbackTitle(providerId, url) {
   if (providerId === 'archive') return 'Archive.org media';
   if (providerId === '9gag') return '9GAG video';
   if (providerId === 'loom') return 'Loom recording';
+  if (providerId === 'linkedin') return 'LinkedIn video';
+  if (providerId === 'pinterest') return 'Pinterest video';
+  if (providerId === 'tumblr') return 'Tumblr media';
 
   try {
     const parsed = new URL(url);
@@ -86,6 +89,9 @@ function getFallbackChannel(providerId) {
   if (providerId === 'archive') return 'Archive.org';
   if (providerId === '9gag') return '9GAG';
   if (providerId === 'loom') return 'Loom';
+  if (providerId === 'linkedin') return 'LinkedIn';
+  if (providerId === 'pinterest') return 'Pinterest';
+  if (providerId === 'tumblr') return 'Tumblr';
   return 'Direct link';
 }
 

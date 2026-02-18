@@ -25,6 +25,9 @@ import { coubProvider } from './coub';
 import { archiveProvider } from './archive';
 import { ninegagProvider } from './ninegag';
 import { loomProvider } from './loom';
+import { linkedinProvider } from './linkedin';
+import { pinterestProvider } from './pinterest';
+import { tumblrProvider } from './tumblr';
 import { genericProvider } from './generic';
 
 export const PROVIDERS: Provider[] = [
@@ -49,6 +52,9 @@ export const PROVIDERS: Provider[] = [
   archiveProvider,
   ninegagProvider,
   loomProvider,
+  linkedinProvider,
+  pinterestProvider,
+  tumblrProvider,
   genericProvider
 ];
 

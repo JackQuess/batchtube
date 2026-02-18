@@ -20,6 +20,9 @@ export type ProviderId =
   | 'archive'
   | '9gag'
   | 'loom'
+  | 'linkedin'
+  | 'pinterest'
+  | 'tumblr'
   | 'generic';
 
 export type ProviderErrorCode =
