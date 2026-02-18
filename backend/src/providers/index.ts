@@ -13,6 +13,9 @@ import { vimeoProvider } from './vimeo';
 import { dailymotionProvider } from './dailymotion';
 import { twitchProvider } from './twitch';
 import { redditProvider } from './reddit';
+import { soundcloudProvider } from './soundcloud';
+import { mixcloudProvider } from './mixcloud';
+import { streamableProvider } from './streamable';
 import { genericProvider } from './generic';
 
 export const PROVIDERS: Provider[] = [
@@ -25,6 +28,9 @@ export const PROVIDERS: Provider[] = [
   dailymotionProvider,
   twitchProvider,
   redditProvider,
+  soundcloudProvider,
+  mixcloudProvider,
+  streamableProvider,
   genericProvider
 ];
 

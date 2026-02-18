@@ -42,6 +42,9 @@ function getFallbackTitle(providerId, url) {
   if (providerId === 'dailymotion') return 'Dailymotion video';
   if (providerId === 'twitch') return 'Twitch clip/VOD';
   if (providerId === 'reddit') return 'Reddit video';
+  if (providerId === 'soundcloud') return 'SoundCloud track';
+  if (providerId === 'mixcloud') return 'Mixcloud show';
+  if (providerId === 'streamable') return 'Streamable video';
 
   try {
     const parsed = new URL(url);
@@ -62,6 +65,9 @@ function getFallbackChannel(providerId) {
   if (providerId === 'dailymotion') return 'Dailymotion';
   if (providerId === 'twitch') return 'Twitch';
   if (providerId === 'reddit') return 'Reddit';
+  if (providerId === 'soundcloud') return 'SoundCloud';
+  if (providerId === 'mixcloud') return 'Mixcloud';
+  if (providerId === 'streamable') return 'Streamable';
   return 'Direct link';
 }
 

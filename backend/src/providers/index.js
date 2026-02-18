@@ -12,6 +12,9 @@ const { vimeoProvider } = require('./vimeo');
 const { dailymotionProvider } = require('./dailymotion');
 const { twitchProvider } = require('./twitch');
 const { redditProvider } = require('./reddit');
+const { soundcloudProvider } = require('./soundcloud');
+const { mixcloudProvider } = require('./mixcloud');
+const { streamableProvider } = require('./streamable');
 const { genericProvider } = require('./generic');
 
 const PROVIDERS = [
@@ -24,6 +27,9 @@ const PROVIDERS = [
   dailymotionProvider,
   twitchProvider,
   redditProvider,
+  soundcloudProvider,
+  mixcloudProvider,
+  streamableProvider,
   genericProvider
 ];
 

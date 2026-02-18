@@ -8,6 +8,9 @@ export type ProviderId =
   | 'dailymotion'
   | 'twitch'
   | 'reddit'
+  | 'soundcloud'
+  | 'mixcloud'
+  | 'streamable'
   | 'generic';
 
 export type ProviderErrorCode =
