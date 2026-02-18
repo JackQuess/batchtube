@@ -121,6 +121,17 @@ export interface Translations {
   howItWorks: string;
   faq: string;
   supportedSites: string;
+  pricing: string;
+  supportedPlatformsTitle: string;
+  supportedPlatformsSubtitle: string;
+  availabilityNote: string;
+  plansTitle: string;
+  freePlan: string;
+  proPlan: string;
+  upgradeNow: string;
+  currentPlan: string;
+  upgradeForQualityTooltip: string;
+  freeBatchLimitMessage: string;
   close: string;
   acceptCookies: string;
   cookieMessage: string;

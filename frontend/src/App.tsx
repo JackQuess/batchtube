@@ -7,9 +7,11 @@ import { api } from './services/apiService';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
 import { VideoCard } from './components/VideoCard';
+import { PlansSection } from './components/PlansSection';
 import { SelectionBar } from './components/SelectionBar';
 import { SelectionModal } from './components/SelectionModal';
 import { ProgressModal } from './components/ProgressModal';
+import { PlanLimitModal } from './components/PlanLimitModal';
 import { Footer } from './components/Footer';
 import { CookieConsent } from './components/CookieConsent';
 import { AdSlotSearch } from './components/AdSlotSearch';
@@ -31,6 +33,7 @@ const App: React.FC = () => {
 
   // Global State
   const [lang, setLang] = useState<SupportedLanguage>('en');
+  const isProPlan = false; // Client-side plan simulation until backend plan API is ready.
   const t = TRANSLATIONS[lang];
   const consent = useCookieConsent();
   const consentGranted = consent === 'accepted';
@@ -49,6 +52,7 @@ const App: React.FC = () => {
   // Job/Modal State
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [isSelectionModalOpen, setIsSelectionModalOpen] = useState(false);
+  const [isPlanLimitModalOpen, setIsPlanLimitModalOpen] = useState(false);
 
   useEffect(() => {
     if (route !== '/') return;
@@ -71,9 +75,16 @@ const App: React.FC = () => {
     if (batchFormat === 'mp3') {
       setBatchQuality('320k');
     } else {
-      setBatchQuality('1080p');
+      setBatchQuality(isProPlan ? '1080p' : '720p');
     }
-  }, [batchFormat]);
+  }, [batchFormat, isProPlan]);
+
+  useEffect(() => {
+    if (isProPlan) return;
+    if (batchFormat === 'mp4' && (batchQuality === '1080p' || batchQuality === '1440p' || batchQuality === '4K')) {
+      setBatchQuality('720p');
+    }
+  }, [batchFormat, batchQuality, isProPlan]);
 
   // Handlers
   const getSelectionKey = (video: VideoResult) => video.url || video.id;
@@ -118,6 +129,10 @@ const App: React.FC = () => {
 
   const handleBatchDownload = async () => {
     if (selectedItems.length === 0) return;
+    if (!isProPlan && selectedItems.length > 3) {
+      setIsPlanLimitModalOpen(true);
+      return;
+    }
     try {
       // Map to new API format
       const items = selectedItems.map(item => ({
@@ -129,7 +144,7 @@ const App: React.FC = () => {
       // Map quality: '320k' -> '1080p' for MP3, keep as is for MP4
       const quality = batchFormat === 'mp3' 
         ? '1080p' // MP3 doesn't use quality, but API expects it
-        : (batchQuality === '4K' ? '4k' : '1080p');
+        : (batchQuality === '4K' ? '4k' : batchQuality === '720p' ? '720p' : batchQuality === '480p' ? '480p' : '1080p');
 
       const { jobId } = await batchAPI.createJob({
         items,
@@ -173,6 +188,7 @@ const App: React.FC = () => {
         {isHome ? (
           <>
             <Hero onSearch={handleSearch} loading={isSearching} t={t} />
+            <PlansSection t={t} />
 
             {searchError && (
               <div className="mt-6 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
@@ -212,6 +228,8 @@ const App: React.FC = () => {
           <Faq lang={lang} t={t} />
         ) : route === '/supported-sites' ? (
           <SupportedSites lang={lang} t={t} />
+        ) : route === '/pricing' ? (
+          <PlansSection t={t} />
         ) : route === '/legal' ? (
           <LegalPage type="legal" lang={lang} t={t} />
         ) : route === '/terms' ? (
@@ -229,6 +247,7 @@ const App: React.FC = () => {
         <SelectionBar 
           count={selectedItems.length}
           format={batchFormat}
+          isProPlan={isProPlan}
           setFormat={setBatchFormat}
           quality={batchQuality}
           setQuality={setBatchQuality}
@@ -256,6 +275,14 @@ const App: React.FC = () => {
           jobId={activeJobId} 
           onClose={() => setActiveJobId(null)} 
           totalItems={selectedItems.length}
+          t={t}
+        />
+      )}
+
+      {isHome && (
+        <PlanLimitModal
+          isOpen={isPlanLimitModalOpen}
+          onClose={() => setIsPlanLimitModalOpen(false)}
           t={t}
         />
       )}

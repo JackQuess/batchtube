@@ -5,6 +5,7 @@ import { X, Archive, ChevronDown } from 'lucide-react';
 interface SelectionBarProps {
   count: number;
   format: VideoFormat;
+  isProPlan: boolean;
   setFormat: (f: VideoFormat) => void;
   quality: VideoQuality;
   setQuality: (q: VideoQuality) => void;
@@ -18,7 +19,7 @@ const MP4_QUALITIES: MP4Quality[] = ['4K', '1440p', '1080p', '720p', '480p'];
 const MP3_QUALITIES: MP3Quality[] = ['320k', '128k'];
 
 export const SelectionBar: React.FC<SelectionBarProps> = ({
-  count, format, setFormat, quality, setQuality, onClear, onDownload, onViewList, t
+  count, format, isProPlan, setFormat, quality, setQuality, onClear, onDownload, onViewList, t
 }) => {
   const [showFormatMenu, setShowFormatMenu] = useState(false);
   const [showQualityMenu, setShowQualityMenu] = useState(false);
@@ -26,6 +27,7 @@ export const SelectionBar: React.FC<SelectionBarProps> = ({
   if (count === 0) return null;
 
   const qualities = format === 'mp3' ? MP3_QUALITIES : MP4_QUALITIES;
+  const lockedQualities = ['4K', '1440p', '1080p'];
   const selectionLabel = count === 1 ? t.itemSelected : t.itemsSelected;
 
   const handleFormatChange = (newFormat: VideoFormat) => {
@@ -115,18 +117,27 @@ export const SelectionBar: React.FC<SelectionBarProps> = ({
             {showQualityMenu && (
               <div className="absolute bottom-full mb-2 left-0 w-full bg-[#1a1a20] border border-white/10 rounded-lg overflow-hidden z-20 max-h-48 overflow-y-auto min-w-[100px]">
                 {qualities.map((q) => (
+                  (() => {
+                    const isLocked = !isProPlan && format === 'mp4' && lockedQualities.includes(q);
+                    return (
                   <div
                     key={q}
                     onClick={() => {
+                      if (isLocked) return;
                       setQuality(q);
                       setShowQualityMenu(false);
                     }}
-                    className={`px-3 py-2 text-xs sm:text-sm hover:bg-white/10 cursor-pointer ${
+                    title={isLocked ? t.upgradeForQualityTooltip : undefined}
+                    className={`px-3 py-2 text-xs sm:text-sm ${
+                      isLocked ? 'text-gray-500 cursor-not-allowed' : 'hover:bg-white/10 cursor-pointer'
+                    } ${
                       quality === q ? 'text-primary font-bold' : 'text-gray-300'
                     }`}
                   >
                     {q}
                   </div>
+                    );
+                  })()
                 ))}
               </div>
             )}
@@ -192,23 +203,35 @@ export const SelectionBar: React.FC<SelectionBarProps> = ({
             {showQualityMenu && (
               <div className="absolute bottom-full mb-2 left-0 w-full bg-[#1a1a20] border border-white/10 rounded-lg overflow-hidden z-20 max-h-48 overflow-y-auto min-w-[100px]">
                 {qualities.map((q) => (
+                  (() => {
+                    const isLocked = !isProPlan && format === 'mp4' && lockedQualities.includes(q);
+                    return (
                   <div
                     key={q}
                     onClick={() => {
+                      if (isLocked) return;
                       setQuality(q);
                       setShowQualityMenu(false);
                     }}
-                    className={`px-3 py-2 text-xs hover:bg-white/10 cursor-pointer ${
+                    title={isLocked ? t.upgradeForQualityTooltip : undefined}
+                    className={`px-3 py-2 text-xs ${
+                      isLocked ? 'text-gray-500 cursor-not-allowed' : 'hover:bg-white/10 cursor-pointer'
+                    } ${
                       quality === q ? 'text-primary font-bold' : 'text-gray-300'
                     }`}
                   >
                     {q}
                   </div>
+                    );
+                  })()
                 ))}
               </div>
             )}
           </div>
         </div>
+        {!isProPlan && format === 'mp4' && (
+          <div className="text-[11px] text-amber-300/90">{t.upgradeForQualityTooltip}</div>
+        )}
         <button
           onClick={onDownload}
           className="w-full bg-primary hover:bg-red-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-primary/20 transition-all active:scale-95"

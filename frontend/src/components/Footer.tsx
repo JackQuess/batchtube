@@ -30,6 +30,10 @@ export const Footer: React.FC<FooterProps> = ({ t }) => {
             {t.supportedSites}
           </AppLink>
           <span className="text-gray-600">·</span>
+          <AppLink to="/pricing" className="hover:text-primary transition-colors text-xs sm:text-sm">
+            {t.pricing}
+          </AppLink>
+          <span className="text-gray-600">·</span>
           <AppLink to="/legal" className="hover:text-primary transition-colors text-xs sm:text-sm">
             {t.legal}
           </AppLink>
