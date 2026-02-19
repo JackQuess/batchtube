@@ -4,6 +4,6 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "sh -c 'npm run prisma:generate && npm run prisma:migrate && node dist/${SERVICE_ENTRY:-server}.js'"
+    "startCommand": "sh -c 'npm run prisma:generate && npm run prisma:migrate && ENTRY=${SERVICE_ENTRY:-server}; if [ \"$ENTRY\" = \"worker\" ]; then ENTRY=queues/worker; fi; node dist/${ENTRY}.js'"
   }
 }
