@@ -15,9 +15,10 @@ export const config = {
   s3: {
     endpoint: process.env.S3_ENDPOINT ?? 'http://localhost:9000',
     region: process.env.S3_REGION ?? 'us-east-1',
-    accessKeyId: process.env.S3_ACCESS_KEY ?? 'minio',
-    secretAccessKey: process.env.S3_SECRET_KEY ?? 'minio123',
+    accessKeyId: process.env.S3_ACCESS_KEY ?? process.env.AWS_ACCESS_KEY_ID ?? 'minio',
+    secretAccessKey: process.env.S3_SECRET_KEY ?? process.env.AWS_SECRET_ACCESS_KEY ?? 'minio123',
     bucket: process.env.S3_BUCKET ?? 'batchtube',
-    forcePathStyle: String(process.env.S3_FORCE_PATH_STYLE ?? 'true') === 'true'
+    forcePathStyle: String(process.env.S3_FORCE_PATH_STYLE ?? 'true') === 'true',
+    skipBucketEnsure: String(process.env.S3_SKIP_BUCKET_ENSURE ?? 'false') === 'true'
   }
 };

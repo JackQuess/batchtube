@@ -19,9 +19,25 @@ export const s3 = new S3Client({
 });
 
 export async function ensureBucket() {
+  if (config.s3.skipBucketEnsure) {
+    return;
+  }
+
   try {
     await s3.send(new HeadBucketCommand({ Bucket: config.s3.bucket }));
-  } catch {
+  } catch (error: any) {
+    const statusCode = Number(error?.$metadata?.httpStatusCode || 0);
+    const code = String(error?.Code || error?.code || error?.name || '');
+    const canCreate =
+      statusCode === 404 ||
+      code === 'NotFound' ||
+      code === 'NoSuchBucket' ||
+      code === 'NoSuchBucketPolicy';
+
+    if (!canCreate) {
+      throw error;
+    }
+
     await s3.send(new CreateBucketCommand({ Bucket: config.s3.bucket }));
   }
 }
