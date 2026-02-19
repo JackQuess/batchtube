@@ -3,7 +3,7 @@ import { GlassInput } from '../components/GlassInput';
 import { Button } from '../components/Button';
 import { Logo } from '../components/Logo';
 import { ViewState } from '../types';
-import { supabaseAuth } from '../lib/supabaseClient';
+import { loginWithEmail } from '../lib/auth';
 
 interface LoginScreenProps {
   onNavigate: (view: ViewState) => void;
@@ -14,33 +14,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
-  
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    setInfo(null);
+
     try {
-      await supabaseAuth.signInWithPassword(email.trim(), password);
+      loginWithEmail(email, password);
       onNavigate('dashboard');
     } catch (err: any) {
-      setError(err?.message || 'Login failed.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleMagicLink = async () => {
-    if (!email.trim()) return;
-    setLoading(true);
-    setError(null);
-    setInfo(null);
-    try {
-      await supabaseAuth.sendMagicLink(email.trim(), `${window.location.origin}/login`);
-      setInfo('Magic link sent. Check your inbox.');
-    } catch (err: any) {
-      setError(err?.message || 'Failed to send magic link.');
+      setError(err?.message || 'Giriş başarısız.');
     } finally {
       setLoading(false);
     }
@@ -55,11 +39,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
 
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">Welcome back</h1>
-        <p className="text-gray-400 text-sm">Enter your credentials to access your workspace.</p>
+        <p className="text-gray-400 text-sm">Devam etmek için hesabına giriş yap.</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        <GlassInput 
+        <GlassInput
           id="email"
           label="Email Address"
           icon="mail"
@@ -69,9 +53,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
-        
+
         <div>
-          <GlassInput 
+          <GlassInput
             id="password"
             label="Password"
             icon="lock"
@@ -92,40 +76,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
           </div>
         </div>
 
-        {(error || info) && (
-          <p className={`text-xs ${error ? 'text-red-400' : 'text-emerald-400'}`}>
-            {error || info}
-          </p>
-        )}
+        {error && <p className="text-xs text-red-400">{error}</p>}
 
         <Button type="submit" fullWidth icon="login" disabled={loading}>
           {loading ? 'Signing in...' : 'Sign In'}
-        </Button>
-
-        <div className="relative flex py-2 items-center">
-          <div className="flex-grow border-t border-white/10"></div>
-          <span className="flex-shrink-0 mx-4 text-gray-500 text-xs">Or continue with</span>
-          <div className="flex-grow border-t border-white/10"></div>
-        </div>
-
-        <Button
-          type="button"
-          variant="secondary"
-          fullWidth
-          disabled={loading || !email.trim()}
-          onClick={handleMagicLink}
-        >
-          Send Magic Link
         </Button>
       </form>
 
       <div className="mt-8 text-center">
         <p className="text-sm text-gray-400">
           Don't have an account?{' '}
-          <button 
-            onClick={() => onNavigate('signup')} 
-            className="text-primary hover:text-red-400 font-medium transition-colors"
-          >
+          <button onClick={() => onNavigate('signup')} className="text-primary hover:text-red-400 font-medium transition-colors">
             Create account
           </button>
         </p>

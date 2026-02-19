@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { GlassInput } from '../components/GlassInput';
 import { Button } from '../components/Button';
 import { ViewState } from '../types';
-import { supabaseAuth } from '../lib/supabaseClient';
+import { sendResetForEmail } from '../lib/auth';
 
 interface ForgotPasswordScreenProps {
   onNavigate: (view: ViewState) => void;
@@ -18,11 +18,14 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ onNa
     e.preventDefault();
     setLoading(true);
     setError(null);
+
     try {
-      await supabaseAuth.sendPasswordReset(email.trim(), `${window.location.origin}/login`);
+      const exists = sendResetForEmail(email);
+      if (!exists) {
+        setError('Bu e-posta ile kayıtlı hesap bulunamadı.');
+        return;
+      }
       setSent(true);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to send reset email.');
     } finally {
       setLoading(false);
     }
@@ -31,16 +34,16 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ onNa
   if (sent) {
     return (
       <div className="w-full max-w-[440px] glass-card rounded-2xl p-8 sm:p-10 transform transition-all animate-in fade-in zoom-in duration-300 text-center">
-         <div className="w-16 h-16 bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6">
-            <span className="material-symbols-outlined text-3xl">mark_email_read</span>
-         </div>
-         <h1 className="text-2xl font-bold text-white mb-2">Check your inbox</h1>
-         <p className="text-gray-400 text-sm mb-8">
-           We've sent a password reset link to <span className="text-white font-medium">{email}</span>
-         </p>
-         <Button variant="secondary" fullWidth onClick={() => onNavigate('login')}>
-           Back to Login
-         </Button>
+        <div className="w-16 h-16 bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6">
+          <span className="material-symbols-outlined text-3xl">mark_email_read</span>
+        </div>
+        <h1 className="text-2xl font-bold text-white mb-2">Reset ready</h1>
+        <p className="text-gray-400 text-sm mb-8">
+          <span className="text-white font-medium">{email}</span> için şifre sıfırlama isteği alındı. Şu an demo akışta mail göndermiyoruz.
+        </p>
+        <Button variant="secondary" fullWidth onClick={() => onNavigate('login')}>
+          Back to Login
+        </Button>
       </div>
     );
   }
@@ -53,7 +56,7 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ onNa
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <GlassInput 
+        <GlassInput
           id="email"
           label="Email Address"
           icon="mail"
@@ -72,10 +75,7 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ onNa
       </form>
 
       <div className="mt-8 text-center">
-        <button 
-          onClick={() => onNavigate('login')} 
-          className="text-sm text-gray-500 hover:text-white transition-colors flex items-center justify-center gap-2 mx-auto"
-        >
+        <button onClick={() => onNavigate('login')} className="text-sm text-gray-500 hover:text-white transition-colors flex items-center justify-center gap-2 mx-auto">
           <span className="material-symbols-outlined text-sm">arrow_back</span>
           Back to Login
         </button>

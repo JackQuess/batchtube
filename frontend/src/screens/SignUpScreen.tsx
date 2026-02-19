@@ -3,7 +3,7 @@ import { GlassInput } from '../components/GlassInput';
 import { Button } from '../components/Button';
 import { Logo } from '../components/Logo';
 import { ViewState } from '../types';
-import { supabaseAuth } from '../lib/supabaseClient';
+import { registerWithEmail } from '../lib/auth';
 
 interface SignUpScreenProps {
   onNavigate: (view: ViewState) => void;
@@ -15,43 +15,28 @@ export const SignUpScreen: React.FC<SignUpScreenProps> = ({ onNavigate }) => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters.');
+
+    if (password.length < 6) {
+      setError('Şifre en az 6 karakter olmalı.');
       return;
     }
+
     if (password !== confirmPassword) {
-      setError('Passwords do not match.');
+      setError('Şifreler eşleşmiyor.');
       return;
     }
 
     setLoading(true);
     setError(null);
-    setInfo(null);
+
     try {
-      await supabaseAuth.signUp(email.trim(), password);
-      setInfo('Account created. Continue onboarding.');
+      registerWithEmail(email, password);
       onNavigate('onboarding');
     } catch (err: any) {
-      setError(err?.message || 'Sign up failed.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleMagicLink = async () => {
-    if (!email.trim()) return;
-    setLoading(true);
-    setError(null);
-    setInfo(null);
-    try {
-      await supabaseAuth.sendMagicLink(email.trim(), `${window.location.origin}/login`);
-      setInfo('Magic link sent. Check your inbox.');
-    } catch (err: any) {
-      setError(err?.message || 'Failed to send magic link.');
+      setError(err?.message || 'Kayıt başarısız.');
     } finally {
       setLoading(false);
     }
@@ -64,16 +49,13 @@ export const SignUpScreen: React.FC<SignUpScreenProps> = ({ onNavigate }) => {
         <span className="text-lg font-semibold tracking-tight text-white">BatchTube</span>
       </div>
 
-      {/* Header */}
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">Create your account</h1>
         <p className="text-gray-400 text-sm">Start your professional workflow today.</p>
       </div>
 
-      {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-5">
-        
-        <GlassInput 
+        <GlassInput
           id="email"
           label="Email Address"
           icon="mail"
@@ -84,75 +66,52 @@ export const SignUpScreen: React.FC<SignUpScreenProps> = ({ onNavigate }) => {
           onChange={(e) => setEmail(e.target.value)}
         />
 
-        <div className="space-y-1.5">
-          <GlassInput 
-            id="password"
-            label="Password"
-            icon="lock"
-            isPassword
-            placeholder="Minimum 8 characters"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </div>
+        <GlassInput
+          id="password"
+          label="Password"
+          icon="lock"
+          isPassword
+          placeholder="Minimum 6 characters"
+          required
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
 
-        <div className="space-y-1.5">
-          <GlassInput 
-            id="confirm-password"
-            label="Confirm Password"
-            icon="lock_reset"
-            isPassword
-            placeholder="Confirm your password"
-            required
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-          />
-        </div>
+        <GlassInput
+          id="confirm-password"
+          label="Confirm Password"
+          icon="lock_reset"
+          isPassword
+          placeholder="Confirm your password"
+          required
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+        />
 
-        {(error || info) && (
-          <p className={`text-xs ${error ? 'text-red-400' : 'text-emerald-400'}`}>
-            {error || info}
-          </p>
-        )}
+        {error && <p className="text-xs text-red-400">{error}</p>}
 
         <Button type="submit" fullWidth icon="arrow_forward" disabled={loading}>
           {loading ? 'Creating...' : 'Create Account'}
         </Button>
-
-        {/* Divider */}
-        <div className="relative flex py-2 items-center">
-          <div className="flex-grow border-t border-white/10"></div>
-          <span className="flex-shrink-0 mx-4 text-gray-500 text-xs">Or continue with</span>
-          <div className="flex-grow border-t border-white/10"></div>
-        </div>
-
-        <Button
-          type="button"
-          variant="secondary"
-          fullWidth
-          disabled={loading || !email.trim()}
-          onClick={handleMagicLink}
-        >
-          Continue with Magic Link
-        </Button>
       </form>
 
-      {/* Footer Links */}
       <div className="mt-8 text-center space-y-4">
         <p className="text-sm text-gray-400">
           Already have an account?{' '}
-          <button 
-            onClick={() => onNavigate('login')} 
-            className="text-primary hover:text-red-400 font-medium transition-colors"
-          >
+          <button onClick={() => onNavigate('login')} className="text-primary hover:text-red-400 font-medium transition-colors">
             Log in
           </button>
         </p>
         <p className="text-xs text-gray-600 leading-relaxed px-4">
           By clicking create account, you agree to our{' '}
-          <button onClick={() => onNavigate('legal')} className="hover:text-gray-400 underline decoration-gray-700">Terms</button> and{' '}
-          <button onClick={() => onNavigate('legal')} className="hover:text-gray-400 underline decoration-gray-700">Privacy Policy</button>.
+          <button onClick={() => onNavigate('legal')} className="hover:text-gray-400 underline decoration-gray-700">
+            Terms
+          </button>{' '}
+          and{' '}
+          <button onClick={() => onNavigate('legal')} className="hover:text-gray-400 underline decoration-gray-700">
+            Privacy Policy
+          </button>
+          .
         </p>
       </div>
     </div>

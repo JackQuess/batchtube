@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { AppLink } from '../lib/simpleRouter';
 import { Translations } from '../types';
-import { supabaseAuth } from '../lib/supabaseClient';
+import { sendResetForEmail } from '../lib/auth';
 
 interface ForgotPasswordPageProps {
   t: Translations;
@@ -18,12 +18,14 @@ export const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({ t }) => 
     setLoading(true);
     setError(null);
     setInfo(null);
+
     try {
-      const redirectTo = `${window.location.origin}/login`;
-      await supabaseAuth.sendPasswordReset(email.trim(), redirectTo);
-      setInfo(t.authCheckEmail);
-    } catch (err: any) {
-      setError(err?.message || t.error);
+      const ok = sendResetForEmail(email.trim());
+      if (!ok) {
+        setError(t.error);
+      } else {
+        setInfo(t.authCheckEmail);
+      }
     } finally {
       setLoading(false);
     }

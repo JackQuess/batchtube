@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Layout } from './components/Layout';
 import { SignUpScreen } from './screens/SignUpScreen';
 import { LoginScreen } from './screens/LoginScreen';
@@ -21,10 +21,24 @@ import { NotFoundScreen } from './screens/NotFoundScreen';
 import { QueueScreen } from './screens/QueueScreen';
 import { FilesScreen } from './screens/FilesScreen';
 import { ViewState } from './types';
-import { supabaseAuth } from './lib/supabaseClient';
+import { AUTH_CHANGE_EVENT, getStoredUser } from './lib/auth';
 
 const App: React.FC = () => {
-  const [currentView, setCurrentView] = useState<ViewState>(() => (supabaseAuth.getUser() ? 'dashboard' : 'landing'));
+  const [currentView, setCurrentView] = useState<ViewState>(() => (getStoredUser() ? 'dashboard' : 'landing'));
+
+  useEffect(() => {
+    const handler = () => {
+      if (!getStoredUser()) {
+        setCurrentView((current) => {
+          const protectedViews: ViewState[] = ['dashboard', 'new-batch', 'queue', 'history', 'files', 'account', 'billing', 'settings'];
+          return protectedViews.includes(current) ? 'landing' : current;
+        });
+      }
+    };
+
+    window.addEventListener(AUTH_CHANGE_EVENT, handler);
+    return () => window.removeEventListener(AUTH_CHANGE_EVENT, handler);
+  }, []);
 
   const renderView = () => {
     switch (currentView) {

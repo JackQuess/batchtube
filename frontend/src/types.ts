@@ -20,6 +20,12 @@ export type ViewState =
   | 'settings'
   | 'not-found';
 
+export interface AuthUser {
+  id: string;
+  email: string;
+  plan: 'free' | 'pro';
+}
+
 export interface User {
   email: string;
   name: string;

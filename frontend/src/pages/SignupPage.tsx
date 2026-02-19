@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { AppLink, navigate } from '../lib/simpleRouter';
 import { Translations } from '../types';
-import { supabaseAuth } from '../lib/supabaseClient';
+import { registerWithEmail } from '../lib/auth';
 
 interface SignupPageProps {
   t: Translations;
@@ -16,7 +16,6 @@ export const SignupPage: React.FC<SignupPageProps> = ({ t, onAuthChanged, return
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,12 +30,10 @@ export const SignupPage: React.FC<SignupPageProps> = ({ t, onAuthChanged, return
 
     setLoading(true);
     setError(null);
-    setInfo(null);
 
     try {
-      await supabaseAuth.signUp(email.trim(), password);
+      registerWithEmail(email.trim(), password);
       onAuthChanged();
-      setInfo(t.authCheckEmail);
       navigate(returnUrl || '/account', { replace: true });
     } catch (err: any) {
       setError(err?.message || t.error);
@@ -86,17 +83,11 @@ export const SignupPage: React.FC<SignupPageProps> = ({ t, onAuthChanged, return
           </label>
 
           <label className="flex items-start gap-2 text-xs text-neutral-300">
-            <input
-              type="checkbox"
-              checked={acceptedTerms}
-              onChange={(e) => setAcceptedTerms(e.target.checked)}
-              className="mt-0.5"
-            />
+            <input type="checkbox" checked={acceptedTerms} onChange={(e) => setAcceptedTerms(e.target.checked)} className="mt-0.5" />
             <span>{t.acceptTermsLabel}</span>
           </label>
 
           {error && <div className="text-xs text-red-300">{error}</div>}
-          {info && <div className="text-xs text-emerald-300">{info}</div>}
 
           <button
             type="submit"

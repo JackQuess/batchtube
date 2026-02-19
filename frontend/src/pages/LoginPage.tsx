@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { AppLink, navigate } from '../lib/simpleRouter';
 import { Translations } from '../types';
-import { supabaseAuth } from '../lib/supabaseClient';
+import { loginWithEmail } from '../lib/auth';
 
 interface LoginPageProps {
   t: Translations;
@@ -14,7 +14,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ t, returnUrl, onAuthChange
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
 
   const finishAuth = () => {
     onAuthChanged();
@@ -25,25 +24,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ t, returnUrl, onAuthChange
     e.preventDefault();
     setLoading(true);
     setError(null);
-    setInfo(null);
     try {
-      await supabaseAuth.signInWithPassword(email.trim(), password);
+      loginWithEmail(email.trim(), password);
       finishAuth();
-    } catch (err: any) {
-      setError(err?.message || t.error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleMagicLink = async () => {
-    setLoading(true);
-    setError(null);
-    setInfo(null);
-    try {
-      const redirectTo = `${window.location.origin}/login`;
-      await supabaseAuth.sendMagicLink(email.trim(), redirectTo);
-      setInfo(t.authCheckEmail);
     } catch (err: any) {
       setError(err?.message || t.error);
     } finally {
@@ -81,7 +64,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ t, returnUrl, onAuthChange
           </label>
 
           {error && <div className="text-xs text-red-300">{error}</div>}
-          {info && <div className="text-xs text-emerald-300">{info}</div>}
 
           <button
             type="submit"
@@ -89,15 +71,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ t, returnUrl, onAuthChange
             className="w-full py-2.5 rounded-xl bg-primary hover:bg-red-600 text-white text-sm font-semibold transition-colors disabled:opacity-60"
           >
             {loading ? t.preparing : t.continueButton}
-          </button>
-
-          <button
-            type="button"
-            disabled={loading || !email.trim()}
-            onClick={handleMagicLink}
-            className="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-sm font-semibold transition-colors disabled:opacity-60"
-          >
-            {t.authContinueWithMagicLink}
           </button>
         </form>
 
