@@ -33,7 +33,7 @@ export const SignUpScreen: React.FC<SignUpScreenProps> = ({ onNavigate }) => {
     setError(null);
 
     try {
-      registerWithEmail(email, password);
+      await registerWithEmail(email, password);
       onNavigate('onboarding');
     } catch (err: any) {
       setError(err?.message || 'Kayıt başarısız.');

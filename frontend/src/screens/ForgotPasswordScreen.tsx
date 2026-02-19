@@ -20,7 +20,7 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ onNa
     setError(null);
 
     try {
-      const exists = sendResetForEmail(email);
+      const exists = await sendResetForEmail(email);
       if (!exists) {
         setError('Bu e-posta ile kayıtlı hesap bulunamadı.');
         return;

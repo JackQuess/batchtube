@@ -21,12 +21,18 @@ import { NotFoundScreen } from './screens/NotFoundScreen';
 import { QueueScreen } from './screens/QueueScreen';
 import { FilesScreen } from './screens/FilesScreen';
 import { ViewState } from './types';
-import { AUTH_CHANGE_EVENT, getStoredUser } from './lib/auth';
+import { AUTH_CHANGE_EVENT, getStoredUser, initializeAuth } from './lib/auth';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewState>(() => (getStoredUser() ? 'dashboard' : 'landing'));
 
   useEffect(() => {
+    void initializeAuth().then((user) => {
+      if (user && currentView === 'landing') {
+        setCurrentView('dashboard');
+      }
+    });
+
     const handler = () => {
       if (!getStoredUser()) {
         setCurrentView((current) => {

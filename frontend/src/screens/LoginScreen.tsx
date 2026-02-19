@@ -21,7 +21,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
     setError(null);
 
     try {
-      loginWithEmail(email, password);
+      await loginWithEmail(email, password);
       onNavigate('dashboard');
     } catch (err: any) {
       setError(err?.message || 'Giriş başarısız.');
