@@ -33,6 +33,18 @@ export function loadAdSense(options?: { clientId?: string }) {
   document.head.appendChild(script);
 }
 
+export function getCookieConsent(): 'accepted' | 'rejected' | null {
+  const value = localStorage.getItem(STORAGE_KEY);
+  if (value === 'accepted' || value === 'rejected') {
+    return value;
+  }
+  return null;
+}
+
+export function setCookieConsent(value: 'accepted' | 'rejected') {
+  localStorage.setItem(STORAGE_KEY, value);
+}
+
 export function unloadAdSense() {
   const script = document.getElementById('adsense-script');
   if (script) script.remove();

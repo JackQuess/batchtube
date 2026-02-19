@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Logo } from './Logo';
 import { ViewState } from '../types';
 import { clearUser, getStoredUser } from '../lib/auth';
+import { getCookieConsent, loadAdSense, setCookieConsent, unloadAdSense } from '../lib/adLoader';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -11,6 +12,7 @@ interface LayoutProps {
 
 export const Layout: React.FC<LayoutProps> = ({ children, activeView, onNavigate }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [cookieConsent, setCookieConsentState] = useState<'accepted' | 'rejected' | null>(() => getCookieConsent());
   const user = getStoredUser();
   const displayName = useMemo(() => user?.email?.split('@')[0] || 'Guest', [user?.email]);
 
@@ -26,6 +28,19 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeView, onNavigate
   const handleSignOut = () => {
     clearUser();
     onNavigate('landing');
+  };
+
+  useEffect(() => {
+    if (cookieConsent === 'accepted') {
+      loadAdSense();
+    } else if (cookieConsent === 'rejected') {
+      unloadAdSense();
+    }
+  }, [cookieConsent]);
+
+  const handleCookieConsent = (value: 'accepted' | 'rejected') => {
+    setCookieConsent(value);
+    setCookieConsentState(value);
   };
 
   if (isAppMode) {
@@ -263,6 +278,32 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeView, onNavigate
           </div>
           <div className="text-center text-xs text-gray-700 border-t border-white/5 pt-6">© 2026 BatchTube Inc. Multi-platform downloading engine.</div>
         </footer>
+      )}
+
+      {!cookieConsent && (
+        <div className="fixed bottom-4 left-4 right-4 z-[70]">
+          <div className="max-w-4xl mx-auto glass-card border border-white/10 rounded-xl px-4 py-3 md:px-5 md:py-4 shadow-2xl">
+            <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
+              <p className="text-xs md:text-sm text-gray-300 leading-relaxed flex-1">
+                Bu sitede işlevsellik ve reklam gösterimi için çerezler kullanıyoruz.
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleCookieConsent('rejected')}
+                  className="px-3 py-2 rounded-lg text-xs md:text-sm border border-white/15 text-gray-300 hover:text-white hover:border-white/30 transition-colors"
+                >
+                  Reddet
+                </button>
+                <button
+                  onClick={() => handleCookieConsent('accepted')}
+                  className="px-3 py-2 rounded-lg text-xs md:text-sm bg-primary text-white hover:bg-primary-hover transition-colors"
+                >
+                  Kabul Et
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
