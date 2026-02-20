@@ -18,14 +18,14 @@ const parseJson = async (res: Response): Promise<any> => {
 };
 
 export const subscriptionAPI = {
-  createCheckout: async (returnUrl: string): Promise<string | null> => {
-    const res = await fetch(`${API_BASE_URL}/api/billing/checkout`, {
+  createCheckout: async (_returnUrl: string): Promise<string | null> => {
+    const res = await fetch(`${API_BASE_URL}/billing/create-checkout`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...getAuthHeaders()
       },
-      body: JSON.stringify({ returnUrl })
+      body: JSON.stringify({ plan: 'pro' })
     });
 
     if (!res.ok) {
@@ -38,21 +38,7 @@ export const subscriptionAPI = {
   },
 
   createPortal: async (returnUrl: string): Promise<string | null> => {
-    const res = await fetch(`${API_BASE_URL}/api/billing/portal`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...getAuthHeaders()
-      },
-      body: JSON.stringify({ returnUrl })
-    });
-
-    if (!res.ok) {
-      const data = await parseJson(res);
-      throw new Error(data?.error || 'portal_failed');
-    }
-
-    const data = (await parseJson(res)) as PortalResponse;
-    return data?.url || null;
+    void returnUrl;
+    return null;
   }
 };

@@ -67,10 +67,10 @@ export const batchAPI = {
    */
   createJob: async (request: BatchJobRequest): Promise<BatchJobResponse> => {
     const formatToUse = request.format === 'mp4'
-      ? (isSafari() ? 'mp4-h264' : 'mp4')
-      : request.format;
+      ? (isSafari() ? 'mp4' : 'mp4')
+      : 'mp3';
 
-    const res = await fetch(`${API_BASE_URL}/api/batch`, {
+    const res = await fetch(`${API_BASE_URL}/v1/batches`, {
       method: 'POST',
       mode: 'cors',
       credentials: 'omit',
@@ -78,24 +78,121 @@ export const batchAPI = {
         'Content-Type': 'application/json',
         ...getAuthHeaders()
       },
-      body: JSON.stringify({ ...request, format: formatToUse })
+      body: JSON.stringify({
+        name: 'Batch download',
+        urls: request.items.map((item) => item.url),
+        auto_start: true,
+        options: {
+          format: formatToUse,
+          quality: request.quality || '1080p',
+          archive_as_zip: true
+        }
+      })
     });
 
     if (!res.ok) {
-      const error = await res.json().catch(() => ({ error: 'Failed to create batch job' }));
-      const code = error.code || '';
-      const message = error.error || 'Failed to create batch job';
+      const error = await res.json().catch(() => ({}));
+      const code = error?.error?.code || '';
+      const message = error?.error?.message || 'Failed to create batch job';
       throw new Error(code ? `${code}: ${message}` : message);
     }
 
-    return res.json();
+    const data = await res.json();
+    return { jobId: data.id };
   },
 
   /**
    * Get batch job status
    */
   getStatus: async (jobId: string): Promise<BatchJobStatus> => {
-    const res = await fetch(`${API_BASE_URL}/api/batch/${jobId}/status`, {
+    const [batchRes, itemsRes] = await Promise.all([
+      fetch(`${API_BASE_URL}/v1/batches/${jobId}`, {
+        method: 'GET',
+        mode: 'cors',
+        credentials: 'omit',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        }
+      }),
+      fetch(`${API_BASE_URL}/v1/batches/${jobId}/items?page=1&limit=200`, {
+        method: 'GET',
+        mode: 'cors',
+        credentials: 'omit',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        }
+      })
+    ]);
+
+    if (!batchRes.ok) {
+      throw new Error('Failed to get job status');
+    }
+    if (!itemsRes.ok) {
+      throw new Error('Failed to get job items');
+    }
+
+    const batch = await batchRes.json();
+    const itemsPayload = await itemsRes.json();
+    const items = Array.isArray(itemsPayload?.data) ? itemsPayload.data : [];
+
+    const stateMap: Record<string, BatchJobStatus['state']> = {
+      created: 'waiting',
+      queued: 'waiting',
+      processing: 'active',
+      completed: 'completed',
+      failed: 'failed',
+      cancelled: 'failed'
+    };
+    const state = stateMap[batch.status] || 'waiting';
+
+    const normalizedItems = items.map((item: any, index: number) => {
+      const failed = item.status === 'failed' || item.status === 'cancelled';
+      return {
+        id: index + 1,
+        status: failed ? 'failed' : item.status === 'completed' ? 'success' : 'failed',
+        provider: item.provider,
+        meta: {
+          title: item.original_url,
+          channel: undefined,
+          durationSeconds: undefined,
+          thumbnail: undefined
+        },
+        error: item.error ?? undefined
+      };
+    });
+
+    const succeeded = normalizedItems.filter((i: any) => i.status === 'success').length;
+    const failed = normalizedItems.filter((i: any) => i.status === 'failed').length;
+
+    return {
+      state,
+      progress: typeof batch.progress === 'number' ? batch.progress : 0,
+      result: {
+        batchStatus: failed > 0 && succeeded > 0 ? 'completed_with_errors' : 'completed',
+        total: normalizedItems.length,
+        succeeded,
+        failed,
+        items: normalizedItems.map((r: any) => ({
+          id: r.id,
+          title: r.meta?.title || `Item ${r.id}`,
+          thumbnail: r.meta?.thumbnail || null,
+          provider: r.provider,
+          meta: r.meta,
+          status: r.status
+        })),
+        results: normalizedItems
+      }
+    };
+  },
+
+  getDownloadUrl: (jobId: string): string => {
+    return `${API_BASE_URL}/v1/batches/${jobId}/zip`;
+  },
+
+  getSignedDownloadUrl: async (jobId: string): Promise<string> => {
+    const res = await fetch(`${API_BASE_URL}/v1/batches/${jobId}/zip`, {
       method: 'GET',
       mode: 'cors',
       credentials: 'omit',
@@ -106,17 +203,9 @@ export const batchAPI = {
     });
 
     if (!res.ok) {
-      throw new Error('Failed to get job status');
+      throw new Error('Failed to get download url');
     }
-
-    return res.json();
-  },
-
-  /**
-   * Get download URL for completed job
-   * Returns direct API endpoint for combined ZIP download
-   */
-  getDownloadUrl: (jobId: string): string => {
-    return `${API_BASE_URL}/api/batch/${jobId}/download`;
+    const data = await res.json();
+    return data.url;
   }
 };

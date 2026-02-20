@@ -3,6 +3,7 @@ import { hasSupabaseConfig, supabase } from './supabaseClient';
 
 const AUTH_STORAGE_KEY = 'batchtube_auth_user';
 const ACCOUNT_STORAGE_KEY = 'batchtube_local_accounts';
+const AUTH_TOKEN_STORAGE_KEY = 'batchtube_auth_token';
 
 export const AUTH_CHANGE_EVENT = 'batchtube:auth-changed';
 
@@ -48,6 +49,16 @@ const writeUser = (user: AuthUser | null) => {
   window.dispatchEvent(new Event(AUTH_CHANGE_EVENT));
 };
 
+const writeAuthToken = (token: string | null) => {
+  if (!token) {
+    localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+    return;
+  }
+  localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
+};
+
+const readAuthToken = () => localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
+
 export const getStoredUser = (): AuthUser | null => {
   return safeParse<AuthUser | null>(localStorage.getItem(AUTH_STORAGE_KEY), null);
 };
@@ -75,6 +86,7 @@ export const clearUser = () => {
   if (hasSupabaseConfig && supabase) {
     void supabase.auth.signOut();
   }
+  writeAuthToken(null);
   writeUser(null);
 };
 
@@ -108,6 +120,7 @@ export const registerWithEmail = async (email: string, password: string): Promis
     throw new Error('Kayıt sırasında kullanıcı oluşturulamadı.');
   }
   const user = toAuthUser(data.user);
+  writeAuthToken(data.session?.access_token ?? null);
   writeUser(user);
   return user;
 };
@@ -132,6 +145,7 @@ export const loginWithEmail = async (email: string, password: string): Promise<A
     throw new Error(error?.message || 'E-posta veya şifre hatalı.');
   }
   const user = toAuthUser(data.user);
+  writeAuthToken(data.session?.access_token ?? null);
   writeUser(user);
   return user;
 };
@@ -154,8 +168,11 @@ export const initializeAuth = async (): Promise<AuthUser | null> => {
   if (!hasSupabaseConfig || !supabase) {
     return getStoredUser();
   }
+  const sessionData = await supabase.auth.getSession();
+  writeAuthToken(sessionData.data.session?.access_token ?? null);
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) {
+    writeAuthToken(null);
     writeUser(null);
     return null;
   }
@@ -165,13 +182,12 @@ export const initializeAuth = async (): Promise<AuthUser | null> => {
 };
 
 export const getAuthHeaders = (): Record<string, string> => {
-  const user = getStoredUser();
-  if (!user) {
+  const token = readAuthToken();
+  if (!token) {
     return {};
   }
 
   return {
-    'x-user-id': user.id,
-    'x-user-email': user.email
+    Authorization: `Bearer ${token}`
   };
 };

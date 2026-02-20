@@ -15,7 +15,6 @@ interface FileRow {
   size: string;
   date: string;
   batchId: string;
-  downloadUrl: string;
 }
 
 export const FilesScreen: React.FC<FilesScreenProps> = () => {
@@ -39,8 +38,7 @@ export const FilesScreen: React.FC<FilesScreenProps> = () => {
           type: 'ZIP',
           size: bytes > 0 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : '-',
           date: new Date(job.createdAt).toLocaleString(),
-          batchId: job.jobId,
-          downloadUrl: batchAPI.getDownloadUrl(job.jobId)
+          batchId: job.jobId
         });
       } catch {
         // skip jobs that cannot be fetched
@@ -110,9 +108,19 @@ export const FilesScreen: React.FC<FilesScreenProps> = () => {
                   <td className="px-6 py-4 font-mono">{file.size}</td>
                   <td className="px-6 py-4">{file.date}</td>
                   <td className="px-6 py-4 text-right">
-                    <a href={file.downloadUrl} className="text-primary hover:text-white transition-colors" target="_blank" rel="noreferrer">
+                    <button
+                      className="text-primary hover:text-white transition-colors"
+                      onClick={async () => {
+                        try {
+                          const url = await batchAPI.getSignedDownloadUrl(file.batchId);
+                          window.open(url, '_blank', 'noopener,noreferrer');
+                        } catch {
+                          // ignored
+                        }
+                      }}
+                    >
                       <span className="material-symbols-outlined text-[20px]">download</span>
-                    </a>
+                    </button>
                   </td>
                 </tr>
               ))
