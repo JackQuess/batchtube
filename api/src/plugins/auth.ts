@@ -83,6 +83,8 @@ const authPlugin: FastifyPluginAsync = async (app) => {
   app.decorateRequest('auth', undefined);
 
   app.addHook('preHandler', async (request, reply) => {
+    if (request.method === 'OPTIONS') return;
+    if (request.url === '/health') return;
     if (!request.url.startsWith('/v1')) return;
 
     const authorization = request.headers.authorization;

@@ -16,6 +16,8 @@ const API_ENABLED: SaaSPlan[] = ['archivist', 'enterprise'];
 
 const verifyApiKeyPlugin: FastifyPluginAsync = async (app) => {
   app.addHook('preHandler', async (request, reply) => {
+    if (request.method === 'OPTIONS') return;
+    if (request.url === '/health') return;
     if (!request.url.startsWith('/v1/api/')) return;
 
     const authorization = request.headers.authorization;
@@ -61,4 +63,3 @@ const verifyApiKeyPlugin: FastifyPluginAsync = async (app) => {
 };
 
 export default fp(verifyApiKeyPlugin);
-
