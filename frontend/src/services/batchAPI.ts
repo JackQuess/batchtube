@@ -66,6 +66,11 @@ export const batchAPI = {
    * Create a new batch download job
    */
   createJob: async (request: BatchJobRequest): Promise<BatchJobResponse> => {
+    const authHeaders = getAuthHeaders();
+    if (!authHeaders.Authorization) {
+      throw new Error('Oturum geçersiz. Lütfen tekrar giriş yapın.');
+    }
+
     const formatToUse = request.format === 'mp4'
       ? (isSafari() ? 'mp4' : 'mp4')
       : 'mp3';
@@ -76,7 +81,7 @@ export const batchAPI = {
       credentials: 'omit',
       headers: {
         'Content-Type': 'application/json',
-        ...getAuthHeaders()
+        ...authHeaders
       },
       body: JSON.stringify({
         name: 'Batch download',
@@ -105,6 +110,11 @@ export const batchAPI = {
    * Get batch job status
    */
   getStatus: async (jobId: string): Promise<BatchJobStatus> => {
+    const authHeaders = getAuthHeaders();
+    if (!authHeaders.Authorization) {
+      throw new Error('Oturum geçersiz. Lütfen tekrar giriş yapın.');
+    }
+
     const [batchRes, itemsRes] = await Promise.all([
       fetch(`${API_BASE_URL}/v1/batches/${jobId}`, {
         method: 'GET',
@@ -112,7 +122,7 @@ export const batchAPI = {
         credentials: 'omit',
         headers: {
           'Content-Type': 'application/json',
-          ...getAuthHeaders()
+          ...authHeaders
         }
       }),
       fetch(`${API_BASE_URL}/v1/batches/${jobId}/items?page=1&limit=200`, {
@@ -121,7 +131,7 @@ export const batchAPI = {
         credentials: 'omit',
         headers: {
           'Content-Type': 'application/json',
-          ...getAuthHeaders()
+          ...authHeaders
         }
       })
     ]);
@@ -192,13 +202,18 @@ export const batchAPI = {
   },
 
   getSignedDownloadUrl: async (jobId: string): Promise<string> => {
+    const authHeaders = getAuthHeaders();
+    if (!authHeaders.Authorization) {
+      throw new Error('Oturum geçersiz. Lütfen tekrar giriş yapın.');
+    }
+
     const res = await fetch(`${API_BASE_URL}/v1/batches/${jobId}/zip`, {
       method: 'GET',
       mode: 'cors',
       credentials: 'omit',
       headers: {
         'Content-Type': 'application/json',
-        ...getAuthHeaders()
+        ...authHeaders
       }
     });
 

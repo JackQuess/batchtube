@@ -19,11 +19,16 @@ const parseJson = async (res: Response): Promise<any> => {
 
 export const subscriptionAPI = {
   createCheckout: async (_returnUrl: string): Promise<string | null> => {
+    const authHeaders = getAuthHeaders();
+    if (!authHeaders.Authorization) {
+      throw new Error('session_missing');
+    }
+
     const res = await fetch(`${API_BASE_URL}/billing/create-checkout`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...getAuthHeaders()
+        ...authHeaders
       },
       body: JSON.stringify({ plan: 'pro' })
     });

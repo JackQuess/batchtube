@@ -16,10 +16,15 @@ export interface AccountSummary {
 
 export const accountAPI = {
   getSummary: async (): Promise<AccountSummary> => {
+    const authHeaders = getAuthHeaders();
+    if (!authHeaders.Authorization) {
+      throw new Error('session_missing');
+    }
+
     const res = await fetch(`${API_BASE_URL}/v1/account/usage`, {
       headers: {
         'Content-Type': 'application/json',
-        ...getAuthHeaders()
+        ...authHeaders
       }
     });
 
