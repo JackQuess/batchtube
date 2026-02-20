@@ -5,6 +5,10 @@ dotenv.config();
 export const config = {
   nodeEnv: process.env.NODE_ENV ?? 'development',
   port: Number(process.env.PORT ?? 8080),
+  cors: {
+    allowedOrigin: process.env.ALLOWED_ORIGIN ?? 'https://batchtube.net',
+    allowedOrigin2: process.env.ALLOWED_ORIGIN_2 ?? 'https://www.batchtube.net'
+  },
   databaseUrl: process.env.DATABASE_URL ?? '',
   redisUrl: process.env.REDIS_URL ?? 'redis://localhost:6379',
   supabase: {

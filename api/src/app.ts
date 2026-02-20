@@ -9,6 +9,7 @@ import filesRoute from './routes/files.js';
 import accountRoute from './routes/account.js';
 import apiKeysRoute from './routes/api-keys.js';
 import billingRoute from './routes/billing.js';
+import { config } from './config.js';
 import { sendError } from './utils/errors.js';
 
 export function createApp() {
@@ -16,9 +17,35 @@ export function createApp() {
     logger: true
   });
 
+  const allowedOrigins = [config.cors.allowedOrigin, config.cors.allowedOrigin2]
+    .map((origin) => origin?.trim())
+    .filter((origin): origin is string => Boolean(origin));
+
   app.register(cors, {
-    origin: true,
-    allowedHeaders: ['Authorization', 'Content-Type', 'Idempotency-Key', 'Paddle-Signature']
+    origin: (origin, cb) => {
+      // No Origin header (curl/postman/server-to-server) should be allowed.
+      if (!origin) {
+        cb(null, true);
+        return;
+      }
+      if (allowedOrigins.includes(origin)) {
+        cb(null, true);
+        return;
+      }
+      cb(new Error('Origin not allowed by CORS'), false);
+    },
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Authorization', 'Content-Type', 'Idempotency-Key'],
+    credentials: false,
+    strictPreflight: true,
+    optionsSuccessStatus: 204
+  });
+
+  app.addHook('onSend', async (request, reply) => {
+    if (request.headers.origin) {
+      reply.header('Vary', 'Origin');
+      reply.header('Access-Control-Allow-Credentials', 'false');
+    }
   });
 
   app.get('/health', async () => ({ status: 'ok' }));
