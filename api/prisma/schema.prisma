@@ -16,6 +16,15 @@ enum PlanTier {
   @@map("plan_tier")
 }
 
+enum ProfilePlan {
+  free      @map("free")
+  pro       @map("pro")
+  archivist @map("archivist")
+  enterprise @map("enterprise")
+
+  @@map("profile_plan")
+}
+
 enum BatchStatus {
   created   @map("created")
   queued    @map("queued")
@@ -53,12 +62,26 @@ model User {
   batches      Batch[]
   batchItems   BatchItem[]
   files        File[]
+  profile      Profile?
   usageCounters UsageCounter[]
   auditLogs    AuditLog[]
 
   @@index([plan], map: "idx_users_plan")
   @@index([created_at], map: "idx_users_created_at")
   @@map("users")
+}
+
+model Profile {
+  id                     String      @id @db.Uuid
+  plan                   ProfilePlan @default(free)
+  paddle_customer_id     String?
+  paddle_subscription_id String?
+  created_at             DateTime    @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime    @default(now()) @db.Timestamptz(6)
+
+  user User @relation(fields: [id], references: [id], onDelete: Cascade)
+
+  @@map("profiles")
 }
 
 model ApiKey {
@@ -141,7 +164,7 @@ model UsageCounter {
   user_id         String   @db.Uuid
   period_start    DateTime @db.Date
   bandwidth_bytes BigInt   @default(0)
-  items_processed Int      @default(0)
+  batches_processed Int    @default(0)
 
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 

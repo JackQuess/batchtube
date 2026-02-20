@@ -7,10 +7,6 @@ export interface BatchJob {
 }
 export type BatchJobName = 'process-batch';
 
-export const standardQueue = new Queue<BatchJob, void, BatchJobName>('batchtube-standard', {
-  connection: { url: config.redisUrl }
-});
-
-export const priorityQueue = new Queue<BatchJob, void, BatchJobName>('batchtube-priority', {
+export const defaultQueue = new Queue<BatchJob, void, BatchJobName>('batchtube-default', {
   connection: { url: config.redisUrl }
 });

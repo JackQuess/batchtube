@@ -1,13 +1,14 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import authPlugin from './plugins/auth.js';
-import adminAuthPlugin from './plugins/admin-auth.js';
+import apiKeyAuthPlugin from './plugins/api-key-auth.js';
 import rateLimitPlugin from './plugins/rate-limit.js';
 import idempotencyPlugin from './plugins/idempotency.js';
 import batchesRoute from './routes/batches.js';
 import filesRoute from './routes/files.js';
 import accountRoute from './routes/account.js';
-import adminRoute from './routes/admin.js';
+import apiKeysRoute from './routes/api-keys.js';
+import billingRoute from './routes/billing.js';
 import { sendError } from './utils/errors.js';
 
 export function createApp() {
@@ -17,20 +18,21 @@ export function createApp() {
 
   app.register(cors, {
     origin: true,
-    allowedHeaders: ['Authorization', 'Content-Type', 'Idempotency-Key']
+    allowedHeaders: ['Authorization', 'Content-Type', 'Idempotency-Key', 'Paddle-Signature']
   });
 
   app.get('/health', async () => ({ status: 'ok' }));
 
   app.register(authPlugin);
-  app.register(adminAuthPlugin);
+  app.register(apiKeyAuthPlugin);
   app.register(rateLimitPlugin);
   app.register(idempotencyPlugin);
 
   app.register(batchesRoute);
   app.register(filesRoute);
   app.register(accountRoute);
-  app.register(adminRoute);
+  app.register(apiKeysRoute);
+  app.register(billingRoute);
 
   app.setNotFoundHandler((request, reply) => {
     return sendError(request, reply, 404, 'not_found', 'Resource not found.');

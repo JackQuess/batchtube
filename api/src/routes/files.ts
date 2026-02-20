@@ -8,7 +8,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 
 const filesRoute: FastifyPluginAsync = async (app) => {
   app.get('/v1/files/:id/download', async (request, reply) => {
-    if (!request.auth) return sendError(request, reply, 401, 'unauthorized', 'Missing API key.');
+    if (!request.auth) return sendError(request, reply, 401, 'unauthorized', 'Missing or invalid Authorization header.');
 
     const { id } = request.params as { id: string };
     if (!UUID_RE.test(id)) {

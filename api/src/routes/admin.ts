@@ -141,7 +141,7 @@ const adminRoute: FastifyPluginAsync = async (app) => {
         disabled: u.disabled,
         created_at: u.created_at.toISOString(),
         last_used_at: lastUsedMap.get(u.id)?.toISOString?.() ?? null,
-        month_items_processed: usageMap.get(u.id)?.items_processed ?? 0,
+        month_items_processed: usageMap.get(u.id)?.batches_processed ?? 0,
         month_bandwidth_bytes: Number(usageMap.get(u.id)?.bandwidth_bytes ?? 0n)
       })),
       meta: { page, limit, total }
@@ -208,7 +208,7 @@ const adminRoute: FastifyPluginAsync = async (app) => {
       usage: usage
         ? {
             period_start: usage.period_start.toISOString().slice(0, 10),
-            items_processed: usage.items_processed,
+            items_processed: usage.batches_processed,
             bandwidth_bytes: Number(usage.bandwidth_bytes)
           }
         : {

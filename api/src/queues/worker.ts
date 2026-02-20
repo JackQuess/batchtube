@@ -3,8 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { prisma } from '../services/db.js';
 import { detectProvider } from '../services/providers.js';
 import { putObject } from '../storage/s3.js';
-import { PLAN_LIMITS } from '../services/plans.js';
-import { incrementBandwidthBytes } from '../services/usage.js';
+import { PLAN_LIMITS, getPlan, incrementBandwidth } from '../services/plans.js';
 import { sendBatchWebhook } from '../services/webhooks.js';
 import type { BatchJob } from './bull.js';
 import { config } from '../config.js';
@@ -12,10 +11,8 @@ import { config } from '../config.js';
 async function processBatch(job: Job<BatchJob>) {
   const { batchId, userId } = job.data;
 
-  const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user) return;
-
-  const retentionHours = PLAN_LIMITS[user.plan].retentionHours;
+  const plan = await getPlan(userId);
+  const retentionHours = PLAN_LIMITS[plan].fileTtlHours;
 
   await prisma.batch.update({ where: { id: batchId }, data: { status: 'processing' } });
 
@@ -68,7 +65,7 @@ async function processBatch(job: Job<BatchJob>) {
         data: { status: 'completed', progress: 100, updated_at: new Date() }
       });
 
-      await incrementBandwidthBytes(userId, BigInt(content.byteLength));
+      await incrementBandwidth(userId, BigInt(content.byteLength));
       completed += 1;
     } catch (error) {
       failed += 1;
@@ -111,8 +108,7 @@ async function processBatch(job: Job<BatchJob>) {
   });
 }
 
-new Worker<BatchJob>('batchtube-standard', processBatch, { connection: { url: config.redisUrl }, concurrency: 4 });
-new Worker<BatchJob>('batchtube-priority', processBatch, { connection: { url: config.redisUrl }, concurrency: 8 });
+new Worker<BatchJob>('batchtube-default', processBatch, { connection: { url: config.redisUrl }, concurrency: 20 });
 
 // eslint-disable-next-line no-console
 console.log('BatchTube worker started');

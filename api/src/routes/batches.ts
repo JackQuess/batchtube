@@ -5,11 +5,18 @@ import { z } from 'zod';
 import { enqueueBatch } from '../queues/enqueue.js';
 import { writeAuditLog } from '../services/audit.js';
 import { prisma } from '../services/db.js';
-import { PLAN_LIMITS } from '../services/plans.js';
+import {
+  PLAN_LIMITS,
+  enforceBatchLimit,
+  enforceConcurrency,
+  enforceMonthlyQuota,
+  getPlan,
+  incrementUsage
+} from '../services/plans.js';
 import { detectProvider, isMediaUrlAllowed } from '../services/providers.js';
+import { defaultQueue } from '../queues/bull.js';
 import { signedGetUrl } from '../storage/s3.js';
 import { sendError } from '../utils/errors.js';
-import { getOrCreateUsageCounter, incrementItemsProcessed } from '../services/usage.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -60,7 +67,7 @@ function toBatchResponse(batch: {
 
 const batchesRoute: FastifyPluginAsync = async (app) => {
   app.post('/v1/batches', async (request, reply) => {
-    if (!request.auth) return sendError(request, reply, 401, 'unauthorized', 'Missing API key.');
+    if (!request.auth) return sendError(request, reply, 401, 'unauthorized', 'Missing or invalid Authorization header.');
 
     const parsed = createBatchSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -70,11 +77,13 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
     }
 
     const body = parsed.data;
-    const limits = PLAN_LIMITS[request.auth.plan];
-
-    if (body.urls.length > limits.maxItemsPerBatch) {
-      return sendError(request, reply, 403, 'forbidden', 'Batch size exceeds your plan limit.', {
-        max_items_per_batch: limits.maxItemsPerBatch
+    const plan = await getPlan(request.auth.user.id);
+    const limits = PLAN_LIMITS[plan];
+    const batchAllowed = await enforceBatchLimit(body.urls.length, plan);
+    if (!batchAllowed) {
+      return sendError(request, reply, 429, 'rate_limit_exceeded', 'You have exceeded your plan limits.', {
+        plan,
+        max_batch_links: limits.maxBatchLinks
       });
     }
 
@@ -88,27 +97,29 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
       }
     }
 
-    const activeItems = await prisma.batchItem.count({
-      where: {
-        user_id: request.auth.user.id,
-        status: {
-          in: ['queued', 'processing']
-        }
-      }
-    });
-
-    if (activeItems + body.urls.length > limits.concurrency) {
-      return sendError(request, reply, 403, 'forbidden', 'You have exceeded your plan limits.', {
-        concurrency: limits.concurrency,
-        current_active_items: activeItems
+    const concurrency = await enforceConcurrency(request.auth.user.id, plan);
+    if (!concurrency.allowed) {
+      return sendError(request, reply, 429, 'rate_limit_exceeded', 'You have exceeded your plan limits.', {
+        plan,
+        concurrency: concurrency.limit,
+        current_active_items: concurrency.active
       });
     }
 
-    const usage = await getOrCreateUsageCounter(request.auth.user.id);
-    if (usage.items_processed + body.urls.length > limits.monthlyDownloads) {
-      return sendError(request, reply, 403, 'forbidden', 'You have exceeded your plan limits.', {
-        monthly_downloads_limit: limits.monthlyDownloads,
-        monthly_downloads_used: usage.items_processed
+    const monthly = await enforceMonthlyQuota(request.auth.user.id, plan);
+    if (!monthly.allowed) {
+      return sendError(request, reply, 429, 'rate_limit_exceeded', 'You have exceeded your plan limits.', {
+        plan,
+        monthly_batches_limit: monthly.limit,
+        monthly_batches_used: monthly.used
+      });
+    }
+
+    const waitingCount = await defaultQueue.getWaitingCount();
+    const delayedCount = await defaultQueue.getDelayedCount();
+    if (waitingCount + delayedCount > 5000) {
+      return sendError(request, reply, 429, 'system_busy', 'System busy. Please retry shortly.', {
+        queue_size: waitingCount + delayedCount
       });
     }
 
@@ -141,10 +152,10 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
       }))
     });
 
-    await incrementItemsProcessed(request.auth.user.id, body.urls.length);
+    await incrementUsage(request.auth.user.id, 1);
 
     if (autoStart) {
-      await enqueueBatch(batch.id, request.auth.user.id, request.auth.plan);
+      await enqueueBatch(batch.id, request.auth.user.id, plan);
     }
 
     await writeAuditLog({
@@ -165,7 +176,7 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
   });
 
   app.get('/v1/batches', async (request, reply) => {
-    if (!request.auth) return sendError(request, reply, 401, 'unauthorized', 'Missing API key.');
+    if (!request.auth) return sendError(request, reply, 401, 'unauthorized', 'Missing or invalid Authorization header.');
 
     const parsed = listQuerySchema.safeParse(request.query);
     if (!parsed.success) {
@@ -207,7 +218,7 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
   });
 
   app.get('/v1/batches/:id', async (request, reply) => {
-    if (!request.auth) return sendError(request, reply, 401, 'unauthorized', 'Missing API key.');
+    if (!request.auth) return sendError(request, reply, 401, 'unauthorized', 'Missing or invalid Authorization header.');
 
     const { id } = request.params as { id: string };
     if (!UUID_RE.test(id)) {
@@ -234,7 +245,7 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
   });
 
   app.post('/v1/batches/:id/cancel', async (request, reply) => {
-    if (!request.auth) return sendError(request, reply, 401, 'unauthorized', 'Missing API key.');
+    if (!request.auth) return sendError(request, reply, 401, 'unauthorized', 'Missing or invalid Authorization header.');
 
     const { id } = request.params as { id: string };
     if (!UUID_RE.test(id)) {
@@ -287,7 +298,7 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
   });
 
   app.get('/v1/batches/:id/items', async (request, reply) => {
-    if (!request.auth) return sendError(request, reply, 401, 'unauthorized', 'Missing API key.');
+    if (!request.auth) return sendError(request, reply, 401, 'unauthorized', 'Missing or invalid Authorization header.');
 
     const { id } = request.params as { id: string };
     if (!UUID_RE.test(id)) {
@@ -356,7 +367,7 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
   });
 
   app.get('/v1/batches/:id/zip', async (request, reply) => {
-    if (!request.auth) return sendError(request, reply, 401, 'unauthorized', 'Missing API key.');
+    if (!request.auth) return sendError(request, reply, 401, 'unauthorized', 'Missing or invalid Authorization header.');
 
     const { id } = request.params as { id: string };
     if (!UUID_RE.test(id)) {

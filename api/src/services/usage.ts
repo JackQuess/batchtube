@@ -29,12 +29,12 @@ export async function getOrCreateUsageCounter(userId: string) {
       user_id: userId,
       period_start: periodStart,
       bandwidth_bytes: BigInt(0),
-      items_processed: 0
+      batches_processed: 0
     }
   });
 }
 
-export async function incrementItemsProcessed(userId: string, increment: number) {
+export async function incrementBatchesProcessed(userId: string, increment: number) {
   const periodStart = getCurrentPeriodStart();
   await getOrCreateUsageCounter(userId);
 
@@ -46,7 +46,7 @@ export async function incrementItemsProcessed(userId: string, increment: number)
       }
     },
     data: {
-      items_processed: {
+      batches_processed: {
         increment
       }
     }
