@@ -1,11 +1,21 @@
-import { API_BASE_URL } from '../config/api';
-import { getAuthHeaders } from '../lib/auth';
+import { apiClient } from '../lib/apiClient';
+
+export interface UsageResponse {
+  plan: 'free' | 'pro' | 'archivist' | 'enterprise';
+  cycle_reset: string;
+  credits: {
+    used: number;
+    limit: number;
+    available: number;
+  };
+}
 
 export interface AccountSummary {
-  plan: 'free' | 'pro';
-  subscriptionStatus: string;
+  plan: UsageResponse['plan'];
+  subscriptionStatus?: string;
+  cancelAtPeriodEnd?: boolean;
   renewalDate: string | null;
-  cancelAtPeriodEnd: boolean;
+  credits: UsageResponse['credits'];
   usage: {
     month: string;
     batchesCount: number;
@@ -15,34 +25,23 @@ export interface AccountSummary {
 }
 
 export const accountAPI = {
+  getUsage: async (): Promise<UsageResponse> => {
+    return apiClient<UsageResponse>('/v1/account/usage');
+  },
+
   getSummary: async (): Promise<AccountSummary> => {
-    const authHeaders = getAuthHeaders();
-    if (!authHeaders.Authorization) {
-      throw new Error('session_missing');
-    }
-
-    const res = await fetch(`${API_BASE_URL}/v1/account/usage`, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...authHeaders
-      }
-    });
-
-    if (!res.ok) {
-      throw new Error('failed_summary');
-    }
-
-    const usage = await res.json();
+    const usage = await apiClient<UsageResponse>('/v1/account/usage');
     return {
-      plan: usage.plan === 'free' ? 'free' : 'pro',
+      plan: usage.plan,
       subscriptionStatus: usage.plan === 'free' ? 'inactive' : 'active',
-      renewalDate: usage.cycle_reset ?? null,
       cancelAtPeriodEnd: false,
+      renewalDate: usage.cycle_reset ?? null,
+      credits: usage.credits,
       usage: {
         month: usage.cycle_reset ? String(usage.cycle_reset).slice(0, 7) : '-',
-        batchesCount: usage?.used?.monthly_downloads ?? 0,
-        itemsCount: usage?.used?.monthly_downloads ?? 0,
-        maxPerBatch: 50
+        batchesCount: usage.credits.used,
+        itemsCount: usage.credits.used,
+        maxPerBatch: usage.plan === 'free' ? 10 : 50
       }
     };
   }

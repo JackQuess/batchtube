@@ -7,11 +7,11 @@ import { writeAuditLog } from '../services/audit.js';
 import { prisma } from '../services/db.js';
 import {
   PLAN_LIMITS,
+  checkCreditsAvailability,
+  deductCreditsForBatchTx,
   enforceBatchLimit,
   enforceConcurrency,
-  enforceMonthlyQuota,
-  getPlan,
-  incrementUsage
+  getPlan
 } from '../services/plans.js';
 import { detectProvider, isMediaUrlAllowed } from '../services/providers.js';
 import { defaultQueue } from '../queues/bull.js';
@@ -106,12 +106,12 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
       });
     }
 
-    const monthly = await enforceMonthlyQuota(request.auth.user.id, plan);
-    if (!monthly.allowed) {
-      return sendError(request, reply, 429, 'rate_limit_exceeded', 'You have exceeded your plan limits.', {
-        plan,
-        monthly_batches_limit: monthly.limit,
-        monthly_batches_used: monthly.used
+    const creditCheck = await checkCreditsAvailability(request.auth.user.id, plan, body.urls.length);
+    if (!creditCheck.ok) {
+      return sendError(request, reply, 402, 'insufficient_credits', 'Not enough credits to start this batch.', {
+        needed: creditCheck.needed,
+        available: creditCheck.available,
+        plan
       });
     }
 
@@ -125,34 +125,56 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
 
     const autoStart = body.auto_start ?? false;
 
-    const batch = await prisma.batch.create({
-      data: {
-        id: randomUUID(),
-        user_id: request.auth.user.id,
-        name: body.name ?? null,
-        status: autoStart ? 'queued' : 'created',
-        options: {
-          format: body.options?.format ?? 'mp4',
-          quality: body.options?.quality ?? 'best',
-          archive_as_zip: body.options?.archive_as_zip ?? false
-        },
-        callback_url: body.callback_url ?? null,
-        item_count: body.urls.length
+    const batchId = randomUUID();
+    const batch = await prisma.$transaction(async (tx) => {
+      const creditDeduction = await deductCreditsForBatchTx(tx, request.auth!.user.id, plan, body.urls.length, batchId);
+      if (!creditDeduction.ok) {
+        throw new Error(`INSUFFICIENT_CREDITS:${creditDeduction.needed}:${creditDeduction.available}`);
       }
+
+      const createdBatch = await tx.batch.create({
+        data: {
+          id: batchId,
+          user_id: request.auth!.user.id,
+          name: body.name ?? null,
+          status: autoStart ? 'queued' : 'created',
+          options: {
+            format: body.options?.format ?? 'mp4',
+            quality: body.options?.quality ?? 'best',
+            archive_as_zip: body.options?.archive_as_zip ?? false
+          },
+          callback_url: body.callback_url ?? null,
+          item_count: body.urls.length
+        }
+      });
+
+      await tx.batchItem.createMany({
+        data: body.urls.map((url) => ({
+          id: randomUUID(),
+          batch_id: createdBatch.id,
+          user_id: request.auth!.user.id,
+          original_url: url,
+          provider: detectProvider(url),
+          status: autoStart ? 'queued' : 'pending'
+        }))
+      });
+
+      return createdBatch;
+    }).catch((error: Error) => {
+      if (error.message.startsWith('INSUFFICIENT_CREDITS:')) {
+        const [, neededRaw, availableRaw] = error.message.split(':');
+        return { __credit_error: true as const, needed: Number(neededRaw), available: Number(availableRaw) };
+      }
+      throw error;
     });
 
-    await prisma.batchItem.createMany({
-      data: body.urls.map((url) => ({
-        id: randomUUID(),
-        batch_id: batch.id,
-        user_id: request.auth!.user.id,
-        original_url: url,
-        provider: detectProvider(url),
-        status: autoStart ? 'queued' : 'pending'
-      }))
-    });
-
-    await incrementUsage(request.auth.user.id, 1);
+    if ('__credit_error' in batch) {
+      return sendError(request, reply, 402, 'insufficient_credits', 'Not enough credits to start this batch.', {
+        needed: batch.needed,
+        available: batch.available,
+        plan
+      });
+    }
 
     if (autoStart) {
       await enqueueBatch(batch.id, request.auth.user.id, plan);

@@ -25,7 +25,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onNavigate }) => {
       }
     };
 
-    load();
+    void load();
   }, []);
 
   return (
@@ -45,26 +45,27 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onNavigate }) => {
           </div>
           <div className="space-y-1.5 w-full">
             <label className="block text-xs font-medium uppercase tracking-wider text-gray-500">Plan</label>
-            <div className="input-glass rounded-lg flex items-center px-4 h-12 text-sm text-gray-300">{summary?.plan || 'free'}</div>
+            <div className="input-glass rounded-lg flex items-center px-4 h-12 text-sm text-gray-300 uppercase">{summary?.plan || 'free'}</div>
           </div>
           <div className="space-y-1.5 w-full">
-            <label className="block text-xs font-medium uppercase tracking-wider text-gray-500">Subscription</label>
-            <div className="input-glass rounded-lg flex items-center px-4 h-12 text-sm text-gray-300">{summary?.subscriptionStatus || 'inactive'}</div>
+            <label className="block text-xs font-medium uppercase tracking-wider text-gray-500">Reset Date</label>
+            <div className="input-glass rounded-lg flex items-center px-4 h-12 text-sm text-gray-300">
+              {summary?.renewalDate ? new Date(summary.renewalDate).toLocaleDateString() : '-'}
+            </div>
           </div>
         </div>
       </div>
 
       <div className="glass-card rounded-xl p-6 md:p-8 flex flex-col md:flex-row justify-between items-center gap-6">
         <div className="flex-1">
-          <h2 className="text-lg font-semibold text-white mb-1">Usage</h2>
+          <h2 className="text-lg font-semibold text-white mb-1">Credit Usage</h2>
           {loading ? (
             <p className="text-gray-400 text-sm">Loading usage...</p>
           ) : (
             <div className="text-sm text-gray-300 space-y-1">
-              <p>Month: {summary?.usage.month || '-'}</p>
-              <p>Batches: {summary?.usage.batchesCount ?? 0}</p>
-              <p>Items: {summary?.usage.itemsCount ?? 0}</p>
-              <p>Max per batch: {summary?.usage.maxPerBatch ?? 0}</p>
+              <p>Used: {summary?.credits.used ?? 0}</p>
+              <p>Limit: {summary?.credits.limit ?? 0}</p>
+              <p>Available: {summary?.credits.available ?? 0}</p>
             </div>
           )}
         </div>

@@ -18,6 +18,32 @@ async function main() {
     }
   });
 
+  await prisma.profile.upsert({
+    where: { id: user.id },
+    update: { plan: 'pro' },
+    create: { id: user.id, plan: 'pro' }
+  });
+
+  const periodStart = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1));
+  await prisma.usageCounter.upsert({
+    where: {
+      user_id_period_start: {
+        user_id: user.id,
+        period_start: periodStart
+      }
+    },
+    update: {
+      credits_used: 0
+    },
+    create: {
+      user_id: user.id,
+      period_start: periodStart,
+      batches_processed: 0,
+      credits_used: 0,
+      bandwidth_bytes: BigInt(0)
+    }
+  });
+
   const existingKey = await prisma.apiKey.findFirst({
     where: {
       user_id: user.id,

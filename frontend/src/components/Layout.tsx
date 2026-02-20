@@ -3,6 +3,7 @@ import { Logo } from './Logo';
 import { ViewState } from '../types';
 import { clearUser, getStoredUser } from '../lib/auth';
 import { getCookieConsent, loadAdSense, setCookieConsent, unloadAdSense } from '../lib/adLoader';
+import { accountAPI } from '../services/accountAPI';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -15,10 +16,12 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeView, onNavigate
   const [cookieConsent, setCookieConsentState] = useState<'accepted' | 'rejected' | null>(() => getCookieConsent());
   const user = getStoredUser();
   const displayName = useMemo(() => user?.email?.split('@')[0] || 'Guest', [user?.email]);
+  const [creditsPanelOpen, setCreditsPanelOpen] = useState(false);
 
   const appViews: ViewState[] = ['dashboard', 'new-batch', 'queue', 'history', 'files', 'settings', 'account', 'billing'];
   const isAppMode = appViews.includes(activeView);
   const isAuthPage = ['login', 'signup', 'forgot-password', 'onboarding'].includes(activeView);
+  const [credits, setCredits] = useState<{ used: number; limit: number; available: number; plan: string; cycleReset: string } | null>(null);
 
   const handleMobileNavigate = (view: ViewState) => {
     onNavigate(view);
@@ -37,6 +40,39 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeView, onNavigate
       unloadAdSense();
     }
   }, [cookieConsent]);
+
+  useEffect(() => {
+    if (!isAppMode || !user?.id) {
+      setCredits(null);
+      return;
+    }
+
+    let mounted = true;
+    const loadCredits = async () => {
+      try {
+        const usage = await accountAPI.getUsage();
+        if (!mounted) return;
+        setCredits({
+          used: usage.credits.used,
+          limit: usage.credits.limit,
+          available: usage.credits.available,
+          plan: usage.plan,
+          cycleReset: usage.cycle_reset
+        });
+      } catch {
+        if (!mounted) return;
+        setCredits(null);
+      }
+    };
+
+    void loadCredits();
+    const refresh = () => void loadCredits();
+    window.addEventListener('batchtube:usage-refresh', refresh);
+    return () => {
+      mounted = false;
+      window.removeEventListener('batchtube:usage-refresh', refresh);
+    };
+  }, [isAppMode, user?.id]);
 
   const handleCookieConsent = (value: 'accepted' | 'rejected') => {
     setCookieConsent(value);
@@ -63,6 +99,37 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeView, onNavigate
               <span className="material-symbols-outlined text-[18px]">add</span>
               New Batch
             </button>
+          </div>
+
+          <div className="px-4 py-2 relative">
+            <button
+              type="button"
+              onClick={() => setCreditsPanelOpen((prev) => !prev)}
+              className="w-full text-left rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 hover:border-primary/40 transition-colors"
+            >
+              <p className="text-[11px] uppercase tracking-wider text-gray-500">Credits</p>
+              <p className="text-sm font-semibold text-white">
+                {credits ? `${credits.available} / ${credits.limit}` : '-- / --'}
+              </p>
+              <p className="text-[11px] text-gray-500">
+                {credits ? `${credits.plan.toUpperCase()} · reset ${new Date(credits.cycleReset).toLocaleDateString()}` : 'Plan bilgisi yükleniyor'}
+              </p>
+            </button>
+
+            {creditsPanelOpen && credits && (
+              <div className="absolute left-4 right-4 mt-2 rounded-lg border border-white/15 bg-[#0f1117] shadow-2xl p-3 z-30">
+                <p className="text-xs text-gray-400">Plan: <span className="text-white uppercase">{credits.plan}</span></p>
+                <p className="text-xs text-gray-400 mt-1">Used: <span className="text-white">{credits.used}</span></p>
+                <p className="text-xs text-gray-400 mt-1">Reset: <span className="text-white">{new Date(credits.cycleReset).toLocaleDateString()}</span></p>
+                <button
+                  type="button"
+                  onClick={() => onNavigate('pricing')}
+                  className="mt-3 w-full text-xs font-semibold rounded-md bg-primary hover:bg-primary-hover text-white py-2"
+                >
+                  Upgrade
+                </button>
+              </div>
+            )}
           </div>
 
           <nav className="flex-1 px-4 py-6 space-y-1">
@@ -157,8 +224,11 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeView, onNavigate
               <span className="material-symbols-outlined">menu</span>
             </div>
             <Logo className="size-6 text-primary" />
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-primary to-orange-500 flex items-center justify-center text-xs font-bold text-white shadow-lg shadow-primary/20">
-              {displayName.slice(0, 2).toUpperCase()}
+            <div className="text-right">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-primary to-orange-500 flex items-center justify-center text-xs font-bold text-white shadow-lg shadow-primary/20 ml-auto">
+                {displayName.slice(0, 2).toUpperCase()}
+              </div>
+              {credits && <p className="text-[10px] text-gray-400 mt-1">{credits.available} cr</p>}
             </div>
           </header>
 

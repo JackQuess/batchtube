@@ -1,49 +1,19 @@
-import { API_BASE_URL } from '../config/api';
-import { getAuthHeaders } from '../lib/auth';
+import { apiClient, ApiError } from '../lib/apiClient';
 
 interface CheckoutResponse {
   url?: string;
 }
 
-interface PortalResponse {
-  url?: string;
-}
-
-const parseJson = async (res: Response): Promise<any> => {
-  try {
-    return await res.json();
-  } catch {
-    return {};
-  }
-};
-
 export const subscriptionAPI = {
-  createCheckout: async (_returnUrl: string): Promise<string | null> => {
-    const authHeaders = getAuthHeaders();
-    if (!authHeaders.Authorization) {
-      throw new Error('session_missing');
-    }
-
-    const res = await fetch(`${API_BASE_URL}/billing/create-checkout`, {
+  createCheckout: async (): Promise<string | null> => {
+    const data = await apiClient<CheckoutResponse>('/billing/create-checkout', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...authHeaders
-      },
       body: JSON.stringify({ plan: 'pro' })
     });
-
-    if (!res.ok) {
-      const data = await parseJson(res);
-      throw new Error(data?.error || 'checkout_failed');
-    }
-
-    const data = (await parseJson(res)) as CheckoutResponse;
     return data?.url || null;
   },
 
-  createPortal: async (returnUrl: string): Promise<string | null> => {
-    void returnUrl;
-    return null;
+  createPortal: async (): Promise<string | null> => {
+    throw new ApiError(501, 'not_implemented', 'Portal henüz aktif değil.');
   }
 };

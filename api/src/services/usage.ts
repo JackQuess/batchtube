@@ -29,7 +29,8 @@ export async function getOrCreateUsageCounter(userId: string) {
       user_id: userId,
       period_start: periodStart,
       bandwidth_bytes: BigInt(0),
-      batches_processed: 0
+      batches_processed: 0,
+      credits_used: 0
     }
   });
 }
@@ -47,6 +48,25 @@ export async function incrementBatchesProcessed(userId: string, increment: numbe
     },
     data: {
       batches_processed: {
+        increment
+      }
+    }
+  });
+}
+
+export async function incrementCreditsUsed(userId: string, increment: number) {
+  const periodStart = getCurrentPeriodStart();
+  await getOrCreateUsageCounter(userId);
+
+  return prisma.usageCounter.update({
+    where: {
+      user_id_period_start: {
+        user_id: userId,
+        period_start: periodStart
+      }
+    },
+    data: {
+      credits_used: {
         increment
       }
     }

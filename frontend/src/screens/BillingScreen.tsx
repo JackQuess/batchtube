@@ -30,7 +30,7 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onNavigate }) => {
   const handleUpgrade = async () => {
     try {
       setError(null);
-      const url = await subscriptionAPI.createCheckout(window.location.href);
+      const url = await subscriptionAPI.createCheckout();
       if (url) {
         window.location.href = url;
         return;
@@ -44,7 +44,7 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onNavigate }) => {
   const handleManage = async () => {
     try {
       setError(null);
-      const url = await subscriptionAPI.createPortal(window.location.href);
+      const url = await subscriptionAPI.createPortal();
       if (url) {
         window.location.href = url;
         return;

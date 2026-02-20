@@ -22,6 +22,7 @@ import { QueueScreen } from './screens/QueueScreen';
 import { FilesScreen } from './screens/FilesScreen';
 import { ViewState } from './types';
 import { AUTH_CHANGE_EVENT, getStoredUser, initializeAuth } from './lib/auth';
+import { hasSupabaseConfig } from './lib/supabaseClient';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewState>(() => (getStoredUser() ? 'dashboard' : 'landing'));
@@ -92,6 +93,20 @@ const App: React.FC = () => {
         return <NotFoundScreen onNavigate={setCurrentView} />;
     }
   };
+
+  if (!hasSupabaseConfig) {
+    return (
+      <div className="min-h-screen bg-background-dark text-white flex items-center justify-center px-6">
+        <div className="glass-card rounded-2xl border border-red-500/40 p-8 max-w-xl w-full text-center">
+          <h1 className="text-2xl font-bold mb-3">Supabase yapılandırması eksik</h1>
+          <p className="text-gray-300 text-sm leading-relaxed">
+            Uygulama çalışması için <code>VITE_SUPABASE_URL</code> ve <code>VITE_SUPABASE_ANON_KEY</code> tanımlanmalı.
+            Vercel ortam değişkenlerini güncelleyip yeniden deploy etmelisin.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Layout activeView={currentView} onNavigate={setCurrentView}>

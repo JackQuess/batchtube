@@ -6,6 +6,7 @@ export type ErrorCode =
   | 'not_found'
   | 'validation_error'
   | 'rate_limit_exceeded'
+  | 'insufficient_credits'
   | 'system_busy'
   | 'internal_server_error';
 

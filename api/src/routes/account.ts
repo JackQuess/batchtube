@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { writeAuditLog } from '../services/audit.js';
-import { PLAN_LIMITS, getPlan } from '../services/plans.js';
-import { getCycleReset, getOrCreateUsageCounter } from '../services/usage.js';
+import { getCreditsUsage, getPlan } from '../services/plans.js';
+import { getCycleReset } from '../services/usage.js';
 import { sendError } from '../utils/errors.js';
 
 const accountRoute: FastifyPluginAsync = async (app) => {
@@ -9,8 +9,7 @@ const accountRoute: FastifyPluginAsync = async (app) => {
     if (!request.auth) return sendError(request, reply, 401, 'unauthorized', 'Missing or invalid Authorization header.');
 
     const plan = await getPlan(request.auth.user.id);
-    const usage = await getOrCreateUsageCounter(request.auth.user.id);
-    const limits = PLAN_LIMITS[plan];
+    const credits = await getCreditsUsage(request.auth.user.id, plan);
 
     await writeAuditLog({
       request,
@@ -21,14 +20,10 @@ const accountRoute: FastifyPluginAsync = async (app) => {
     return reply.send({
       plan,
       cycle_reset: getCycleReset(),
-      limits: {
-        bandwidth_bytes: 0,
-        monthly_downloads: limits.monthlyBatches,
-        concurrency: limits.concurrency
-      },
-      used: {
-        bandwidth_bytes: Number(usage.bandwidth_bytes),
-        monthly_downloads: usage.batches_processed
+      credits: {
+        used: credits.used,
+        limit: credits.limit,
+        available: credits.available
       }
     });
   });

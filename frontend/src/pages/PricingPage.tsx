@@ -34,7 +34,7 @@ export const PricingPage: React.FC<PricingPageProps> = ({ t, user }) => {
     }
 
     try {
-      const url = await subscriptionAPI.createCheckout('/billing/success');
+      const url = await subscriptionAPI.createCheckout();
       if (url) {
         window.location.href = url;
         return;

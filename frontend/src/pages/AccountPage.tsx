@@ -61,7 +61,7 @@ export const AccountPage: React.FC<AccountPageProps> = ({ t, user }) => {
     setBusy(true);
     setMessage(null);
     try {
-      const url = await subscriptionAPI.createCheckout('/billing/success');
+      const url = await subscriptionAPI.createCheckout();
       if (url) {
         window.location.href = url;
         return;
@@ -78,7 +78,7 @@ export const AccountPage: React.FC<AccountPageProps> = ({ t, user }) => {
     setBusy(true);
     setMessage(null);
     try {
-      const url = await subscriptionAPI.createPortal('/account');
+      const url = await subscriptionAPI.createPortal();
       if (url) {
         window.location.href = url;
         return;

@@ -23,7 +23,7 @@ export type ViewState =
 export interface AuthUser {
   id: string;
   email: string;
-  plan: 'free' | 'pro';
+  plan: 'free' | 'pro' | 'archivist' | 'enterprise';
 }
 
 export interface User {
