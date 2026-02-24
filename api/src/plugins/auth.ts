@@ -55,17 +55,34 @@ async function autoCreateProfileIfMissing(userId: string) {
 
 async function ensureUserRecord(userId: string, email: string | null): Promise<User> {
   const safeEmail = email || `${userId}@supabase.local`;
-  return prisma.user.upsert({
-    where: { id: userId },
-    update: {
-      email: safeEmail
-    },
-    create: {
-      id: userId,
-      email: safeEmail,
-      password_hash: FALLBACK_PASSWORD_HASH
-    }
-  });
+  try {
+    return await prisma.user.upsert({
+      where: { id: userId },
+      update: {
+        email: safeEmail
+      },
+      create: {
+        id: userId,
+        email: safeEmail,
+        password_hash: FALLBACK_PASSWORD_HASH
+      }
+    });
+  } catch (error: any) {
+    // Email may collide with an existing legacy row. Keep user auth path alive with a deterministic fallback email.
+    if (error?.code !== 'P2002') throw error;
+
+    return prisma.user.upsert({
+      where: { id: userId },
+      update: {
+        email: `${userId}@supabase.local`
+      },
+      create: {
+        id: userId,
+        email: `${userId}@supabase.local`,
+        password_hash: FALLBACK_PASSWORD_HASH
+      }
+    });
+  }
 }
 
 export async function verifySupabaseJWT(token: string): Promise<JWTPayload> {
