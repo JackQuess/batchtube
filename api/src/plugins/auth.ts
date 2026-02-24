@@ -108,6 +108,7 @@ const authPlugin: FastifyPluginAsync = async (app) => {
     }
 
     const jwtEmail = typeof payload.email === 'string' ? payload.email : null;
+    const user = await ensureUserRecord(sub, jwtEmail);
     let profile = await getProfileFromProfilesTable(sub);
     if (!profile) {
       await autoCreateProfileIfMissing(sub);
@@ -115,7 +116,6 @@ const authPlugin: FastifyPluginAsync = async (app) => {
     }
 
     const effectivePlan = normalizePlan(profile?.plan);
-    const user = await ensureUserRecord(sub, jwtEmail);
 
     request.auth = {
       user,

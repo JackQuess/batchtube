@@ -1,5 +1,5 @@
 import { API_BASE_URL } from '../config/api';
-import { getAuthHeaders } from './auth';
+import { getAuthHeadersFresh } from './auth';
 
 export interface ApiErrorPayload {
   error?: {
@@ -44,7 +44,7 @@ export async function apiClient<T>(path: string, init: RequestInit = {}, require
   }
 
   if (requireAuth) {
-    const auth = getAuthHeaders();
+    const auth = await getAuthHeadersFresh();
     if (!auth.Authorization) {
       throw new ApiError(401, 'unauthorized', 'Oturum bulunamadı. Lütfen tekrar giriş yapın.');
     }

@@ -75,6 +75,11 @@ const asInt = (value: unknown): number => {
   return 0;
 };
 
+const isPrismaMissingSchemaError = (error: unknown): boolean => {
+  const code = (error as { code?: string } | null)?.code;
+  return code === 'P2021' || code === 'P2022' || code === '42P01' || code === '42703';
+};
+
 export const normalizePlan = (value: string | null | undefined): SaaSPlan => {
   if (!value) return 'free';
   if (value === 'free' || value === 'pro' || value === 'archivist' || value === 'enterprise') return value;
@@ -84,13 +89,18 @@ export const normalizePlan = (value: string | null | undefined): SaaSPlan => {
 };
 
 export async function getPlan(userId: string): Promise<SaaSPlan> {
-  const row = await prisma.profile.upsert({
-    where: { id: userId },
-    update: {},
-    create: { id: userId, plan: 'free' },
-    select: { plan: true }
-  });
-  return normalizePlan(row.plan);
+  try {
+    const row = await prisma.profile.upsert({
+      where: { id: userId },
+      update: {},
+      create: { id: userId, plan: 'free' },
+      select: { plan: true }
+    });
+    return normalizePlan(row.plan);
+  } catch (error) {
+    if (isPrismaMissingSchemaError(error)) return 'free';
+    throw error;
+  }
 }
 
 export async function enforceBatchLimit(urlsLength: number, plan: SaaSPlan) {
@@ -110,36 +120,48 @@ export async function enforceConcurrency(userId: string, plan: SaaSPlan) {
 
 export async function getCreditsUsage(userId: string, plan: SaaSPlan): Promise<CreditUsage> {
   const periodStart = getCurrentPeriodStart();
-  const row = await prisma.usageCounter.upsert({
-    where: {
-      user_id_period_start: {
-        user_id: userId,
-        period_start: periodStart
-      }
-    },
-    update: {},
-    create: {
-      user_id: userId,
-      period_start: periodStart,
-      batches_processed: 0,
-      credits_used: 0,
-      bandwidth_bytes: BigInt(0)
-    },
-    select: {
-      credits_used: true
-    }
-  });
 
   const limit = PLAN_LIMITS[plan].monthlyCredits;
-  const used = asInt(row.credits_used);
-  const available = Math.max(0, limit - used);
+  try {
+    const row = await prisma.usageCounter.upsert({
+      where: {
+        user_id_period_start: {
+          user_id: userId,
+          period_start: periodStart
+        }
+      },
+      update: {},
+      create: {
+        user_id: userId,
+        period_start: periodStart,
+        batches_processed: 0,
+        credits_used: 0,
+        bandwidth_bytes: BigInt(0)
+      },
+      select: {
+        credits_used: true
+      }
+    });
 
-  return {
-    used,
-    limit,
-    available,
-    periodStart
-  };
+    const used = asInt(row.credits_used);
+    const available = Math.max(0, limit - used);
+
+    return {
+      used,
+      limit,
+      available,
+      periodStart
+    };
+  } catch (error) {
+    if (!isPrismaMissingSchemaError(error)) throw error;
+
+    return {
+      used: 0,
+      limit,
+      available: limit,
+      periodStart
+    };
+  }
 }
 
 export async function checkCreditsAvailability(userId: string, plan: SaaSPlan, urlsLength: number): Promise<CreditCheckResult> {

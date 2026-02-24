@@ -142,3 +142,18 @@ export const getAuthHeaders = (): Record<string, string> => {
     Authorization: `Bearer ${token}`
   };
 };
+
+export const getAuthHeadersFresh = async (): Promise<Record<string, string>> => {
+  if (hasSupabaseConfig && supabase) {
+    const { data } = await supabase.auth.getSession();
+    const refreshedToken = data.session?.access_token ?? null;
+    writeAuthToken(refreshedToken);
+    if (refreshedToken) {
+      return {
+        Authorization: `Bearer ${refreshedToken}`
+      };
+    }
+  }
+
+  return getAuthHeaders();
+};
