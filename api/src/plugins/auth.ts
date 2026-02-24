@@ -125,11 +125,29 @@ const authPlugin: FastifyPluginAsync = async (app) => {
     }
 
     const jwtEmail = typeof payload.email === 'string' ? payload.email : null;
-    const user = await ensureUserRecord(sub, jwtEmail);
-    let profile = await getProfileFromProfilesTable(sub);
-    if (!profile) {
-      await autoCreateProfileIfMissing(sub);
+    const fallbackUser = {
+      id: sub,
+      email: jwtEmail || `${sub}@supabase.local`,
+      password_hash: FALLBACK_PASSWORD_HASH,
+      plan: 'starter',
+      disabled: false,
+      stripe_customer_id: null,
+      webhook_secret: null,
+      created_at: new Date(),
+      updated_at: new Date()
+    } as User;
+
+    let user = fallbackUser;
+    let profile: ProfileRow | null = null;
+    try {
+      user = await ensureUserRecord(sub, jwtEmail);
       profile = await getProfileFromProfilesTable(sub);
+      if (!profile) {
+        await autoCreateProfileIfMissing(sub);
+        profile = await getProfileFromProfilesTable(sub);
+      }
+    } catch (error) {
+      request.log.error({ err: error, requestId: request.id, userId: sub }, 'auth_user_profile_sync_failed');
     }
 
     const effectivePlan = normalizePlan(profile?.plan);
