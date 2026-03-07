@@ -30,7 +30,9 @@ export function createApp() {
         cb(null, true);
         return;
       }
-      cb(new Error('Origin not allowed by CORS'), false);
+      // Reject without throwing so the server returns 403-style CORS rejection, not 500
+      app.log.warn({ origin, allowedOrigins }, 'CORS origin not allowed – add it to ALLOWED_ORIGIN or CORS_ALLOWED_ORIGINS');
+      cb(null, false);
     },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Authorization', 'Content-Type', 'Idempotency-Key'],
