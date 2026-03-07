@@ -11,14 +11,8 @@ const sizeMap = {
   lg: { box: 'w-11 h-10', svg: 'w-8 h-6', text: 'text-xl' },
 };
 
-/** App primary red (Tailwind app-primary / app-primary-hover). */
-const RED = '#E11D48';
-const RED_LIGHT = '#F43F5E';
-const RED_DARK = '#BE123C';
-
 /**
- * BatchTube logo: L-shaped block (tetromino) that evokes batches/modular processing.
- * Matches the site’s visual identity so the block instantly recalls BatchTube.
+ * BatchTube logo: L-shaped block (tetromino). App primary red (#E11D48), 180° rotated.
  */
 export function BatchTubeLogo({ size = 'md', textClassName = '' }: BatchTubeLogoProps) {
   const id = useId().replace(/:/g, '');
@@ -36,19 +30,18 @@ export function BatchTubeLogo({ size = 'md', textClassName = '' }: BatchTubeLogo
           role="img"
           aria-label="BatchTube"
         >
-          {/* L-block: 2 squares left column, 1 square top-right, touching. */}
           <defs>
             <linearGradient id={`bt-block-top-${id}`} x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor={RED_LIGHT} />
-              <stop offset="100%" stopColor={RED} />
+              <stop offset="0%" stopColor="#F43F5E" />
+              <stop offset="100%" stopColor="#E11D48" />
             </linearGradient>
             <linearGradient id={`bt-block-mid-${id}`} x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor={RED} />
-              <stop offset="100%" stopColor={RED_DARK} />
+              <stop offset="0%" stopColor="#E11D48" />
+              <stop offset="100%" stopColor="#BE123C" />
             </linearGradient>
             <linearGradient id={`bt-block-right-${id}`} x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor={RED_LIGHT} />
-              <stop offset="100%" stopColor={RED_DARK} />
+              <stop offset="0%" stopColor="#F43F5E" />
+              <stop offset="100%" stopColor="#BE123C" />
             </linearGradient>
           </defs>
           <rect x="0" y="0" width="10" height="10" rx="1" fill={`url(#bt-block-top-${id})`} />
