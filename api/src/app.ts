@@ -17,9 +17,7 @@ export function createApp() {
     logger: true
   });
 
-  const allowedOrigins = [config.cors.allowedOrigin, config.cors.allowedOrigin2]
-    .map((origin) => origin?.trim())
-    .filter((origin): origin is string => Boolean(origin));
+  const allowedOrigins = config.cors.allowedOrigins;
 
   app.register(cors, {
     origin: (origin, cb) => {

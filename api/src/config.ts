@@ -7,7 +7,24 @@ export const config = {
   port: Number(process.env.PORT ?? 8080),
   cors: {
     allowedOrigin: process.env.ALLOWED_ORIGIN ?? 'https://batchtube.net',
-    allowedOrigin2: process.env.ALLOWED_ORIGIN_2 ?? 'https://www.batchtube.net'
+    allowedOrigin2: process.env.ALLOWED_ORIGIN_2 ?? 'https://www.batchtube.net',
+    /** Comma-separated list, or use ALLOWED_ORIGIN + ALLOWED_ORIGIN_2. Production API must include frontend origin (e.g. https://batchtube.net). */
+    get allowedOrigins(): string[] {
+      const fromEnv = process.env.CORS_ALLOWED_ORIGINS
+        ?.split(',')
+        .map((o) => o.trim())
+        .filter(Boolean);
+      if (fromEnv?.length) return fromEnv;
+      const list = [
+        this.allowedOrigin,
+        this.allowedOrigin2,
+        'http://localhost:5173',
+        'http://localhost:3000',
+        'http://127.0.0.1:5173',
+        'http://127.0.0.1:3000'
+      ].filter((o): o is string => Boolean(o?.trim()));
+      return [...new Set(list)];
+    }
   },
   databaseUrl: process.env.DATABASE_URL ?? '',
   redisUrl: process.env.REDIS_URL ?? 'redis://localhost:6379',
