@@ -35,9 +35,8 @@ async function getProfileFromProfilesTable(userId: string): Promise<ProfileRow |
       LIMIT 1
     `);
     return rows[0] ?? null;
-  } catch (error: any) {
-    if (error?.code === '42P01') return null; // profiles table not found
-    throw error;
+  } catch {
+    return null;
   }
 }
 
@@ -48,19 +47,28 @@ async function autoCreateProfileIfMissing(userId: string) {
       VALUES (${userId}::uuid)
       ON CONFLICT (id) DO NOTHING
     `);
-  } catch (error: any) {
-    if (error?.code !== '42P01') throw error;
+  } catch {
+    // Table missing or FK (user not in users): ignore
   }
 }
 
 async function ensureUserRecord(userId: string, email: string | null): Promise<User> {
   const safeEmail = email || `${userId}@supabase.local`;
+  const fallback: User = {
+    id: userId,
+    email: safeEmail,
+    password_hash: FALLBACK_PASSWORD_HASH,
+    plan: 'starter',
+    disabled: false,
+    stripe_customer_id: null,
+    webhook_secret: null,
+    created_at: new Date(),
+    updated_at: new Date()
+  } as User;
   try {
     return await prisma.user.upsert({
       where: { id: userId },
-      update: {
-        email: safeEmail
-      },
+      update: { email: safeEmail },
       create: {
         id: userId,
         email: safeEmail,
@@ -68,20 +76,24 @@ async function ensureUserRecord(userId: string, email: string | null): Promise<U
       }
     });
   } catch (error: any) {
-    // Email may collide with an existing legacy row. Keep user auth path alive with a deterministic fallback email.
-    if (error?.code !== 'P2002') throw error;
-
-    return prisma.user.upsert({
-      where: { id: userId },
-      update: {
-        email: `${userId}@supabase.local`
-      },
-      create: {
-        id: userId,
-        email: `${userId}@supabase.local`,
-        password_hash: FALLBACK_PASSWORD_HASH
+    // Email collision: retry with deterministic email
+    if (error?.code === 'P2002') {
+      try {
+        return await prisma.user.upsert({
+          where: { id: userId },
+          update: { email: `${userId}@supabase.local` },
+          create: {
+            id: userId,
+            email: `${userId}@supabase.local`,
+            password_hash: FALLBACK_PASSWORD_HASH
+          }
+        });
+      } catch {
+        return fallback;
       }
-    });
+    }
+    // Table missing (42P01), connection error, or other Prisma error: continue with fallback user
+    return fallback;
   }
 }
 

@@ -80,6 +80,16 @@ const isPrismaMissingSchemaError = (error: unknown): boolean => {
   return code === 'P2021' || code === 'P2022' || code === '42P01' || code === '42703';
 };
 
+const isPrismaUnavailableError = (error: unknown): boolean => {
+  const name = (error as { name?: string } | null)?.name;
+  const code = (error as { code?: string } | null)?.code;
+  return (
+    name === 'PrismaClientInitializationError' ||
+    code === 'P1001' || // Can't reach DB
+    code === 'P1017'    // Server closed connection
+  );
+};
+
 export const normalizePlan = (value: string | null | undefined): SaaSPlan => {
   if (!value) return 'free';
   if (value === 'free' || value === 'pro' || value === 'archivist' || value === 'enterprise') return value;
@@ -98,7 +108,14 @@ export async function getPlan(userId: string): Promise<SaaSPlan> {
     });
     return normalizePlan(row.plan);
   } catch (error) {
-    if (isPrismaMissingSchemaError(error)) return 'free';
+    // Table missing, DB unreachable, or FK (e.g. user not in users table yet) -> default to free
+    if (
+      isPrismaMissingSchemaError(error) ||
+      isPrismaUnavailableError(error) ||
+      (error as { code?: string })?.code === 'P2003'
+    ) {
+      return 'free';
+    }
     throw error;
   }
 }
