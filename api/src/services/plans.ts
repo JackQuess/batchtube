@@ -126,13 +126,25 @@ export async function enforceBatchLimit(urlsLength: number, plan: SaaSPlan) {
 
 export async function enforceConcurrency(userId: string, plan: SaaSPlan) {
   const limit = PLAN_LIMITS[plan].concurrency;
-  const active = await prisma.batch.count({
-    where: {
-      user_id: userId,
-      status: { in: ['queued', 'processing'] }
+  try {
+    const active = await prisma.batch.count({
+      where: {
+        user_id: userId,
+        status: { in: ['queued', 'processing'] }
+      }
+    });
+    return { allowed: active < limit, active, limit };
+  } catch (error) {
+    // DB unreachable, table missing, or Prisma init error -> allow request (fail open)
+    if (
+      isPrismaMissingSchemaError(error) ||
+      isPrismaUnavailableError(error) ||
+      (error as { name?: string })?.name === 'PrismaClientInitializationError'
+    ) {
+      return { allowed: true, active: 0, limit };
     }
-  });
-  return { allowed: active < limit, active, limit };
+    throw error;
+  }
 }
 
 export async function getCreditsUsage(userId: string, plan: SaaSPlan): Promise<CreditUsage> {
@@ -170,7 +182,13 @@ export async function getCreditsUsage(userId: string, plan: SaaSPlan): Promise<C
       periodStart
     };
   } catch (error) {
-    if (!isPrismaMissingSchemaError(error)) throw error;
+    if (
+      !isPrismaMissingSchemaError(error) &&
+      !isPrismaUnavailableError(error) &&
+      (error as { name?: string })?.name !== 'PrismaClientInitializationError'
+    ) {
+      throw error;
+    }
 
     return {
       used: 0,

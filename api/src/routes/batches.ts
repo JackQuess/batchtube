@@ -183,9 +183,16 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
           plan
         });
       }
-      const prismaError = error as { code?: string };
+      const prismaError = error as { code?: string; name?: string };
       if (prismaError?.code === 'P2003') {
         return sendError(request, reply, 409, 'conflict', 'Batch creation failed due to a constraint. Please retry.');
+      }
+      if (
+        prismaError?.name === 'PrismaClientInitializationError' ||
+        prismaError?.code === 'P1001' ||
+        prismaError?.code === 'P1017'
+      ) {
+        return sendError(request, reply, 503, 'internal_server_error', 'Database temporarily unavailable. Please retry.');
       }
       throw error;
     }
