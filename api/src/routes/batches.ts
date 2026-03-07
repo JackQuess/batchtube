@@ -129,7 +129,7 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
     let batch: Awaited<ReturnType<typeof prisma.batch.create>>;
     try {
       batch = await prisma.$transaction(async (tx) => {
-        // 1. Create batch first (must exist before credit_ledger references it)
+        // 1. Create batch first — must exist before any row references it (batch_items, credit_ledger)
         const createdBatch = await tx.batch.create({
           data: {
             id: batchId,
@@ -146,11 +146,13 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
           }
         });
 
-        // 2. Create batch items
+        const persistedBatchId = createdBatch.id;
+
+        // 2. Create batch items (reference persisted batch)
         await tx.batchItem.createMany({
           data: body.urls.map((url) => ({
             id: randomUUID(),
-            batch_id: createdBatch.id,
+            batch_id: persistedBatchId,
             user_id: request.auth!.user.id,
             original_url: url,
             provider: detectProvider(url),
@@ -158,8 +160,14 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
           }))
         });
 
-        // 3. Deduct credits and create credit_ledger (references createdBatch.id)
-        const creditDeduction = await deductCreditsForBatchTx(tx, request.auth!.user.id, plan, body.urls.length, createdBatch.id);
+        // 3. Deduct credits and create credit_ledger (must reference same persisted batch.id)
+        const creditDeduction = await deductCreditsForBatchTx(
+          tx,
+          request.auth!.user.id,
+          plan,
+          body.urls.length,
+          persistedBatchId
+        );
         if (!creditDeduction.ok) {
           throw new Error(`INSUFFICIENT_CREDITS:${creditDeduction.needed}:${creditDeduction.available}`);
         }

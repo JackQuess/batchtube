@@ -8,6 +8,7 @@ export type ErrorCode =
   | 'rate_limit_exceeded'
   | 'insufficient_credits'
   | 'system_busy'
+  | 'conflict'
   | 'internal_server_error';
 
 export function sendError(

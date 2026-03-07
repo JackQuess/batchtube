@@ -234,6 +234,7 @@ export async function deductCreditsForBatchTx(
     }
   });
 
+  // Use persisted batch.id from the same transaction so the FK exists
   await tx.creditLedger.create({
     data: {
       user_id: userId,
