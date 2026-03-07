@@ -126,54 +126,60 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
     const autoStart = body.auto_start ?? false;
 
     const batchId = randomUUID();
-    const batch = await prisma.$transaction(async (tx) => {
-      const creditDeduction = await deductCreditsForBatchTx(tx, request.auth!.user.id, plan, body.urls.length, batchId);
-      if (!creditDeduction.ok) {
-        throw new Error(`INSUFFICIENT_CREDITS:${creditDeduction.needed}:${creditDeduction.available}`);
-      }
+    let batch: Awaited<ReturnType<typeof prisma.batch.create>>;
+    try {
+      batch = await prisma.$transaction(async (tx) => {
+        // 1. Create batch first (must exist before credit_ledger references it)
+        const createdBatch = await tx.batch.create({
+          data: {
+            id: batchId,
+            user_id: request.auth!.user.id,
+            name: body.name ?? null,
+            status: autoStart ? 'queued' : 'created',
+            options: {
+              format: body.options?.format ?? 'mp4',
+              quality: body.options?.quality ?? 'best',
+              archive_as_zip: body.options?.archive_as_zip ?? false
+            },
+            callback_url: body.callback_url ?? null,
+            item_count: body.urls.length
+          }
+        });
 
-      const createdBatch = await tx.batch.create({
-        data: {
-          id: batchId,
-          user_id: request.auth!.user.id,
-          name: body.name ?? null,
-          status: autoStart ? 'queued' : 'created',
-          options: {
-            format: body.options?.format ?? 'mp4',
-            quality: body.options?.quality ?? 'best',
-            archive_as_zip: body.options?.archive_as_zip ?? false
-          },
-          callback_url: body.callback_url ?? null,
-          item_count: body.urls.length
+        // 2. Create batch items
+        await tx.batchItem.createMany({
+          data: body.urls.map((url) => ({
+            id: randomUUID(),
+            batch_id: createdBatch.id,
+            user_id: request.auth!.user.id,
+            original_url: url,
+            provider: detectProvider(url),
+            status: autoStart ? 'queued' : 'pending'
+          }))
+        });
+
+        // 3. Deduct credits and create credit_ledger (references createdBatch.id)
+        const creditDeduction = await deductCreditsForBatchTx(tx, request.auth!.user.id, plan, body.urls.length, createdBatch.id);
+        if (!creditDeduction.ok) {
+          throw new Error(`INSUFFICIENT_CREDITS:${creditDeduction.needed}:${creditDeduction.available}`);
         }
-      });
 
-      await tx.batchItem.createMany({
-        data: body.urls.map((url) => ({
-          id: randomUUID(),
-          batch_id: createdBatch.id,
-          user_id: request.auth!.user.id,
-          original_url: url,
-          provider: detectProvider(url),
-          status: autoStart ? 'queued' : 'pending'
-        }))
+        return createdBatch;
       });
-
-      return createdBatch;
-    }).catch((error: Error) => {
-      if (error.message.startsWith('INSUFFICIENT_CREDITS:')) {
+    } catch (error: unknown) {
+      if (error instanceof Error && error.message.startsWith('INSUFFICIENT_CREDITS:')) {
         const [, neededRaw, availableRaw] = error.message.split(':');
-        return { __credit_error: true as const, needed: Number(neededRaw), available: Number(availableRaw) };
+        return sendError(request, reply, 402, 'insufficient_credits', 'Not enough credits to start this batch.', {
+          needed: Number(neededRaw),
+          available: Number(availableRaw),
+          plan
+        });
+      }
+      const prismaError = error as { code?: string };
+      if (prismaError?.code === 'P2003') {
+        return sendError(request, reply, 409, 'conflict', 'Batch creation failed due to a constraint. Please retry.');
       }
       throw error;
-    });
-
-    if ('__credit_error' in batch) {
-      return sendError(request, reply, 402, 'insufficient_credits', 'Not enough credits to start this batch.', {
-        needed: batch.needed,
-        available: batch.available,
-        plan
-      });
     }
 
     if (autoStart) {

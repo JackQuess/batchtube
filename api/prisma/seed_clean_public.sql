@@ -142,7 +142,8 @@ CREATE INDEX idx_profiles_plan ON public.profiles(plan);
 CREATE INDEX idx_credit_ledger_user_created ON public.credit_ledger(user_id, created_at DESC);
 CREATE INDEX idx_credit_ledger_batch ON public.credit_ledger(batch_id);
 
--- Bitti. Prisma migration geçmişini senkron etmek için yerelde:
+-- Bitti. Sonra RLS eklemek için: api/prisma/rls_policies.sql dosyasını SQL Editor'da çalıştır.
+-- Prisma migration geçmişini senkron etmek için yerelde:
 -- npx prisma migrate resolve --applied "0001_init"
 -- npx prisma migrate resolve --applied "0002_admin_user_disabled"
 -- npx prisma migrate resolve --applied "0003_saas_core"
