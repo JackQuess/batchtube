@@ -217,8 +217,7 @@ export async function deductCreditsForBatchTx(
   tx: Prisma.TransactionClient,
   userId: string,
   plan: SaaSPlan,
-  urlsLength: number,
-  batchId?: string
+  urlsLength: number
 ): Promise<CreditCheckResult> {
   const limits = PLAN_LIMITS[plan];
   const needed = urlsLength * limits.costPerUrl;
@@ -266,16 +265,6 @@ export async function deductCreditsForBatchTx(
       batches_processed: {
         increment: 1
       }
-    }
-  });
-
-  // Use persisted batch.id from the same transaction so the FK exists
-  await tx.creditLedger.create({
-    data: {
-      user_id: userId,
-      amount: needed,
-      reason: 'batch_start',
-      batch_id: batchId ?? null
     }
   });
 

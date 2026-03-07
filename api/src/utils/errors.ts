@@ -9,7 +9,8 @@ export type ErrorCode =
   | 'insufficient_credits'
   | 'system_busy'
   | 'conflict'
-  | 'internal_server_error';
+  | 'internal_server_error'
+  | 'service_unavailable';
 
 export function sendError(
   request: FastifyRequest,

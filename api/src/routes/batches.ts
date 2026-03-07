@@ -115,11 +115,35 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
       });
     }
 
-    const waitingCount = await defaultQueue.getWaitingCount();
-    const delayedCount = await defaultQueue.getDelayedCount();
-    if (waitingCount + delayedCount > 5000) {
-      return sendError(request, reply, 429, 'system_busy', 'System busy. Please retry shortly.', {
-        queue_size: waitingCount + delayedCount
+    // --- 503 sources (POST /v1/batches):
+    // 1. Queue health check (getWaitingCount/getDelayedCount) throws → Redis unreachable → 503 service_unavailable, reason: redis_unavailable
+    // 2. prisma.$transaction throws PrismaClientInitializationError or P1001/P1017 → DB unreachable → 503 service_unavailable, reason: database_unavailable
+    // 3. enqueueBatch() throws after transaction committed → 503 service_unavailable, reason: queue_unavailable (batch_id returned so client can retry)
+    // ---
+    // Queue overload guard: if Redis is unreachable, return 503 with reason; otherwise enforce limit
+    let queueSize = 0;
+    try {
+      const [waitingCount, delayedCount] = await Promise.all([
+        defaultQueue.getWaitingCount(),
+        defaultQueue.getDelayedCount()
+      ]);
+      queueSize = waitingCount + delayedCount;
+      request.log.debug(
+        { queueWaiting: waitingCount, queueDelayed: delayedCount, queueSize },
+        'queue_health_check'
+      );
+      if (queueSize > 5000) {
+        return sendError(request, reply, 429, 'system_busy', 'System busy. Please retry shortly.', {
+          queue_size: queueSize
+        });
+      }
+    } catch (queueError) {
+      request.log.warn(
+        { err: queueError, requestId: request.id },
+        'queue_health_check_failed_redis_unavailable'
+      );
+      return sendError(request, reply, 503, 'service_unavailable', 'Queue temporarily unavailable. Please retry.', {
+        reason: 'redis_unavailable'
       });
     }
 
@@ -129,7 +153,7 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
     let batch: Awaited<ReturnType<typeof prisma.batch.create>>;
     try {
       batch = await prisma.$transaction(async (tx) => {
-        // 1. Create batch first — must exist before any row references it (batch_items, credit_ledger)
+        // STEP 1: Create batch first (must exist before credit_ledger references it)
         const createdBatch = await tx.batch.create({
           data: {
             id: batchId,
@@ -146,13 +170,11 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
           }
         });
 
-        const persistedBatchId = createdBatch.id;
-
-        // 2. Create batch items (reference persisted batch)
+        // STEP 2: Create batch items (reference created batch)
         await tx.batchItem.createMany({
           data: body.urls.map((url) => ({
             id: randomUUID(),
-            batch_id: persistedBatchId,
+            batch_id: createdBatch.id,
             user_id: request.auth!.user.id,
             original_url: url,
             provider: detectProvider(url),
@@ -160,17 +182,26 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
           }))
         });
 
-        // 3. Deduct credits and create credit_ledger (must reference same persisted batch.id)
+        // STEP 3: Deduct credits (usage counter only); then create credit_ledger with createdBatch.id in same tx
         const creditDeduction = await deductCreditsForBatchTx(
           tx,
           request.auth!.user.id,
           plan,
-          body.urls.length,
-          persistedBatchId
+          body.urls.length
         );
         if (!creditDeduction.ok) {
           throw new Error(`INSUFFICIENT_CREDITS:${creditDeduction.needed}:${creditDeduction.available}`);
         }
+
+        // STEP 4: Create credit_ledger referencing the batch we just created (same transaction, FK guaranteed)
+        await tx.creditLedger.create({
+          data: {
+            user_id: request.auth!.user.id,
+            amount: creditDeduction.needed,
+            reason: 'batch_start',
+            batch_id: createdBatch.id
+          }
+        });
 
         return createdBatch;
       });
@@ -183,7 +214,7 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
           plan
         });
       }
-      const prismaError = error as { code?: string; name?: string };
+      const prismaError = error as { code?: string; name?: string; message?: string };
       if (prismaError?.code === 'P2003') {
         return sendError(request, reply, 409, 'conflict', 'Batch creation failed due to a constraint. Please retry.');
       }
@@ -192,13 +223,31 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
         prismaError?.code === 'P1001' ||
         prismaError?.code === 'P1017'
       ) {
-        return sendError(request, reply, 503, 'internal_server_error', 'Database temporarily unavailable. Please retry.');
+        request.log.error(
+          { err: error, requestId: request.id, code: prismaError?.code, name: prismaError?.name },
+          'batch_create_503_database_unavailable'
+        );
+        return sendError(request, reply, 503, 'service_unavailable', 'Database temporarily unavailable. Please retry.', {
+          reason: 'database_unavailable'
+        });
       }
       throw error;
     }
 
     if (autoStart) {
-      await enqueueBatch(batch.id, request.auth.user.id, plan);
+      try {
+        await enqueueBatch(batch.id, request.auth.user.id, plan);
+        request.log.debug({ batchId: batch.id }, 'enqueue_batch_ok');
+      } catch (enqueueError) {
+        request.log.error(
+          { err: enqueueError, batchId: batch.id, requestId: request.id },
+          'enqueue_batch_failed'
+        );
+        return sendError(request, reply, 503, 'service_unavailable', 'Batch created but queue unavailable. Please retry or use the batch later.', {
+          reason: 'queue_unavailable',
+          batch_id: batch.id
+        });
+      }
     }
 
     await writeAuditLog({

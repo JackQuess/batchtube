@@ -34,12 +34,12 @@ describe('credits plan service', () => {
 
   it('deducts credits for a batch when balance is enough', async () => {
     const { deductCreditsForBatchTx } = await import('../src/services/plans.js');
-    const result = await deductCreditsForBatchTx(tx as any, '11111111-1111-4111-8111-111111111111', 'pro', 5, '22222222-2222-4222-8222-222222222222');
+    const result = await deductCreditsForBatchTx(tx as any, '11111111-1111-4111-8111-111111111111', 'pro', 5);
 
     expect(result.ok).toBe(true);
     expect(result.needed).toBe(5);
     expect(tx.usageCounter.update).toHaveBeenCalledTimes(1);
-    expect(tx.creditLedger.create).toHaveBeenCalledTimes(1);
+    expect(tx.creditLedger.create).not.toHaveBeenCalled();
   });
 
   it('fails batch start when credits are insufficient', async () => {
