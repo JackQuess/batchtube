@@ -1,19 +1,12 @@
 import React, { useState } from 'react';
 import { ViewState } from '../types';
+import { FAQ_ITEMS } from '../content/faq';
 
 interface FAQScreenProps {
   onNavigate: (view: ViewState) => void;
 }
 
-export const FAQScreen: React.FC<FAQScreenProps> = ({ onNavigate }) => {
-  const faqs = [
-    { q: "Is BatchTube legal to use?", a: "BatchTube is a tool for personal archiving and fair-use content processing. Users are responsible for ensuring they have the rights to download content." },
-    { q: "What happens if a download fails?", a: "Our system automatically retries failed downloads up to 3 times. If it persists, Pro users can request manual server-side handling." },
-    { q: "Is there a limit on file size?", a: "Free users are limited to 2GB per file. Pro users can process up to 50GB per file." },
-    { q: "Can I cancel my subscription anytime?", a: "Yes, you can cancel directly from your billing dashboard. Access remains until the end of the billing period." },
-    { q: "Do you support playlist downloads?", a: "Yes! Just paste the playlist URL, and our engine will detect and list all contained videos." }
-  ];
-
+export const FAQScreen: React.FC<FAQScreenProps> = () => {
   return (
     <div className="w-full max-w-3xl mx-auto px-6 py-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
        <div className="text-center mb-16">
@@ -22,7 +15,7 @@ export const FAQScreen: React.FC<FAQScreenProps> = ({ onNavigate }) => {
        </div>
 
        <div className="space-y-4">
-          {faqs.map((faq, idx) => (
+          {FAQ_ITEMS.map((faq, idx) => (
              <AccordionItem key={idx} question={faq.q} answer={faq.a} />
           ))}
        </div>

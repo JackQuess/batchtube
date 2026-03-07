@@ -1033,8 +1033,48 @@ for (const lang of Object.keys(EXTENDED_TRANSLATION_OVERRIDES) as SupportedLangu
 
 export const LEGAL_TEXTS: Record<SupportedLanguage, Record<LegalDocType, string>> = {
   en: {
-    terms: `BatchTube Terms of Service\n\n1. Acceptance\nBy using BatchTube, you agree to these terms.\n\n2. Usage\nThis tool is for personal, educational use only. You must comply with YouTube's Terms of Service.\n\n3. Liability\nBatchTube is not responsible for copyright infringement caused by users.`,
-    privacy: `Privacy Policy\n\n1. Data Collection\nWe do not store user data permanently. Download logs are cleared regularly.\n\n2. Third Parties\nWe use Google AdSense which may collect anonymous usage data.`,
+    terms: `Terms of Service
+
+Last updated: March 7, 2026
+
+1. Acceptance of Terms
+By accessing or using the BatchTube service, you agree to be bound by these Terms of Service. If you disagree with any part of the terms, then you may not access the service.
+
+2. Description of Service
+BatchTube provides a platform for downloading and processing media from various online sources. You understand and agree that the service is provided "AS-IS" and that BatchTube assumes no responsibility for the timeliness, deletion, mis-delivery, or failure to store any user communications or personalization settings.
+
+3. User Conduct
+You agree to use the service only for lawful purposes. You are prohibited from using the service to:
+- Download copyrighted material without permission from the copyright holder.
+- Distribute malware, viruses, or any other harmful code.
+- Interfere with or disrupt the service or servers connected to the service.
+- Attempt to gain unauthorized access to any part of the service.
+
+4. Intellectual Property
+The service and its original content, features, and functionality are and will remain the exclusive property of BatchTube and its licensors. The service is protected by copyright, trademark, and other laws of both the United States and foreign countries.
+
+5. Termination
+We may terminate or suspend access to our service immediately, without prior notice or liability, for any reason whatsoever, including without limitation if you breach the Terms. All provisions of the Terms which by their nature should survive termination shall survive termination, including, without limitation, ownership provisions, warranty disclaimers, indemnity, and limitations of liability.`,
+    privacy: `Privacy Policy
+
+Last updated: March 7, 2026
+
+1. Information We Collect
+We collect information you provide directly to us, such as when you create or modify your account, request on-demand services, contact customer support, or otherwise communicate with us. This information may include: name, email, phone number, postal address, profile picture, payment method, and other information you choose to provide.
+
+2. How We Use Your Information
+We may use the information we collect about you to:
+- Provide, maintain, and improve our Services;
+- Perform internal operations, including, for example, to prevent fraud and abuse of our Services;
+- Send or facilitate communications between you and a delivery partner;
+- Send you communications we think will be of interest to you;
+- Personalize and improve the Services.
+
+3. Sharing of Information
+We may share the information we collect about you as described in this Statement or as described at the time of collection or sharing, including as follows:
+- With third parties to provide you a service you requested through a partnership or promotional offering made by a third party or us;
+- With the general public if you submit content in a public forum, such as blog comments, social media posts, or other features of our Services that are viewable by the general public;
+- With third parties with whom you choose to let us share information.`,
     cookies: `Cookie Policy\n\nWe use essential cookies to manage your session and preferences. AdSense uses cookies to serve relevant ads.`,
     legal: `Legal Notice\n\nBatchTube is not affiliated with Google LLC or YouTube. All trademarks belong to their respective owners.`,
     refund: `Refund Policy\n\n1. Subscription Billing\nPro plans are billed monthly and renew automatically unless canceled.\n\n2. Refund Eligibility\nIf you were charged by mistake or experienced a billing issue, contact support within 7 days of the charge.\n\n3. Non-refundable Cases\nPartial-month usage and normal service usage are generally non-refundable.\n\n4. Cancellation\nYou can cancel renewal anytime from your account billing settings.`

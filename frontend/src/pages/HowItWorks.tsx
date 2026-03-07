@@ -2,6 +2,7 @@ import React, { useEffect, useMemo } from 'react';
 import { AppLink } from '../lib/simpleRouter';
 import { applySeoMeta } from '../lib/seo';
 import { INFO_TEXTS } from '../constants';
+import { HOW_IT_WORKS_STEPS } from '../content/howItWorks';
 import { SupportedLanguage, Translations } from '../types';
 
 interface HowItWorksProps {
@@ -25,11 +26,25 @@ export const HowItWorks: React.FC<HowItWorksProps> = ({ lang, t }) => {
       <div className="rounded-2xl bg-white/[0.03] border border-white/10 p-6 sm:p-8 shadow-2xl shadow-black/20">
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{t.howItWorks}</h1>
 
-        <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4">
+        <div className="mt-6 space-y-4">
+          {HOW_IT_WORKS_STEPS.map((step, idx) => (
+            <div key={idx} className="rounded-xl border border-white/10 bg-black/20 p-4 flex gap-4">
+              <div className="flex-shrink-0 h-10 w-10 rounded-xl bg-primary/20 border border-primary/30 flex items-center justify-center font-semibold text-primary">
+                {idx + 1}
+              </div>
+              <div>
+                <p className="font-semibold text-neutral-200">{step.title}</p>
+                <p className="text-sm text-neutral-400 leading-relaxed mt-1">{step.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-6 rounded-xl border border-white/10 bg-black/20 p-4">
           <div className="whitespace-pre-line text-sm text-neutral-300 leading-relaxed">{content}</div>
         </div>
 
-        <div className="mt-6 flex flex-wrap gap-3">
+        <div className="mt-8 flex flex-wrap gap-3">
           <AppLink
             to="/faq"
             className="px-4 py-2 rounded-full bg-white/10 hover:bg-white/15 transition-colors text-sm"

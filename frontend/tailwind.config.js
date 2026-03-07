@@ -8,13 +8,22 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', 'sans-serif'],
+        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
       },
       colors: {
         background: '#050509',
         surface: '#0b0b10',
         primary: '#e53935',
         secondary: '#ff6b81',
+        'app-bg': '#050505',
+        'app-primary': '#E11D48',
+        'app-primary-hover': '#BE123C',
+        'app-text': '#FAFAFA',
+        'app-muted': '#A1A1AA',
+      },
+      borderColor: {
+        'app-border': 'rgba(255, 255, 255, 0.08)',
       },
       animation: {
         'fadeIn': 'fadeIn 0.5s ease-out forwards',

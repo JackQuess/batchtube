@@ -1,3 +1,18 @@
+export type ModalType =
+  | null
+  | 'preview'
+  | 'channel'
+  | 'processing'
+  | 'settings'
+  | 'files'
+  | 'history'
+  | 'supportedSites'
+  | 'pricing'
+  | 'profile'
+  | 'api'
+  | 'batchDetails'
+  | 'sourceSelection';
+
 export type ViewState = 
   | 'landing' 
   | 'pricing' 

@@ -2,10 +2,12 @@ import React from 'react';
 import { AppLink, navigate } from '../lib/simpleRouter';
 import { AuthUser, Translations } from '../types';
 import { subscriptionAPI } from '../services/subscriptionAPI';
+import { Check, X } from 'lucide-react';
 
 interface PricingPageProps {
   t: Translations;
   user: AuthUser | null;
+  onUpgrade?: () => void;
 }
 
 interface Row {
@@ -14,7 +16,7 @@ interface Row {
   pro: string;
 }
 
-export const PricingPage: React.FC<PricingPageProps> = ({ t, user }) => {
+export const PricingPage: React.FC<PricingPageProps> = ({ t, user, onUpgrade }) => {
   const rows: Row[] = [
     { label: t.pricingRowProviders, free: t.pricingFreeProviders, pro: t.pricingProProviders },
     { label: t.pricingRowVideosPerBatch, free: '3', pro: '50' },
@@ -29,10 +31,9 @@ export const PricingPage: React.FC<PricingPageProps> = ({ t, user }) => {
 
   const startPro = async () => {
     if (!user) {
-      navigate('/signup?returnUrl=/pricing');
+      onUpgrade?.();
       return;
     }
-
     try {
       const url = await subscriptionAPI.createCheckout();
       if (url) {
@@ -44,6 +45,90 @@ export const PricingPage: React.FC<PricingPageProps> = ({ t, user }) => {
       navigate('/account');
     }
   };
+
+  // Public pricing (batchtube 8 exact)
+  if (!user) {
+    return (
+      <div className="max-w-4xl mx-auto w-full px-4 sm:px-6">
+        <div className="text-center mb-16">
+          <h1 className="text-4xl md:text-5xl font-bold text-white mb-6">Simple, transparent pricing</h1>
+          <p className="text-xl text-app-muted max-w-2xl mx-auto">
+            Choose the plan that fits your workflow. No hidden fees, cancel anytime.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="glass-panel p-8 rounded-2xl border border-white/10 relative">
+            <h3 className="text-2xl font-bold text-white mb-2">Hobby</h3>
+            <div className="flex items-baseline gap-2 mb-6">
+              <span className="text-4xl font-bold text-white">$0</span>
+              <span className="text-app-muted">/month</span>
+            </div>
+            <p className="text-sm text-app-muted mb-8">Perfect for occasional downloads and personal use.</p>
+            <ul className="space-y-4 mb-8">
+              <li className="flex items-center gap-3 text-sm text-white">
+                <Check className="w-5 h-5 text-green-400 shrink-0" /> 10 downloads per day
+              </li>
+              <li className="flex items-center gap-3 text-sm text-white">
+                <Check className="w-5 h-5 text-green-400 shrink-0" /> Max 720p resolution
+              </li>
+              <li className="flex items-center gap-3 text-sm text-white">
+                <Check className="w-5 h-5 text-green-400 shrink-0" /> Basic audio extraction
+              </li>
+              <li className="flex items-center gap-3 text-sm text-app-muted/50">
+                <X className="w-5 h-5 shrink-0" /> No batch processing
+              </li>
+              <li className="flex items-center gap-3 text-sm text-app-muted/50">
+                <X className="w-5 h-5 shrink-0" /> No API access
+              </li>
+            </ul>
+            <button
+              type="button"
+              onClick={onUpgrade}
+              className="w-full py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white font-medium transition-colors border border-white/10"
+            >
+              Get Started for Free
+            </button>
+          </div>
+          <div className="glass-panel p-8 rounded-2xl border border-app-primary relative overflow-hidden">
+            <div className="absolute top-0 right-0 bg-app-primary text-white text-xs font-bold px-3 py-1 rounded-bl-lg">
+              MOST POPULAR
+            </div>
+            <div className="absolute inset-0 bg-gradient-to-br from-app-primary/10 to-transparent pointer-events-none" />
+            <h3 className="text-2xl font-bold text-white mb-2 relative">Pro</h3>
+            <div className="flex items-baseline gap-2 mb-6 relative">
+              <span className="text-4xl font-bold text-white">$12</span>
+              <span className="text-app-muted">/month</span>
+            </div>
+            <p className="text-sm text-app-muted mb-8 relative">For power users who need speed, quality, and automation.</p>
+            <ul className="space-y-4 mb-8 relative">
+              <li className="flex items-center gap-3 text-sm text-white">
+                <Check className="w-5 h-5 text-app-primary shrink-0" /> Unlimited downloads
+              </li>
+              <li className="flex items-center gap-3 text-sm text-white">
+                <Check className="w-5 h-5 text-app-primary shrink-0" /> Up to 4K resolution
+              </li>
+              <li className="flex items-center gap-3 text-sm text-white">
+                <Check className="w-5 h-5 text-app-primary shrink-0" /> High-quality audio extraction
+              </li>
+              <li className="flex items-center gap-3 text-sm text-white">
+                <Check className="w-5 h-5 text-app-primary shrink-0" /> Unlimited batch processing
+              </li>
+              <li className="flex items-center gap-3 text-sm text-white">
+                <Check className="w-5 h-5 text-app-primary shrink-0" /> Full API access
+              </li>
+            </ul>
+            <button
+              type="button"
+              onClick={startPro}
+              className="w-full py-3 rounded-xl bg-app-primary hover:bg-red-700 text-white font-medium transition-colors shadow-[0_0_20px_rgba(165,0,52,0.4)] relative"
+            >
+              Upgrade to Pro
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto w-full px-4 sm:px-6">

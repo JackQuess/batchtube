@@ -34,12 +34,11 @@ export interface BatchJobStatus {
       id: number;
       status: 'success' | 'failed';
       provider?: string;
-      meta?: {
-        title?: string;
-      };
+      meta?: { title?: string };
       fileName?: string | null;
       bytes?: number;
       error?: string;
+      file_id?: string | null;
     }>;
   };
 }
@@ -59,6 +58,7 @@ interface BatchItemsResponse {
     provider: string;
     status: 'pending' | 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
     error: string | null;
+    file_id?: string | null;
   }>;
 }
 
@@ -110,7 +110,8 @@ export const batchAPI = {
         meta: {
           title: item.original_url
         },
-        error: item.error || undefined
+        error: item.error || undefined,
+        file_id: item.file_id ?? undefined
       };
     });
 
@@ -140,5 +141,9 @@ export const batchAPI = {
   getSignedDownloadUrl: async (jobId: string): Promise<string> => {
     const data = await apiClient<{ url: string }>(`/v1/batches/${jobId}/zip`);
     return data.url;
+  },
+
+  cancel: async (jobId: string): Promise<void> => {
+    await apiClient(`/v1/batches/${jobId}/cancel`, { method: 'POST' });
   }
 };

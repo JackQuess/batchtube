@@ -1,5 +1,5 @@
 import { API_BASE_URL } from '../config/api';
-import { getAuthHeadersFresh } from './auth';
+import { getAuthHeadersFresh, clearUser } from './auth';
 
 export interface ApiErrorPayload {
   error?: {
@@ -59,6 +59,9 @@ export async function apiClient<T>(path: string, init: RequestInit = {}, require
   });
 
   if (!res.ok) {
+    if (res.status === 401) {
+      clearUser();
+    }
     const payload = await parseResponse<ApiErrorPayload>(res).catch(() => ({}));
     const code = payload?.error?.code || 'request_failed';
     const message = payload?.error?.message || 'İstek başarısız.';

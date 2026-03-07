@@ -102,6 +102,18 @@ export const loginWithEmail = async (email: string, password: string): Promise<A
   return user;
 };
 
+/** Redirects to GitHub OAuth. On return, Supabase will set the session and initializeAuth will sync the user. */
+export const loginWithGitHub = async (): Promise<void> => {
+  const client = requireSupabase();
+  const { error } = await client.auth.signInWithOAuth({
+    provider: 'github',
+    options: { redirectTo: `${typeof window !== 'undefined' ? window.location.origin : ''}/` }
+  });
+  if (error) {
+    throw new Error(error.message || 'GitHub ile giriş başarısız.');
+  }
+};
+
 export const sendResetForEmail = async (email: string): Promise<boolean> => {
   const client = requireSupabase();
   const normalized = normalizeEmail(email);
