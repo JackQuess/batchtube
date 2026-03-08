@@ -122,6 +122,7 @@ export function SmartBar({ onCommand, onStartProcessing, onOpenSourcePicker, onS
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
     setIsDragOver(true);
   }, []);
 
@@ -130,15 +131,49 @@ export function SmartBar({ onCommand, onStartProcessing, onOpenSourcePicker, onS
     if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragOver(false);
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    const text = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text');
-    if (text && text.trim()) {
-      setValue(text.trim());
-      inputRef.current?.focus();
-    }
-  }, [setValue]);
+  const handleDrop = useCallback(
+    async (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragOver(false);
+
+      const files = e.dataTransfer.files;
+      if (files && files.length > 0) {
+        const file = files[0];
+        const isText = file.type.startsWith('text/') || /\.(txt|text|urls?|list)$/i.test(file.name || '');
+        if (!isText) {
+          setValue(file.name || '');
+          inputRef.current?.focus();
+          return;
+        }
+        try {
+          const text = await file.text();
+          const lines = text
+            .split(/[\r\n]+/)
+            .map((l) => l.trim())
+            .filter(Boolean);
+          const urlLike = /^https?:\/\//i;
+          const urls = lines.filter((l) => urlLike.test(l));
+          if (urls.length > 0 && onStartBatch) {
+            onStartBatch({ urls });
+            clear();
+            return;
+          }
+          setValue(text.trim());
+        } catch {
+          setValue(file.name || '');
+        }
+        inputRef.current?.focus();
+        return;
+      }
+
+      const text = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text');
+      if (text && text.trim()) {
+        setValue(text.trim());
+        inputRef.current?.focus();
+      }
+    },
+    [setValue, clear, onStartBatch]
+  );
 
   useEffect(() => {
     const onFocus = () => {
