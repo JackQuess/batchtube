@@ -175,7 +175,7 @@ function runYtDlp(
       if (code !== 0) {
         try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
         const errSnippet = stderr.length > MAX_STDERR_LOG ? stderr.slice(-MAX_STDERR_LOG) : stderr;
-        reject(new YtDlpError(`yt-dlp exited ${code}`, errSnippet.trim() || 'no stderr', code));
+        reject(new YtDlpError(`yt-dlp exited ${code}`, errSnippet.trim() || 'no stderr', code ?? -1));
         return;
       }
       const files = fs.readdirSync(dir);
