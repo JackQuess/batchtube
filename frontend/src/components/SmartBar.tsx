@@ -168,9 +168,9 @@ export function SmartBar({ onCommand, onStartProcessing, onOpenSourcePicker, onS
     onStartProcessing();
   };
 
-  const handleSingleDownload = () => {
+  const handleSingleDownload = (opts: { format: 'mp4' | 'mp3' | 'mkv'; quality: 'best' | '720p' | '1080p' | '4k' }) => {
     if (detection?.type === 'single_video' && detection.url && onStartBatch) {
-      onStartBatch({ urls: [detection.url] });
+      onStartBatch({ urls: [detection.url], format: opts.format, quality: opts.quality });
       clear();
     } else {
       handleAction();

@@ -94,6 +94,7 @@ export function classifyYoutubeError(stderr: string): {
     return { code: 'youtube_private_video', retriable: false, authError: false };
   }
   if (
+    s.includes('sign in to confirm') ||
     s.includes('sign in to confirm your age') ||
     s.includes('confirm your age') ||
     s.includes('inappropriate') ||
