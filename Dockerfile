@@ -1,5 +1,5 @@
-# Root Dockerfile: builds the api app when build context is repo root (e.g. Railway worker with no root dir).
-# For api/ and worker services, prefer Root Directory = "api" so api/Dockerfile (Alpine + yt-dlp_musllinux) is used.
+# Root Dockerfile: builds the api app when build context is repo root.
+# For worker/API on Railway, set Root Directory = "api" so api/Dockerfile (Alpine + yt-dlp) is used instead.
 FROM node:20-slim
 
 RUN apt-get update && \
@@ -12,11 +12,9 @@ RUN python3 -m pip install --no-cache-dir -U yt-dlp && \
 
 WORKDIR /app
 
-COPY api/package.json api/package-lock.json* ./
-RUN npm install
-
+# Single COPY to avoid cache checksum issues; then install and build
 COPY api/ ./
-RUN npx prisma generate && npm run build
+RUN npm install && npx prisma generate && npm run build
 
 EXPOSE 8080
 CMD ["node", "dist/server.js"]

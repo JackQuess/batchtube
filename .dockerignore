@@ -10,6 +10,7 @@ backend/node_modules
 backend/bin
 backend/.cache
 backend/dist
+api/node_modules
 *.log
 .vscode
 .idea
