@@ -1,35 +1,22 @@
+# Root Dockerfile: builds the api app when build context is repo root (e.g. Railway worker with no root dir).
+# For api/ and worker services, prefer Root Directory = "api" so api/Dockerfile (Alpine + yt-dlp_musllinux) is used.
 FROM node:20-slim
 
-# Install system dependencies
 RUN apt-get update && \
-    apt-get install -y \
-    python3 \
-    python3-pip \
-    ffmpeg \
-    curl \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+    apt-get install -y python3 python3-pip ffmpeg curl ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
 
-# Install yt-dlp via pip (more reliable updates) + verify
 RUN python3 -m pip install --no-cache-dir -U yt-dlp && \
     ln -sf /usr/local/bin/yt-dlp /usr/bin/yt-dlp && \
     yt-dlp --version
 
-# Set working directory to /app/backend
-WORKDIR /app/backend
+WORKDIR /app
 
-# Copy package files
-COPY backend/package.json backend/package-lock.json ./
+COPY api/package.json api/package-lock.json* ./
+RUN npm install
 
-# Install production dependencies
-RUN npm ci --only=production
+COPY api/ ./
+RUN npx prisma generate && npm run build
 
-# Copy backend source code
-COPY backend/ ./
-
-# Expose port
-EXPOSE 3000
-
-# Default command (backend server)
-# Worker service will override with: node src/worker.js
-CMD ["node", "src/server.js"]
+EXPOSE 8080
+CMD ["node", "dist/server.js"]
