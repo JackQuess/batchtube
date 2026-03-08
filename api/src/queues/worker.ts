@@ -2,7 +2,7 @@ import { Worker, type Job } from 'bullmq';
 import { randomUUID } from 'node:crypto';
 import JSZip from 'jszip';
 import { prisma } from '../services/db.js';
-import { detectProvider } from '../services/providers.js';
+import { detectProvider, getDefaultFormatForProvider } from '../services/providers.js';
 import { putObject } from '../storage/s3.js';
 import { PLAN_LIMITS, getPlan, incrementBandwidth } from '../services/plans.js';
 import { sendBatchWebhook } from '../services/webhooks.js';
@@ -22,9 +22,18 @@ import {
 
 type BatchOptions = { format?: string; quality?: string; archive_as_zip?: boolean };
 
-function toDownloadOptions(opts: BatchOptions | null): { format: DownloadFormat; quality: DownloadQuality } {
-  const format = (opts?.format === 'mp3' || opts?.format === 'mkv' ? opts.format : 'mp4') as DownloadFormat;
+const ALLOWED_FORMATS: DownloadFormat[] = ['mp4', 'mp3', 'mkv'];
+
+function toDownloadOptions(
+  opts: BatchOptions | null,
+  provider: string
+): { format: DownloadFormat; quality: DownloadQuality } {
   const quality = (opts?.quality === '4k' || opts?.quality === '1080p' || opts?.quality === '720p' ? opts.quality : 'best') as DownloadQuality;
+  const requestedFormat = opts?.format;
+  const format: DownloadFormat =
+    requestedFormat && ALLOWED_FORMATS.includes(requestedFormat as DownloadFormat)
+      ? (requestedFormat as DownloadFormat)
+      : getDefaultFormatForProvider(provider);
   return { format, quality };
 }
 
@@ -36,8 +45,6 @@ async function processBatch(job: Job<BatchJob>) {
 
   const batch = await prisma.batch.findUniqueOrThrow({ where: { id: batchId } });
   const batchOptions = (batch.options as BatchOptions) ?? {};
-  const downloadOpts = toDownloadOptions(batchOptions);
-
   await prisma.batch.update({ where: { id: batchId }, data: { status: 'processing' } });
 
   const items = await prisma.batchItem.findMany({
@@ -51,16 +58,18 @@ async function processBatch(job: Job<BatchJob>) {
 
   for (const item of items) {
     try {
+      const provider = item.provider ?? detectProvider(item.original_url);
       await prisma.batchItem.update({
         where: { id: item.id },
         data: {
           status: 'processing',
-          provider: item.provider ?? detectProvider(item.original_url),
+          provider,
           progress: 25,
           updated_at: new Date()
         }
       });
 
+      const downloadOpts = toDownloadOptions(batchOptions, provider);
       const result = await downloadWithYtDlp(item.original_url, downloadOpts, item.id);
       const { buffer: content } = readDownloadAndCleanup(result);
 

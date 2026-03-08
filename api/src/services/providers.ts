@@ -32,6 +32,19 @@ const BLOCKED_DOMAINS = new Set([
   '169.254.169.254'
 ]);
 
+/** Audio-only providers: default format mp3. Video providers default to mp4. */
+const AUDIO_PROVIDERS = new Set([
+  'soundcloud',
+  'mixcloud',
+  'bandcamp'
+]);
+
+export type ProviderDefaultFormat = 'mp4' | 'mp3';
+
+export function getDefaultFormatForProvider(provider: string): ProviderDefaultFormat {
+  return AUDIO_PROVIDERS.has(provider.toLowerCase()) ? 'mp3' : 'mp4';
+}
+
 export function detectProvider(url: string): string {
   for (const rule of DOMAIN_RULES) {
     if (rule.regex.test(url)) return rule.name;
