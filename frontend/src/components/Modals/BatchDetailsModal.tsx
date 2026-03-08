@@ -32,9 +32,25 @@ export function BatchDetailsModal({ batchId, onClose }: BatchDetailsModalProps) 
 
   const handleDownloadZip = async () => {
     setZipLoading(true);
+    const popup = window.open(undefined, '_blank', 'noopener,noreferrer');
     try {
       const url = await batchAPI.getSignedDownloadUrl(batchId);
-      window.open(url, '_blank');
+      if (popup) {
+        popup.location.href = url;
+      } else {
+        const a = document.createElement('a');
+        a.href = url;
+        a.rel = 'noopener noreferrer';
+        a.target = '_blank';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+    } catch (err) {
+      if (popup) popup.close();
+      const message = err instanceof Error ? err.message : 'ZIP alınamadı.';
+      console.error('Download ZIP failed:', err);
+      alert(message);
     } finally {
       setZipLoading(false);
     }

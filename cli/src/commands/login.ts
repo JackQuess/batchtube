@@ -41,6 +41,11 @@ export async function runLogin(): Promise<void> {
       console.error('Invalid API key. Check your key at https://batchtube.app or your dashboard.');
       process.exit(1);
     }
+    if (msg.includes('403') || msg.includes('Archivist') || msg.includes('Enterprise')) {
+      console.error('API access requires Archivist or Enterprise plan.');
+      console.error('If you are an admin, the API server must have ADMIN_USER_IDS set to your user UUID in its environment.');
+      process.exit(1);
+    }
     console.error('Could not verify API key:', msg);
     process.exit(1);
   }
