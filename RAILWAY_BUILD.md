@@ -1,27 +1,22 @@
 # Railway build: Worker & API
 
-## Repository structure
+## Root Directory = `api` (batchtube & worker)
 
-- **API (and worker) source:** `api/`
-- **Root Dockerfile** (`./Dockerfile`): expects build context = **repo root** and runs `COPY api/ ./`.
+**Her iki serviste de Root Directory `/api` ise** build context sadece `api/` klasörünün içeriğidir. Railway bu durumda **`api/Dockerfile`** kullanmalı (içinde `COPY . ./` var, `api/` yok).
 
-## If you see "COPY api/ not found" or "failed to compute checksum"
+Eğer hâlâ "COPY api/ not found" alıyorsan, Railway bazen repo kökündeki Dockerfile’ı seçiyor demektir. Bunu engellemek için repo kökünde artık **`Dockerfile` yok**; sadece **`Dockerfile.reporoot`** var. Böylece Root Directory = `api` iken sadece `api/Dockerfile` kullanılır.
 
-Railway is building with **Root Directory = `api`**, so the build context is only the contents of `api/`. There is no `api` folder inside that context, so the root Dockerfile fails.
+## Repo yapısı
 
-**Fix:** In Railway, for both **worker** and **batchtube (API)** services:
+- **API (ve worker) kaynağı:** `api/`
+- **api/Dockerfile:** Context = `api/` klasörü → `COPY . ./`
+- **Dockerfile.reporoot:** Sadece context = repo kökü için (yerel: `docker build -f Dockerfile.reporoot .`)
 
-1. Open the service → **Settings** → **Source**.
-2. Set **Root Directory** to **`api`**.
-3. Redeploy.
+## Özet
 
-Then Railway will use **`api/Dockerfile`** (and `api/railway.json`). That Dockerfile uses `COPY . ./` (no `api/` prefix) and works when the context is the `api` folder.
+| Root Directory | Kullanılan Dockerfile | COPY |
+|----------------|------------------------|------|
+| `api`          | api/Dockerfile        | COPY . ./ |
+| *(boş)*       | Dockerfile yok → Nixpacks veya Dockerfile.reporoot (path belirtirsen) | - |
 
-## Summary
-
-| Root Directory | Dockerfile used   | COPY in Dockerfile |
-|----------------|-------------------|---------------------|
-| *(empty)*      | `./Dockerfile`    | `COPY api/ ./`      |
-| `api`          | `api/Dockerfile`  | `COPY . ./`         |
-
-Use **Root Directory = `api`** for worker and API so `api/Dockerfile` (Alpine + yt-dlp) is used.
+**batchtube ve worker için Root Directory = `api`** kullan; böylece `api/Dockerfile` (Alpine + yt-dlp) devreye girer.

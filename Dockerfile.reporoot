@@ -1,6 +1,6 @@
-# Root Dockerfile: only valid when build context is REPO ROOT (Root Directory empty).
-# If you see "COPY api/ not found" → Railway context is the api folder. Set Root Directory to "api"
-# so Railway uses api/Dockerfile instead (no "api/" in paths).
+# Use this only when build context is REPO ROOT (Root Directory empty).
+# Build: docker build -f Dockerfile.reporoot .
+# With Root Directory = "api", Railway uses api/Dockerfile (COPY . ./) — do not use this file.
 FROM node:20-slim
 
 RUN apt-get update && \
