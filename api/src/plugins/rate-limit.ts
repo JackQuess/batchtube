@@ -8,6 +8,8 @@ const rateLimitPlugin: FastifyPluginAsync = async (app) => {
   app.addHook('preHandler', async (request, reply) => {
     if (!request.url.startsWith('/v1') || !request.auth) return;
 
+    if (request.auth.isAdmin === true) return;
+
     const plan = await getPlan(request.auth.user.id);
     const limits = PLAN_LIMITS[plan];
     const now = new Date();
@@ -46,6 +48,7 @@ const rateLimitPlugin: FastifyPluginAsync = async (app) => {
 
   app.addHook('onResponse', async (request, reply) => {
     if (!request.url.startsWith('/v1') || !request.auth) return;
+    if (request.auth.isAdmin === true) return;
     const principal = request.auth.user.id;
     const totalKey = `abuse:total:${principal}`;
     const errorsKey = `abuse:4xx:${principal}`;
