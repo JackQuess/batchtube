@@ -1,9 +1,10 @@
 FROM node:20-alpine
-# Alpine uses musl libc → use yt-dlp_musllinux (yt-dlp_linux is glibc)
+# Worker needs yt-dlp (standalone binary, no Python required) and ffmpeg for merge/convert
 RUN apk add --no-cache ffmpeg wget && \
   wget -q -O /usr/local/bin/yt-dlp "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_musllinux" && \
   chmod +x /usr/local/bin/yt-dlp && \
   yt-dlp --version && \
+  ffmpeg -version | head -1 && \
   apk del wget
 WORKDIR /app
 COPY package.json package-lock.json* ./

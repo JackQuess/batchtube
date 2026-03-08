@@ -50,6 +50,11 @@ cd api
 npm run worker
 ```
 
+## Downloads (yt-dlp)
+
+**No cookie required.** BatchTube works out of the box for public videos (YouTube, TikTok, Instagram, etc.).  
+**Optional:** Set `YT_DLP_COOKIES_FILE` only if you need age-restricted or login-required content (e.g. some YouTube videos). If set, the worker logs when the cookie is about to expire (~2 weeks).
+
 ## Tests
 
 ```bash

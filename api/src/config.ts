@@ -54,5 +54,7 @@ export const config = {
     bucket: process.env.S3_BUCKET ?? 'batchtube',
     forcePathStyle: String(process.env.S3_FORCE_PATH_STYLE ?? 'true') === 'true',
     skipBucketEnsure: String(process.env.S3_SKIP_BUCKET_ENSURE ?? 'false') === 'true'
-  }
+  },
+  /** Optional: path to cookies.txt for yt-dlp (age-restricted / login-required content). */
+  ytDlpCookiesPath: process.env.YT_DLP_COOKIES_FILE ?? ''
 };

@@ -19,6 +19,7 @@ import {
   getDbHostCategory,
   QUEUE_NAME
 } from '../runtime-config.js';
+import { getYtDlpCookieExpiry } from '../services/cookieExpiry.js';
 
 type BatchOptions = { format?: string; quality?: string; archive_as_zip?: boolean };
 
@@ -70,17 +71,37 @@ async function processBatch(job: Job<BatchJob>) {
       });
 
       const downloadOpts = toDownloadOptions(batchOptions, provider);
-      const result = await downloadWithYtDlp(item.original_url, downloadOpts, item.id);
+      const result = await downloadWithYtDlp(item.original_url, downloadOpts, item.id, provider);
       const { buffer: content } = readDownloadAndCleanup(result);
 
       const ext = result.ext;
       const key = `results/${batchId}/${item.id}.${ext}`;
 
+      if (provider === 'youtube') {
+        console.log(
+          JSON.stringify({
+            msg: 'youtube_upload_start',
+            itemId: item.id,
+            batchId,
+            key
+          })
+        );
+      }
       await putObject({
         key,
         body: content,
         contentType: result.mimeType
       });
+      if (provider === 'youtube') {
+        console.log(
+          JSON.stringify({
+            msg: 'youtube_upload_success',
+            itemId: item.id,
+            batchId,
+            key
+          })
+        );
+      }
 
       await prisma.file.create({
         data: {
@@ -108,6 +129,8 @@ async function processBatch(job: Job<BatchJob>) {
       failed += 1;
       const errMsg = error instanceof Error ? error.message : String(error);
       const errName = error instanceof Error ? error.name : 'Error';
+      const youtubeCodeMatch = errMsg.match(/^(youtube_(?:private_video|age_restricted|login_required|unavailable|extractor_error|download_error)):/);
+      const errorMessageToStore = youtubeCodeMatch ? youtubeCodeMatch[1] : errMsg;
       console.error(
         JSON.stringify({
           msg: 'worker_item_failed',
@@ -115,14 +138,15 @@ async function processBatch(job: Job<BatchJob>) {
           itemId: item.id,
           url: item.original_url,
           error: errMsg,
-          errorName: errName
+          errorName: errName,
+          ...(youtubeCodeMatch ? { youtubeErrorCode: youtubeCodeMatch[1] } : {})
         })
       );
       await prisma.batchItem.update({
         where: { id: item.id },
         data: {
           status: 'failed',
-          error_message: errMsg,
+          error_message: errorMessageToStore,
           updated_at: new Date()
         }
       });
@@ -174,6 +198,39 @@ if (dbHostCategory === 'supabase_host_detected') {
   console.warn('[worker] DATABASE_URL points to Supabase; use Railway Postgres for worker.');
 }
 
+function logCookieExpiry() {
+  const cookiePath = config.ytDlpCookiesPath?.trim();
+  if (!cookiePath) return;
+  const info = getYtDlpCookieExpiry(cookiePath);
+  if (!info) return;
+  if (info.isExpired) {
+    console.warn(
+      JSON.stringify({
+        msg: 'yt_dlp_cookie_expired',
+        path: info.path,
+        domain: info.domain,
+        hint: 'Replace YT_DLP_COOKIES_FILE with a fresh cookies.txt (e.g. export from browser) for age-restricted downloads.'
+      })
+    );
+    return;
+  }
+  if (info.expiresInDays <= 3) {
+    console.warn(
+      JSON.stringify({
+        msg: 'yt_dlp_cookie_expiring_soon',
+        path: info.path,
+        domain: info.domain,
+        expires_in_days: info.expiresInDays,
+        hint: 'Replace YT_DLP_COOKIES_FILE soon to avoid age-restricted download failures.'
+      })
+    );
+  }
+}
+
+logCookieExpiry();
+const COOKIE_CHECK_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
+setInterval(logCookieExpiry, COOKIE_CHECK_INTERVAL_MS);
+
 // Retry connection on DNS/network errors (e.g. Railway redis.railway.internal EAI_AGAIN)
 function redisRetryStrategy(times: number): number {
   return Math.min(2000 * Math.pow(2, times), 30000);
@@ -195,6 +252,18 @@ console.log(
     database_provider: 'postgres',
     db_host_category: dbHostCategory,
     queue_name: QUEUE_NAME,
-    redis_configured: Boolean(config.redisUrl && config.redisUrl.length > 0)
+    redis_configured: Boolean(config.redisUrl && config.redisUrl.length > 0),
+    ...(config.ytDlpCookiesPath?.trim()
+      ? (() => {
+          const c = getYtDlpCookieExpiry(config.ytDlpCookiesPath!);
+          return c
+            ? {
+                yt_dlp_cookie_configured: true,
+                yt_dlp_cookie_expires_in_days: c.expiresInDays,
+                yt_dlp_cookie_expired: c.isExpired
+              }
+            : { yt_dlp_cookie_configured: true, yt_dlp_cookie_expires_in_days: null };
+        })()
+      : { yt_dlp_cookie_configured: false })
   })
 );

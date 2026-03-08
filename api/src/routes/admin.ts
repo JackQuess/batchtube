@@ -5,6 +5,8 @@ import { prisma } from '../services/db.js';
 import { sendError } from '../utils/errors.js';
 import { generateApiKey } from '../utils/crypto.js';
 import { writeAuditLog } from '../services/audit.js';
+import { config } from '../config.js';
+import { getYtDlpCookieExpiry } from '../services/cookieExpiry.js';
 
 const paginationSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -42,7 +44,19 @@ function getCurrentMonthStart(): Date {
 
 const adminRoute: FastifyPluginAsync = async (app) => {
   app.get('/admin-api/health', async (request, reply) => {
-    return reply.send({ ok: true });
+    const payload: { ok: boolean; yt_dlp_cookie?: { configured: boolean; expires_in_days?: number | null; expired?: boolean } } = { ok: true };
+    const cookiePath = config.ytDlpCookiesPath?.trim();
+    if (cookiePath) {
+      const info = getYtDlpCookieExpiry(cookiePath);
+      payload.yt_dlp_cookie = {
+        configured: true,
+        expires_in_days: info?.expiresInDays ?? null,
+        expired: info?.isExpired ?? false
+      };
+    } else {
+      payload.yt_dlp_cookie = { configured: false };
+    }
+    return reply.send(payload);
   });
 
   app.get('/admin-api/kpis', async (request, reply) => {
