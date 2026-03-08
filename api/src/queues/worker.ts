@@ -1,5 +1,6 @@
 import { Worker, type Job } from 'bullmq';
 import { randomUUID } from 'node:crypto';
+import JSZip from 'jszip';
 import { prisma } from '../services/db.js';
 import { detectProvider } from '../services/providers.js';
 import { putObject } from '../storage/s3.js';
@@ -28,6 +29,7 @@ async function processBatch(job: Job<BatchJob>) {
 
   let completed = 0;
   let failed = 0;
+  const completedFiles: { id: string; content: Buffer }[] = [];
 
   for (const item of items) {
     try {
@@ -72,6 +74,7 @@ async function processBatch(job: Job<BatchJob>) {
 
       await incrementBandwidth(userId, BigInt(content.byteLength));
       completed += 1;
+      completedFiles.push({ id: item.id, content });
     } catch (error) {
       failed += 1;
       const errMsg = error instanceof Error ? error.message : String(error);
@@ -102,8 +105,12 @@ async function processBatch(job: Job<BatchJob>) {
   const finalStatus = completed > 0 ? 'completed' : 'failed';
   const zipKey = `archives/${batchId}.zip`;
 
-  if (completed > 0) {
-    const zipBody = Buffer.from(`batch=${batchId}\ncompleted=${completed}\nfailed=${failed}\n`);
+  if (completed > 0 && completedFiles.length > 0) {
+    const zip = new JSZip();
+    for (const { id, content } of completedFiles) {
+      zip.file(`${id}.txt`, content);
+    }
+    const zipBody = await zip.generateAsync({ type: 'nodebuffer' });
     await putObject({ key: zipKey, body: zipBody, contentType: 'application/zip' });
   }
 
