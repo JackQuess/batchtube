@@ -21,6 +21,16 @@ export type SmartBarSourceState =
 
 const DETECT_DEBOUNCE_MS = 400;
 
+/** Only run detection when input looks like a link or command — not on every keystroke. */
+function shouldRunDetection(trimmed: string): boolean {
+  if (!trimmed || trimmed.length < 2) return false;
+  if (/^https?:\/\/\S+/i.test(trimmed)) return true;
+  if (/^[^\s\r\n,]+\.\S*/.test(trimmed) && (trimmed.includes('/') || /\.(com|net|org|io|co|be)\b/i.test(trimmed))) return true;
+  if (/^\s*(archive|download|batch|extract\s+audio|history|files|latest\s+\d+\s+from)\b/i.test(trimmed)) return true;
+  if (/\n|\s*,\s*/.test(trimmed) && trimmed.split(/[\n,]+/).some((p) => p.trim().length > 0)) return true;
+  return false;
+}
+
 export interface UseSmartBarSourceDetectionOptions {
   onCommand?: (action: string, payload?: string) => void;
   onStartBatch?: (opts: { urls: string[]; format?: 'mp3' | 'mp4' | 'mkv'; quality?: 'best' | '720p' | '1080p' | '4k' }) => void;
@@ -108,18 +118,22 @@ export function useSmartBarSourceDetection(options: UseSmartBarSourceDetectionOp
     (next: string) => {
       setValue(next);
       setErrorMessage(null);
-      if (next.trim()) {
-        setState('typing');
-        const trimmed = next.trim();
-        const looksLikeSingleUrl = /^https?:\/\/[^\s]+$/i.test(trimmed) || (/^[^\s]+$/i.test(trimmed) && trimmed.includes('.'));
-        if (looksLikeSingleUrl) {
-          runDetectionSync(trimmed);
-        } else {
-          runDetection(trimmed);
-        }
-      } else {
+      const trimmed = next.trim();
+      if (!trimmed) {
         setState('idle');
         setDetection(null);
+        return;
+      }
+      setState('typing');
+      if (!shouldRunDetection(trimmed)) {
+        setDetection(null);
+        return;
+      }
+      const looksLikeSingleUrl = /^https?:\/\/[^\s]+$/i.test(trimmed) || (/^[^\s]+$/i.test(trimmed) && trimmed.includes('.'));
+      if (looksLikeSingleUrl) {
+        runDetectionSync(trimmed);
+      } else {
+        runDetection(trimmed);
       }
     },
     [runDetection, runDetectionSync]
