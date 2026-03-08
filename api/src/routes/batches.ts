@@ -578,8 +578,7 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
       return sendError(request, reply, 404, 'not_found', 'Batch not found.', { id });
     }
 
-    const archiveEnabled = Boolean((batch.options as { archive_as_zip?: boolean } | null)?.archive_as_zip);
-    if (!archiveEnabled || batch.status !== 'completed' || !batch.zip_file_path) {
+    if (batch.status !== 'completed' || !batch.zip_file_path) {
       return sendError(request, reply, 403, 'forbidden', 'Batch ZIP is not available.', {
         status: batch.status
       });
