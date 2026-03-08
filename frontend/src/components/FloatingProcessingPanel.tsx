@@ -66,6 +66,12 @@ export function FloatingProcessingPanel({ batchIds, isOpen, onClose, onRemoveBat
 
   if (!isOpen || batchIds.length === 0) return null;
 
+  const hasActive = batchIds.some((id) => {
+    const s = statuses[id];
+    return !s || s.state === 'waiting' || s.state === 'active';
+  });
+  const allDone = !hasActive;
+
   return (
     <AnimatePresence>
       <motion.div
@@ -77,9 +83,19 @@ export function FloatingProcessingPanel({ batchIds, isOpen, onClose, onRemoveBat
       >
         <div className="p-4 border-b border-white/10 flex items-center justify-between bg-black/20 shrink-0">
           <div className="flex items-center gap-2">
-            <Loader2 className="w-4 h-4 text-app-primary animate-spin" />
+            {allDone ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+            ) : (
+              <Loader2 className="w-4 h-4 text-app-primary animate-spin shrink-0" />
+            )}
             <span className="text-sm font-medium text-white">
-              {batchIds.length === 1 ? 'Processing' : `${batchIds.length} batches`}
+              {allDone
+                ? batchIds.length === 1
+                  ? 'Done'
+                  : `Done · ${batchIds.length} batches`
+                : batchIds.length === 1
+                  ? 'Processing'
+                  : `${batchIds.length} batches`}
             </span>
           </div>
           <button type="button" onClick={onClose} className="p-1 hover:bg-white/10 rounded-lg transition-colors">
