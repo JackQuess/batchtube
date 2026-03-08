@@ -74,11 +74,23 @@ async function processBatch(job: Job<BatchJob>) {
       completed += 1;
     } catch (error) {
       failed += 1;
+      const errMsg = error instanceof Error ? error.message : String(error);
+      const errName = error instanceof Error ? error.name : 'Error';
+      console.error(
+        JSON.stringify({
+          msg: 'worker_item_failed',
+          batchId,
+          itemId: item.id,
+          url: item.original_url,
+          error: errMsg,
+          errorName: errName
+        })
+      );
       await prisma.batchItem.update({
         where: { id: item.id },
         data: {
           status: 'failed',
-          error_message: error instanceof Error ? error.message : 'Processing failed',
+          error_message: errMsg,
           updated_at: new Date()
         }
       });

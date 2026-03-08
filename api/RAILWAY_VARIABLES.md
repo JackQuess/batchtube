@@ -51,6 +51,7 @@ Değişkenleri ekledikten sonra batchtube servisini yeniden deploy edin.
 | `DATABASE_URL` | **Yes** | **Same** Railway Postgres URL as API. |
 | `DIRECT_URL`   | **Yes** | Same as `DATABASE_URL`. |
 | `REDIS_URL`    | **Yes** | **Same** Railway Redis URL as API. |
+| `S3_*` (endpoint, bucket, keys) | **Yes** | Worker uploads results to S3; use same S3 vars as batchtube (S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY, S3_SECRET_KEY, etc.). |
 
 API and Worker must use the **exact same** `DATABASE_URL`, `DIRECT_URL`, and `REDIS_URL`. Queue name in code: `batchtube-default`.
 
@@ -88,5 +89,6 @@ API logs: `db_host_category` (railway_postgres | supabase_host_detected | local 
 - [ ] **batchtube**: `REDIS_URL` = Railway Redis
 - [ ] **batchtube**: Supabase auth vars set
 - [ ] **worker**: same `DATABASE_URL`, `DIRECT_URL`, `REDIS_URL` as API
+- [ ] **worker**: same S3_* env vars as batchtube (worker uploads to S3)
 - [ ] `prisma migrate deploy` run against Railway Postgres
 - [ ] Redeploy API and Worker
