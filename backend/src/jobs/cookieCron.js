@@ -3,10 +3,11 @@ import { cookiesManager } from "../core/CookiesManager.js";
 
 /**
  * Cookie refresh cron job
- * Runs every 12 hours to check and refresh cookies if needed
+ * Runs periodically to check if cookies are stale (by real expiry in cookies.txt)
+ * and refreshes only when expired or expiring within REFRESH_BEFORE_DAYS — not on a fixed schedule.
  */
 export function startCookieCron() {
-  console.log("[CookieCron] Starting cookie refresh cron job (every 12 hours)");
+  console.log("[CookieCron] Starting cookie refresh check (every 12h, refresh only when expired or soon to expire)");
 
   // Run every 12 hours: 0 */12 * * *
   cron.schedule("0 */12 * * *", async () => {

@@ -1,11 +1,11 @@
 /**
  * SOURCE RESOLVER LAYER (backend part)
- * URL normalization, provider detection, and source-type inference from URL.
- * Does NOT run yt-dlp for download; used for validation and optional server-side resolution.
- * Listing items is in sourceList.ts (preview); actual download is in download.ts (Download Engine).
+ * Maps normalized URLs to provider + source type + capabilities. Uses provider registry.
+ * Does NOT run yt-dlp for download; listing is in sourceList.ts; download is in download.ts.
  */
 
-import { detectProvider, isMediaUrlAllowed } from './providers.js';
+import type { ProviderResolverResult, ProviderSourceType } from '../types/providerEngine.js';
+import { detectProvider, getProviderCapabilities, isMediaUrlAllowed } from './providers.js';
 
 export type SourceType = 'video' | 'playlist' | 'channel' | 'profile' | 'direct_media' | 'unsupported';
 
@@ -15,6 +15,11 @@ export interface ResolveResult {
   sourceType: SourceType;
   allowed: boolean;
   reason?: string;
+}
+
+function toProviderSourceType(st: SourceType): ProviderSourceType {
+  if (st === 'unsupported') return 'unknown';
+  return st;
 }
 
 /**
@@ -75,5 +80,24 @@ export function resolveSource(input: string): ResolveResult | null {
     sourceType,
     allowed: validation.ok,
     reason: validation.reason
+  };
+}
+
+/**
+ * Resolve to full ProviderResolverResult (provider + source type + capabilities).
+ */
+export function resolveToProviderResult(input: string): ProviderResolverResult | null {
+  const resolved = resolveSource(input);
+  if (!resolved) return null;
+  const cap = getProviderCapabilities(resolved.provider);
+  return {
+    provider: resolved.provider,
+    sourceType: toProviderSourceType(resolved.sourceType),
+    normalizedUrl: resolved.url,
+    supportsPreview: cap.supportsPreview,
+    supportsSelection: cap.supportsSelection,
+    supportsDownload: cap.supportsDownload,
+    allowed: resolved.allowed,
+    reason: resolved.reason
   };
 }

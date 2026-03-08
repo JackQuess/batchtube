@@ -20,6 +20,7 @@ import {
   QUEUE_NAME
 } from '../runtime-config.js';
 import { getYtDlpCookieExpiry } from '../services/cookieExpiry.js';
+import { ensureFreshCookies } from '../services/cookieRefresh.js';
 
 type BatchOptions = { format?: string; quality?: string; archive_as_zip?: boolean };
 
@@ -198,38 +199,18 @@ if (dbHostCategory === 'supabase_host_detected') {
   console.warn('[worker] DATABASE_URL points to Supabase; use Railway Postgres for worker.');
 }
 
-function logCookieExpiry() {
-  const cookiePath = config.ytDlpCookiesPath?.trim();
-  if (!cookiePath) return;
-  const info = getYtDlpCookieExpiry(cookiePath);
-  if (!info) return;
-  if (info.isExpired) {
-    console.warn(
-      JSON.stringify({
-        msg: 'yt_dlp_cookie_expired',
-        path: info.path,
-        domain: info.domain,
-        hint: 'Replace YT_DLP_COOKIES_FILE with a fresh cookies.txt (e.g. export from browser) for age-restricted downloads.'
-      })
-    );
-    return;
-  }
-  if (info.expiresInDays <= 3) {
-    console.warn(
-      JSON.stringify({
-        msg: 'yt_dlp_cookie_expiring_soon',
-        path: info.path,
-        domain: info.domain,
-        expires_in_days: info.expiresInDays,
-        hint: 'Replace YT_DLP_COOKIES_FILE soon to avoid age-restricted download failures.'
-      })
-    );
+// Cookie refresh: when stale (by real expiry), fetch and write. Runs on startup and every 12h.
+async function runCookieRefresh() {
+  try {
+    await ensureFreshCookies();
+  } catch (e) {
+    console.error('[worker] cookie refresh error:', e);
   }
 }
 
-logCookieExpiry();
+runCookieRefresh();
 const COOKIE_CHECK_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
-setInterval(logCookieExpiry, COOKIE_CHECK_INTERVAL_MS);
+setInterval(() => runCookieRefresh(), COOKIE_CHECK_INTERVAL_MS);
 
 // Retry connection on DNS/network errors (e.g. Railway redis.railway.internal EAI_AGAIN)
 function redisRetryStrategy(times: number): number {

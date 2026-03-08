@@ -1,7 +1,8 @@
 /**
  * DOWNLOAD ENGINE LAYER
  * Actual file download only (after user confirms). Uses yt-dlp, retries, format/cookie fallback, ffmpeg, then storage.
- * Do not use for preview or source resolution. Errors here are download-only and must not pollute preview state.
+ * Success: returns { filePath, mimeType, ext }. Failure: throws with message that may start with ProviderErrorCode (e.g. youtube_age_restricted).
+ * See types/providerEngine.ts ProviderDownloadResult for the standard contract.
  */
 
 import { spawn } from 'node:child_process';

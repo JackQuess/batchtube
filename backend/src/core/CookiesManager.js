@@ -7,6 +7,11 @@ const COOKIES_FILE = path.join(COOKIES_DIR, "cookies.txt");
 const METADATA_FILE = path.join(COOKIES_DIR, ".metadata.json");
 const MAX_AGE_DAYS = 25;
 const MAX_AGE_MS = MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+/** Refresh when cookie expiry is within this many days */
+const REFRESH_BEFORE_DAYS = 2;
+const REFRESH_BEFORE_MS = REFRESH_BEFORE_DAYS * 24 * 60 * 60 * 1000;
+const COOKIE_EXPIRY_COLUMN = 4;
+const YT_DLP_DOMAINS = ["youtube.com", "youtu.be", "google.com"];
 
 /**
  * CookiesManager - Automatic YouTube cookie management
@@ -48,11 +53,52 @@ class CookiesManager {
   }
 
   /**
-   * Check if cookies are stale (older than MAX_AGE_DAYS)
+   * Get soonest cookie expiry (Unix seconds) for YouTube/Google from Netscape cookie file.
+   * Returns null if file missing, unreadable, or no relevant cookies.
+   */
+  getParsedExpirySeconds() {
+    if (!fs.existsSync(COOKIES_FILE)) return null;
+    let content;
+    try {
+      content = fs.readFileSync(COOKIES_FILE, "utf8");
+    } catch {
+      return null;
+    }
+    let soonest = null;
+    for (const line of content.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const cols = trimmed.split("\t");
+      if (cols.length <= COOKIE_EXPIRY_COLUMN) continue;
+      const domain = (cols[0] || "").toLowerCase();
+      const isRelevant = YT_DLP_DOMAINS.some(
+        (d) => domain.includes(d) || d.includes(domain.replace(/^\./, ""))
+      );
+      if (!isRelevant) continue;
+      const exp = parseInt(cols[COOKIE_EXPIRY_COLUMN], 10);
+      if (!Number.isNaN(exp) && (soonest === null || exp < soonest)) soonest = exp;
+    }
+    return soonest;
+  }
+
+  /**
+   * Check if cookies are stale (older than MAX_AGE_DAYS) or by real cookie expiry.
+   * Uses parsed expiry from cookies.txt when available; refreshes when expired or within REFRESH_BEFORE_DAYS.
    */
   isStale() {
     if (!this.cookiesExist()) {
       return true;
+    }
+
+    const expirySec = this.getParsedExpirySeconds();
+    if (expirySec !== null) {
+      const nowSec = Math.floor(Date.now() / 1000);
+      const expiryMs = expirySec * 1000;
+      const thresholdMs = Date.now() + REFRESH_BEFORE_MS;
+      if (expiryMs <= thresholdMs) {
+        return true; // expired or expiring within REFRESH_BEFORE_DAYS
+      }
+      return false; // still valid
     }
 
     const lastUpdate = this.getLastUpdateTime();
@@ -209,8 +255,10 @@ class CookiesManager {
    */
   async ensureFresh() {
     if (this.isStale()) {
-      console.log("[CookiesManager] Cookies are stale, refreshing...");
+      console.log("[CookiesManager] Cookies are stale or expiring soon, refreshing...");
       await this.refresh();
+    } else {
+      console.log("[CookiesManager] Cookies still valid, no refresh needed");
     }
   }
 
