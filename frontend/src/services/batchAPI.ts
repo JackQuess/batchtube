@@ -1,13 +1,11 @@
 import { apiClient } from '../lib/apiClient';
 
-const isSafari = () => /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-
 export interface BatchJobRequest {
   items: Array<{
     url: string;
     title?: string;
   }>;
-  format: 'mp3' | 'mp4';
+  format: 'mp3' | 'mp4' | 'mkv';
   quality?: 'best' | '720p' | '1080p' | '4k';
 }
 
@@ -64,8 +62,6 @@ interface BatchItemsResponse {
 
 export const batchAPI = {
   createJob: async (request: BatchJobRequest): Promise<BatchJobResponse> => {
-    const formatToUse = request.format === 'mp4' ? (isSafari() ? 'mp4' : 'mp4') : 'mp3';
-
     const data = await apiClient<BatchResponse>('/v1/batches', {
       method: 'POST',
       body: JSON.stringify({
@@ -73,8 +69,8 @@ export const batchAPI = {
         urls: request.items.map((item) => item.url),
         auto_start: true,
         options: {
-          format: formatToUse,
-          quality: request.quality || '1080p',
+          format: request.format,
+          quality: request.quality ?? 'best',
           archive_as_zip: true
         }
       })

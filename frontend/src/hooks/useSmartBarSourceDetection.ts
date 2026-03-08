@@ -23,7 +23,7 @@ const DETECT_DEBOUNCE_MS = 400;
 
 export interface UseSmartBarSourceDetectionOptions {
   onCommand?: (action: string, payload?: string) => void;
-  onStartBatch?: (opts: { urls: string[]; format?: 'mp3' | 'mp4'; quality?: '1080p' | '4k' }) => void;
+  onStartBatch?: (opts: { urls: string[]; format?: 'mp3' | 'mp4' | 'mkv'; quality?: 'best' | '720p' | '1080p' | '4k' }) => void;
   onOpenSourcePicker?: (url: string, provider: string, kind: 'channel' | 'playlist' | 'profile') => void;
   onOpenSourceSelection?: (url: string, type: 'channel' | 'playlist' | 'profile', provider: string, latestN?: number) => void;
 }

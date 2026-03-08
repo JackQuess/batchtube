@@ -14,7 +14,7 @@ interface SmartBarProps {
   onCommand: (cmd: string, type: ModalType) => void;
   onStartProcessing: () => void;
   onOpenSourcePicker?: (url: string, provider: string, kind: 'channel' | 'playlist' | 'profile') => void;
-  onStartBatch?: (opts: { urls: string[]; format?: 'mp3' | 'mp4'; quality?: '1080p' | '4k' }) => void;
+  onStartBatch?: (opts: { urls: string[]; format?: 'mp3' | 'mp4' | 'mkv'; quality?: 'best' | '720p' | '1080p' | '4k' }) => void;
 }
 
 function QuickAction({

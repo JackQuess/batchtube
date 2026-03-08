@@ -130,7 +130,7 @@ const App: React.FC = () => {
     setActiveModal(type);
   }, []);
 
-  const handleStartBatch = useCallback(async (opts: { urls: string[]; format?: 'mp3' | 'mp4'; quality?: '1080p' | '4k' }) => {
+  const handleStartBatch = useCallback(async (opts: { urls: string[]; format?: 'mp3' | 'mp4' | 'mkv'; quality?: 'best' | '720p' | '1080p' | '4k' }) => {
     setBatchError(null);
     if (opts.urls.length === 0) return;
     setBatchCreating(true);
@@ -138,7 +138,7 @@ const App: React.FC = () => {
       const { jobId } = await batchAPI.createJob({
         items: opts.urls.map((url) => ({ url, title: url })),
         format: opts.format ?? 'mp4',
-        quality: opts.quality ?? '1080p',
+        quality: opts.quality ?? 'best',
       });
       const name = `Batch_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}`;
       saveTrackedJob({
@@ -147,7 +147,7 @@ const App: React.FC = () => {
         createdAt: new Date().toISOString(),
         itemsCount: opts.urls.length,
         format: opts.format ?? 'mp4',
-        quality: opts.quality ?? '1080p',
+        quality: opts.quality ?? 'best',
         urls: opts.urls,
       });
       setActiveBatchIds((prev) => [...prev, jobId]);
