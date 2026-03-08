@@ -1,4 +1,8 @@
 FROM node:20-alpine
+RUN apk add --no-cache ffmpeg wget && \
+  wget -q -O /usr/local/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp && \
+  chmod +x /usr/local/bin/yt-dlp && \
+  apk del wget
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm install

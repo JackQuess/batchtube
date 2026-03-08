@@ -6,6 +6,12 @@ import { detectProvider } from '../services/providers.js';
 import { putObject } from '../storage/s3.js';
 import { PLAN_LIMITS, getPlan, incrementBandwidth } from '../services/plans.js';
 import { sendBatchWebhook } from '../services/webhooks.js';
+import {
+  downloadWithYtDlp,
+  readDownloadAndCleanup,
+  type DownloadFormat,
+  type DownloadQuality
+} from '../services/download.js';
 import type { BatchJob } from './bull.js';
 import { config } from '../config.js';
 import {
@@ -14,11 +20,23 @@ import {
   QUEUE_NAME
 } from '../runtime-config.js';
 
+type BatchOptions = { format?: string; quality?: string; archive_as_zip?: boolean };
+
+function toDownloadOptions(opts: BatchOptions | null): { format: DownloadFormat; quality: DownloadQuality } {
+  const format = (opts?.format === 'mp3' || opts?.format === 'mkv' ? opts.format : 'mp4') as DownloadFormat;
+  const quality = (opts?.quality === '4k' || opts?.quality === '1080p' || opts?.quality === '720p' ? opts.quality : 'best') as DownloadQuality;
+  return { format, quality };
+}
+
 async function processBatch(job: Job<BatchJob>) {
   const { batchId, userId } = job.data;
 
   const plan = await getPlan(userId);
   const retentionHours = PLAN_LIMITS[plan].fileTtlHours;
+
+  const batch = await prisma.batch.findUniqueOrThrow({ where: { id: batchId } });
+  const batchOptions = (batch.options as BatchOptions) ?? {};
+  const downloadOpts = toDownloadOptions(batchOptions);
 
   await prisma.batch.update({ where: { id: batchId }, data: { status: 'processing' } });
 
@@ -29,7 +47,7 @@ async function processBatch(job: Job<BatchJob>) {
 
   let completed = 0;
   let failed = 0;
-  const completedFiles: { id: string; content: Buffer }[] = [];
+  const completedFiles: { id: string; content: Buffer; ext: string }[] = [];
 
   for (const item of items) {
     try {
@@ -43,14 +61,16 @@ async function processBatch(job: Job<BatchJob>) {
         }
       });
 
-      const provider = item.provider ?? detectProvider(item.original_url);
-      const content = Buffer.from(`source=${item.original_url}\nprovider=${provider}\n`);
-      const key = `results/${batchId}/${item.id}.txt`;
+      const result = await downloadWithYtDlp(item.original_url, downloadOpts, item.id);
+      const { buffer: content } = readDownloadAndCleanup(result);
+
+      const ext = result.ext;
+      const key = `results/${batchId}/${item.id}.${ext}`;
 
       await putObject({
         key,
         body: content,
-        contentType: 'text/plain'
+        contentType: result.mimeType
       });
 
       await prisma.file.create({
@@ -60,9 +80,9 @@ async function processBatch(job: Job<BatchJob>) {
           batch_id: batchId,
           user_id: userId,
           storage_path: key,
-          filename: `${item.id}.txt`,
+          filename: `${item.id}.${ext}`,
           file_size_bytes: BigInt(content.byteLength),
-          mime_type: 'text/plain',
+          mime_type: result.mimeType,
           expires_at: new Date(Date.now() + retentionHours * 3600 * 1000)
         }
       });
@@ -74,7 +94,7 @@ async function processBatch(job: Job<BatchJob>) {
 
       await incrementBandwidth(userId, BigInt(content.byteLength));
       completed += 1;
-      completedFiles.push({ id: item.id, content });
+      completedFiles.push({ id: item.id, content, ext });
     } catch (error) {
       failed += 1;
       const errMsg = error instanceof Error ? error.message : String(error);
@@ -107,8 +127,8 @@ async function processBatch(job: Job<BatchJob>) {
 
   if (completed > 0 && completedFiles.length > 0) {
     const zip = new JSZip();
-    for (const { id, content } of completedFiles) {
-      zip.file(`${id}.txt`, content);
+    for (const { id, content, ext } of completedFiles) {
+      zip.file(`${id}.${ext}`, content);
     }
     const zipBody = await zip.generateAsync({ type: 'nodebuffer' });
     await putObject({ key: zipKey, body: zipBody, contentType: 'application/zip' });
