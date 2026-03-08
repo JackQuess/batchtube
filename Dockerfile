@@ -1,5 +1,6 @@
-# Root Dockerfile: builds the api app when build context is repo root.
-# For worker/API on Railway, set Root Directory = "api" so api/Dockerfile (Alpine + yt-dlp) is used instead.
+# Root Dockerfile: only valid when build context is REPO ROOT (Root Directory empty).
+# If you see "COPY api/ not found" → Railway context is the api folder. Set Root Directory to "api"
+# so Railway uses api/Dockerfile instead (no "api/" in paths).
 FROM node:20-slim
 
 RUN apt-get update && \
@@ -12,7 +13,6 @@ RUN python3 -m pip install --no-cache-dir -U yt-dlp && \
 
 WORKDIR /app
 
-# Single COPY to avoid cache checksum issues; then install and build
 COPY api/ ./
 RUN npm install && npx prisma generate && npm run build
 
