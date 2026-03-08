@@ -1,0 +1,43 @@
+{
+  "name": "@batchtube/cli",
+  "version": "1.0.0",
+  "description": "Official BatchTube CLI — batch download from 30+ platforms via the BatchTube API",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "batchtube": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepare": "npm run build",
+    "dev": "tsc --watch"
+  },
+  "keywords": [
+    "batchtube",
+    "youtube",
+    "download",
+    "batch",
+    "cli"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/batchtube/batchtube.git",
+    "directory": "cli"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "commander": "^12.1.0",
+    "prompts": "^2.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/prompts": "^2.4.9",
+    "typescript": "^5.3.0"
+  }
+}
