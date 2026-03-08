@@ -128,3 +128,38 @@ export async function listSourceItems(
     });
   });
 }
+
+const DISCOVERY_PAGE_SIZE = 50;
+const MAX_ARCHIVE_ITEMS = 500;
+
+/**
+ * Fetch up to `maxItems` from a source using parallel page requests for speed.
+ * Uses controlled concurrency (e.g. 5 parallel requests of 50 each = 250 items).
+ */
+export async function listSourceItemsParallel(
+  url: string,
+  type: 'channel' | 'playlist' | 'profile',
+  maxItems: number
+): Promise<SourceListItem[]> {
+  const capped = Math.min(maxItems, MAX_ARCHIVE_ITEMS);
+  const numPages = Math.ceil(capped / DISCOVERY_PAGE_SIZE);
+  const pages = Array.from({ length: numPages }, (_, i) => i + 1);
+
+  const results = await Promise.all(
+    pages.map((page) =>
+      listSourceItems(url, type, { page, limit: DISCOVERY_PAGE_SIZE })
+    )
+  );
+
+  const seen = new Set<string>();
+  const out: SourceListItem[] = [];
+  for (const res of results) {
+    for (const item of res.data) {
+      if (seen.has(item.url)) continue;
+      seen.add(item.url);
+      out.push(item);
+      if (out.length >= capped) return out;
+    }
+  }
+  return out;
+}

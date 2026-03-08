@@ -5,6 +5,7 @@ import { runLogin } from './commands/login.js';
 import { runLogout } from './commands/logout.js';
 import { runWhoami } from './commands/whoami.js';
 import { runDownload } from './commands/download.js';
+import { runArchive } from './commands/archive.js';
 import { runBatch } from './commands/batch.js';
 import { runStatus } from './commands/status.js';
 import { runFiles } from './commands/files.js';
@@ -73,6 +74,29 @@ program
     const g = globalOpts();
     await runBatch(fileOrUrls, {
       apiBaseUrl: g.apiBaseUrl,
+      format: opts.format as 'mp4' | 'mp3',
+      quality: opts.quality as 'best' | '1080p' | '720p',
+      zip: opts.zip,
+      json: g.json ?? opts.json
+    }).catch(handleApiError);
+  });
+
+program
+  .command('archive <channel-url>')
+  .description('Archive a channel/playlist (latest 25 by default). Resolves in background.')
+  .option('--latest <n>', 'Latest N items (1-500)', (v) => parseInt(v, 10))
+  .option('--all', 'All items (up to plan limit)')
+  .option('--select', 'Same as latest 25 for CLI')
+  .option('--format <mp4|mp3>', 'Format', 'mp4')
+  .option('--quality <best|1080p|720p>', 'Quality', 'best')
+  .option('--zip', 'Archive as ZIP when complete')
+  .action(async (channelUrl: string, opts: { latest?: number; all?: boolean; select?: boolean; format?: string; quality?: string; zip?: boolean; json?: boolean }) => {
+    const g = globalOpts();
+    const mode = opts.all ? 'all' : opts.select ? 'latest_25' : opts.latest != null ? 'latest_n' : 'latest_25';
+    await runArchive(channelUrl, {
+      apiBaseUrl: g.apiBaseUrl,
+      mode,
+      latest: opts.latest,
       format: opts.format as 'mp4' | 'mp3',
       quality: opts.quality as 'best' | '1080p' | '720p',
       zip: opts.zip,

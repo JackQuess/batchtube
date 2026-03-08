@@ -3,7 +3,8 @@ import { apiClient } from '../lib/apiClient';
 export interface BatchListItem {
   id: string;
   name: string | null;
-  status: 'created' | 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
+  status: 'created' | 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled' |
+    'resolving_channel' | 'discovering_items' | 'queueing_items';
   progress: number;
   item_count: number;
   created_at: string;

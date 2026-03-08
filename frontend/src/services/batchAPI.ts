@@ -16,6 +16,8 @@ export interface BatchJobResponse {
 export interface BatchJobStatus {
   state: 'waiting' | 'active' | 'completed' | 'failed';
   progress: number;
+  /** When batch is in archive flow: resolving_channel | discovering_items | queueing_items */
+  stage?: string;
   result?: {
     batchStatus?: 'completed' | 'completed_with_errors';
     total: number;
@@ -46,7 +48,8 @@ interface BatchResponse {
 }
 
 interface BatchDetails {
-  status: 'created' | 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
+  status: 'created' | 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled' |
+    'resolving_channel' | 'discovering_items' | 'queueing_items';
   progress: number;
 }
 
@@ -79,6 +82,32 @@ export const batchAPI = {
     return { jobId: data.id };
   },
 
+  createArchive: async (request: {
+    source_url: string;
+    mode: 'latest_25' | 'latest_n' | 'all' | 'select';
+    latest_n?: number;
+    format?: 'mp3' | 'mp4' | 'mkv';
+    quality?: 'best' | '720p' | '1080p' | '4k';
+  }): Promise<BatchJobResponse & { channel?: { title: string; thumbnail: string | null } }> => {
+    const data = await apiClient<BatchResponse & { channel_detected?: boolean; channel?: { title: string; thumbnail: string | null } }>(
+      '/v1/archive',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          source_url: request.source_url,
+          mode: request.mode,
+          latest_n: request.mode === 'latest_n' ? request.latest_n : undefined,
+          options: {
+            format: request.format ?? 'mp4',
+            quality: request.quality ?? 'best',
+            archive_as_zip: true
+          }
+        })
+      }
+    );
+    return { jobId: data.id, channel: data.channel };
+  },
+
   getStatus: async (jobId: string): Promise<BatchJobStatus> => {
     const [batch, itemsPayload] = await Promise.all([
       apiClient<BatchDetails>(`/v1/batches/${jobId}`),
@@ -90,12 +119,22 @@ export const batchAPI = {
     const stateMap: Record<string, BatchJobStatus['state']> = {
       created: 'waiting',
       queued: 'waiting',
+      resolving_channel: 'active',
+      discovering_items: 'active',
+      queueing_items: 'active',
       processing: 'active',
       completed: 'completed',
       failed: 'failed',
       cancelled: 'failed'
     };
     const state = stateMap[batch.status] || 'waiting';
+
+    const stageLabels: Record<string, string> = {
+      resolving_channel: 'Resolving channel...',
+      discovering_items: 'Discovering items...',
+      queueing_items: 'Queueing items...'
+    };
+    const stage = stageLabels[batch.status];
 
     const normalizedItems = items.map((item, index) => {
       const failed = item.status === 'failed' || item.status === 'cancelled';
@@ -117,6 +156,7 @@ export const batchAPI = {
     return {
       state,
       progress: typeof batch.progress === 'number' ? batch.progress : 0,
+      ...(stage && { stage }),
       result: {
         batchStatus: failed > 0 && succeeded > 0 ? 'completed_with_errors' : 'completed',
         total: normalizedItems.length,

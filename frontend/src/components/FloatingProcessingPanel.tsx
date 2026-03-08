@@ -147,7 +147,9 @@ export function FloatingProcessingPanel({ batchIds, isOpen, onClose, onRemoveBat
                 </div>
                 <div className="flex items-center justify-between text-[10px]">
                   {state === 'waiting' && <span className="text-app-muted">Queued...</span>}
-                  {state === 'active' && <span className="text-app-muted">Processing...</span>}
+                  {state === 'active' && (
+                    <span className="text-app-muted">{status?.stage ?? 'Processing...'}</span>
+                  )}
                   {state === 'completed' && (
                     <span className="text-emerald-500 flex items-center gap-1">
                       <CheckCircle2 className="w-3 h-3" /> Done

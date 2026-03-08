@@ -4,7 +4,7 @@ import JSZip from 'jszip';
 import { prisma } from '../services/db.js';
 import { detectProvider, getDefaultFormatForProvider } from '../services/providers.js';
 import { putObject } from '../storage/s3.js';
-import { PLAN_LIMITS, getPlan, incrementBandwidth } from '../services/plans.js';
+import { PLAN_LIMITS, getPlan, incrementBandwidth, deductCreditsForBatch } from '../services/plans.js';
 import { sendBatchWebhook } from '../services/webhooks.js';
 import {
   downloadWithYtDlp,
@@ -13,6 +13,8 @@ import {
   type DownloadQuality
 } from '../services/download.js';
 import type { BatchJob } from './bull.js';
+import { enqueueBatch } from './enqueue.js';
+import { listSourceItems, listSourceItemsParallel } from '../services/sourceList.js';
 import { config } from '../config.js';
 import {
   validateRuntimeConfig,
@@ -22,7 +24,15 @@ import {
 import { getYtDlpCookieExpiry } from '../services/cookieExpiry.js';
 import { ensureFreshCookies } from '../services/cookieRefresh.js';
 
-type BatchOptions = { format?: string; quality?: string; archive_as_zip?: boolean };
+type BatchOptions = {
+  format?: string;
+  quality?: string;
+  archive_as_zip?: boolean;
+  archive_source_url?: string;
+  archive_source_type?: 'channel' | 'playlist' | 'profile';
+  archive_mode?: string;
+  archive_latest_n?: number;
+};
 
 const ALLOWED_FORMATS: DownloadFormat[] = ['mp4', 'mp3', 'mkv'];
 
@@ -186,6 +196,95 @@ async function processBatch(job: Job<BatchJob>) {
   });
 }
 
+async function processChannelArchive(job: Job<BatchJob>) {
+  const { batchId, userId } = job.data;
+
+  const batch = await prisma.batch.findUnique({ where: { id: batchId } });
+  if (!batch || batch.status !== 'resolving_channel') {
+    return;
+  }
+
+  const opts = (batch.options || {}) as BatchOptions;
+  const sourceUrl = opts.archive_source_url;
+  const sourceType = opts.archive_source_type || 'channel';
+  const mode = opts.archive_mode || 'latest_25';
+  const latestN = opts.archive_latest_n ?? 25;
+
+  if (!sourceUrl) {
+    await prisma.batch.update({ where: { id: batchId }, data: { status: 'failed' } });
+    return;
+  }
+
+  const plan = await getPlan(userId);
+  const maxItems = PLAN_LIMITS[plan].maxBatchLinks;
+
+  try {
+    await prisma.batch.update({ where: { id: batchId }, data: { status: 'discovering_items' } });
+  } catch {
+    return;
+  }
+
+  let itemUrls: string[];
+  try {
+    if (mode === 'all') {
+      const items = await listSourceItemsParallel(sourceUrl, sourceType, Math.min(maxItems, 500));
+      itemUrls = items.map((i) => i.url);
+    } else {
+      const limit = mode === 'latest_n' ? Math.min(latestN, maxItems) : Math.min(25, maxItems);
+      const result = await listSourceItems(sourceUrl, sourceType, { page: 1, limit });
+      itemUrls = result.data.slice(0, limit).map((i) => i.url);
+    }
+  } catch (err) {
+    console.error(JSON.stringify({ msg: 'channel_archive_discovery_failed', batchId, error: String(err) }));
+    await prisma.batch.update({ where: { id: batchId }, data: { status: 'failed' } });
+    return;
+  }
+
+  if (itemUrls.length === 0) {
+    await prisma.batch.update({ where: { id: batchId }, data: { status: 'failed' } });
+    return;
+  }
+
+  try {
+    await prisma.batch.update({ where: { id: batchId }, data: { status: 'queueing_items' } });
+  } catch {
+    return;
+  }
+
+  const creditCheck = await deductCreditsForBatch(batchId, userId, plan, itemUrls.length);
+  if (!creditCheck.ok) {
+    console.error(
+      JSON.stringify({
+        msg: 'channel_archive_insufficient_credits',
+        batchId,
+        needed: creditCheck.needed,
+        available: creditCheck.available
+      })
+    );
+    await prisma.batch.update({ where: { id: batchId }, data: { status: 'failed' } });
+    return;
+  }
+
+  const provider = detectProvider(sourceUrl);
+  await prisma.batchItem.createMany({
+    data: itemUrls.map((url) => ({
+      id: randomUUID(),
+      batch_id: batchId,
+      user_id: userId,
+      original_url: url,
+      provider,
+      status: 'queued' as const
+    }))
+  });
+
+  await prisma.batch.update({
+    where: { id: batchId },
+    data: { status: 'queued', item_count: itemUrls.length }
+  });
+
+  await enqueueBatch(batchId, userId, plan);
+}
+
 // Fail fast: validate config before starting worker
 const validation = validateRuntimeConfig({ role: 'worker' });
 if (!validation.ok) {
@@ -217,7 +316,13 @@ function redisRetryStrategy(times: number): number {
   return Math.min(2000 * Math.pow(2, times), 30000);
 }
 
-new Worker<BatchJob>(QUEUE_NAME, processBatch, {
+new Worker<BatchJob>(
+  QUEUE_NAME,
+  async (job) => {
+    if (job.name === 'channel-archive') return processChannelArchive(job);
+    return processBatch(job);
+  },
+  {
   connection: {
     url: config.redisUrl,
     maxRetriesPerRequest: null,

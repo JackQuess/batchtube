@@ -15,6 +15,7 @@ interface SmartBarProps {
   onStartProcessing: () => void;
   onOpenSourcePicker?: (url: string, provider: string, kind: 'channel' | 'playlist' | 'profile') => void;
   onStartBatch?: (opts: { urls: string[]; format?: 'mp3' | 'mp4' | 'mkv'; quality?: 'best' | '720p' | '1080p' | '4k' }) => void;
+  onStartArchive?: (opts: { sourceUrl: string; mode: 'latest_25' | 'latest_n' | 'all' | 'select'; latestN?: number }) => void;
 }
 
 function QuickAction({
@@ -49,7 +50,7 @@ function QuickAction({
   );
 }
 
-export function SmartBar({ onCommand, onStartProcessing, onOpenSourcePicker, onStartBatch }: SmartBarProps) {
+export function SmartBar({ onCommand, onStartProcessing, onOpenSourcePicker, onStartBatch, onStartArchive }: SmartBarProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const {
@@ -76,6 +77,10 @@ export function SmartBar({ onCommand, onStartProcessing, onOpenSourcePicker, onS
     },
     onOpenSourcePicker: (url, provider, kind) => {
       onOpenSourcePicker?.(url, provider, kind);
+      clear();
+    },
+    onStartArchive: (opts) => {
+      onStartArchive?.(opts);
       clear();
     },
     onOpenSourceSelection: async (url, type, _provider, latestN) => {

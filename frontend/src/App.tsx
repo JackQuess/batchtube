@@ -168,6 +168,43 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const handleStartArchive = useCallback(async (opts: { sourceUrl: string; mode: 'latest_25' | 'latest_n' | 'all' | 'select'; latestN?: number }) => {
+    setBatchError(null);
+    setBatchCreating(true);
+    try {
+      const mode = opts.mode === 'select' ? 'latest_25' : opts.mode;
+      const { jobId } = await batchAPI.createArchive({
+        source_url: opts.sourceUrl,
+        mode,
+        latest_n: opts.mode === 'latest_n' ? opts.latestN : undefined,
+      });
+      const name = `Archive_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}`;
+      saveTrackedJob({
+        jobId,
+        name,
+        createdAt: new Date().toISOString(),
+        itemsCount: 0,
+        format: 'mp4',
+        quality: 'best',
+        urls: [opts.sourceUrl],
+      });
+      setActiveBatchIds((prev) => [...prev, jobId]);
+      window.dispatchEvent(new Event('batchtube:usage-refresh'));
+    } catch (e) {
+      if (e instanceof ApiError) {
+        if (e.code === 'insufficient_credits') setBatchError('Yetersiz kredi. Planınızı yükseltin.');
+        else if (e.code === 'unauthorized') setBatchError('Oturum bulunamadı. Lütfen tekrar giriş yapın.');
+        else {
+          const msg = e.message ?? '';
+          setBatchError(msg || 'Arşiv başlatılamadı.');
+        }
+      } else setBatchError('Arşiv başlatılamadı. Bağlantıyı kontrol edin.');
+      window.dispatchEvent(new Event('batchtube:usage-refresh'));
+    } finally {
+      setBatchCreating(false);
+    }
+  }, []);
+
   const handleStartProcessing = useCallback(() => {
     setBatchError(null);
   }, []);
@@ -327,6 +364,7 @@ const App: React.FC = () => {
             setActiveModal('sourceSelection');
           }}
           onStartBatch={handleStartBatch}
+          onStartArchive={handleStartArchive}
         />
       </main>
 

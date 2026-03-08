@@ -24,6 +24,7 @@ const DETECT_DEBOUNCE_MS = 400;
 export interface UseSmartBarSourceDetectionOptions {
   onCommand?: (action: string, payload?: string) => void;
   onStartBatch?: (opts: { urls: string[]; format?: 'mp3' | 'mp4' | 'mkv'; quality?: 'best' | '720p' | '1080p' | '4k' }) => void;
+  onStartArchive?: (opts: { sourceUrl: string; mode: 'latest_25' | 'latest_n' | 'all' | 'select'; latestN?: number }) => void;
   onOpenSourcePicker?: (url: string, provider: string, kind: 'channel' | 'playlist' | 'profile') => void;
   onOpenSourceSelection?: (url: string, type: 'channel' | 'playlist' | 'profile', provider: string, latestN?: number) => void;
 }
@@ -157,6 +158,14 @@ export function useSmartBarSourceDetection(options: UseSmartBarSourceDetectionOp
           options.onCommand?.(first.action);
         } else if (first.action === 'latest' && first.payload) {
           options.onOpenSourceSelection?.(first.payload, 'channel', effectiveDetection.provider ?? 'youtube', effectiveDetection.latestN);
+        } else if (first.action === 'archive' && first.payload && options.onStartArchive) {
+          options.onStartArchive({
+            sourceUrl: first.payload,
+            mode: effectiveDetection.archiveMode ?? 'latest_25',
+            latestN: effectiveDetection.archiveLatestN
+          });
+        } else if (first.action === 'archive' && first.payload) {
+          options.onOpenSourcePicker?.(first.payload, effectiveDetection.provider ?? 'generic', 'channel');
         } else if (first.payload) {
           options.onStartBatch?.({ urls: [first.payload] });
         }

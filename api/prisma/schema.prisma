@@ -35,6 +35,9 @@ enum BatchStatus {
   completed @map("completed")
   failed    @map("failed")
   cancelled @map("cancelled")
+  resolving_channel   @map("resolving_channel")
+  discovering_items   @map("discovering_items")
+  queueing_items      @map("queueing_items")
 
   @@map("batch_status")
 }

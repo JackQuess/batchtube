@@ -130,7 +130,7 @@ export async function enforceConcurrency(userId: string, plan: SaaSPlan) {
     const active = await prisma.batch.count({
       where: {
         user_id: userId,
-        status: { in: ['queued', 'processing'] }
+        status: { in: ['queued', 'processing', 'resolving_channel', 'discovering_items', 'queueing_items'] }
       }
     });
     return { allowed: active < limit, active, limit };
@@ -275,6 +275,28 @@ export async function deductCreditsForBatchTx(
     used: used + needed,
     limit
   };
+}
+
+/** Deduct credits after archive expansion (outside batch-create tx). Creates credit_ledger entry. */
+export async function deductCreditsForBatch(
+  batchId: string,
+  userId: string,
+  plan: SaaSPlan,
+  itemCount: number
+): Promise<CreditCheckResult> {
+  return prisma.$transaction(async (tx) => {
+    const result = await deductCreditsForBatchTx(tx, userId, plan, itemCount);
+    if (!result.ok) return result;
+    await tx.creditLedger.create({
+      data: {
+        user_id: userId,
+        amount: result.needed,
+        reason: 'batch_start',
+        batch_id: batchId
+      }
+    });
+    return result;
+  });
 }
 
 export async function incrementBandwidth(userId: string, bytes: bigint) {

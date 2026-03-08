@@ -114,6 +114,30 @@ export async function createBatch(
   return apiRequest<BatchResponse>(baseUrl, apiKey, 'POST', '/v1/batches', body);
 }
 
+export interface CreateArchiveBody {
+  source_url: string;
+  mode: 'latest_25' | 'latest_n' | 'all' | 'select';
+  latest_n?: number;
+  options?: {
+    format?: 'mp4' | 'mp3' | 'mkv';
+    quality?: 'best' | '4k' | '1080p' | '720p';
+    archive_as_zip?: boolean;
+  };
+}
+
+export interface ArchiveResponse extends BatchResponse {
+  channel_detected?: boolean;
+  channel?: { title: string; thumbnail: string | null };
+}
+
+export async function createArchive(
+  baseUrl: string,
+  apiKey: string,
+  body: CreateArchiveBody
+): Promise<ArchiveResponse> {
+  return apiRequest<ArchiveResponse>(baseUrl, apiKey, 'POST', '/v1/archive', body);
+}
+
 export async function getBatch(
   baseUrl: string,
   apiKey: string,

@@ -39,6 +39,9 @@ export interface DetectionResult {
   latestN?: number;
   /** Extracted source URL from command if present (e.g. "latest 20 from youtube.com/@x") */
   commandSourceUrl?: string;
+  /** For archive command: mode and optional latest N */
+  archiveMode?: 'latest_25' | 'latest_n' | 'all' | 'select';
+  archiveLatestN?: number;
 }
 
 function normalizeUrl(input: string): string | null {
@@ -172,7 +175,28 @@ export function parseCommand(input: string): DetectionResult | null {
   for (const { prefix, action } of CMD_PREFIXES) {
     if (trimmed.startsWith(prefix)) {
       const rest = trimmed.slice(prefix.length).trim();
-      const url = rest && (rest.startsWith('http') ? rest : normalizeUrl(`https://${rest}`));
+      let url: string | null = null;
+      let archiveMode: DetectionResult['archiveMode'] = 'latest_25';
+      let archiveLatestN: number | undefined;
+
+      if (rest) {
+        const archiveLatestMatch = rest.match(/\b--latest\s+(\d+)\b/i);
+        const hasAll = /\b--all\b/i.test(rest);
+        const hasSelect = /\b--select\b/i.test(rest);
+        let urlPart = rest
+          .replace(/\s*--latest\s+\d+\s*/gi, ' ')
+          .replace(/\s*--all\s*/gi, ' ')
+          .replace(/\s*--select\s*/gi, ' ')
+          .trim();
+        url = urlPart.startsWith('http') ? urlPart : normalizeUrl(`https://${urlPart}`);
+        if (hasAll) archiveMode = 'all';
+        else if (hasSelect) archiveMode = 'select';
+        else if (archiveLatestMatch) {
+          archiveMode = 'latest_n';
+          archiveLatestN = Math.min(500, Math.max(1, parseInt(archiveLatestMatch[1]!, 10)));
+        }
+      }
+
       suggestions.push({
         id: action,
         label: action === 'extract_audio' ? 'Extract audio' : action.charAt(0).toUpperCase() + action.slice(1),
@@ -185,7 +209,8 @@ export function parseCommand(input: string): DetectionResult | null {
         raw: trimmed,
         commandRaw: trimmed,
         commandSourceUrl: url || undefined,
-        suggestions
+        suggestions,
+        ...(action === 'archive' && { archiveMode, archiveLatestN })
       };
     }
   }
