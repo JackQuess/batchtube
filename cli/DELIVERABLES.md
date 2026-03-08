@@ -38,13 +38,13 @@ See `cli/package.json`. Summary:
 
 - **name:** `@batchtube/cli`
 - **version:** 1.0.0
-- **bin:** `batchtube` → `./dist/index.js`
+- **bin:** `batchtube` → `dist/index.js`
 - **main:** `dist/index.js`
 - **type:** module
 - **scripts:** build, prepare, dev
 - **dependencies:** commander ^12.1.0, prompts ^2.4.2
 - **devDependencies:** typescript ^5.3.0, @types/node ^20.10.0, @types/prompts
-- **files:** ["dist"]
+- **files:** ["dist", "README.md"]
 - **engines:** node >= 18
 
 ## D) Exact commands supported
@@ -65,7 +65,15 @@ Global options (before command): `--api <url>`, `--json`.
 
 ## E) How to test locally
 
-1. **Build and link**
+1. **Install from npm (recommended)**
+   ```bash
+   npm install -g @batchtube/cli
+   batchtube --help
+   batchtube login
+   batchtube whoami
+   ```
+
+2. **Develop from repo (build + link)**
    ```bash
    cd cli
    npm install
@@ -74,25 +82,25 @@ Global options (before command): `--api <url>`, `--json`.
    batchtube --help
    ```
 
-2. **Run without linking**
+3. **Run without linking** (from repo root)
    ```bash
-   node cli/dist/index.js --help
+   cd cli && npm run build && node dist/index.js --help
    node cli/dist/index.js whoami   # will ask to login if no config
    ```
 
-3. **Login** (use a valid API key from your BatchTube account; API must accept Bearer `bt_live_...` on /v1 routes — see F)
+4. **Login** (use a valid API key from your BatchTube account; API must accept Bearer `bt_live_...` on /v1 routes — see F)
    ```bash
    batchtube login
    batchtube whoami
    ```
 
-4. **Download / batch** (requires API that accepts API key on POST /v1/batches)
+5. **Download / batch** (requires API that accepts API key on POST /v1/batches)
    ```bash
    batchtube download "https://youtube.com/watch?v=..."
    batchtube status <returned-batch-id>
    ```
 
-5. **Override API base**
+6. **Override API base**
    ```bash
    batchtube --api https://your-api.example.com whoami
    ```

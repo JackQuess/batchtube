@@ -7,6 +7,7 @@ RUN apk add --no-cache ffmpeg wget && \
   ffmpeg -version | head -1 && \
   apk del wget
 WORKDIR /app
+RUN mkdir -p /app/cookies
 COPY package.json package-lock.json* ./
 RUN npm install
 COPY . .

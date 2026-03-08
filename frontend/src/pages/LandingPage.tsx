@@ -30,9 +30,9 @@ const TypewriterText = ({ text, delay = 0 }: { text: string; delay?: number }) =
   return <span>{displayedText}<span className="animate-pulse">|</span></span>;
 };
 
-const NPM_CMD = 'npm install @batchtube/cli';
+const NPM_CMD = 'npm install -g @batchtube/cli';
 
-function CliComingSoon() {
+function CliInstall() {
   const [copied, setCopied] = useState(false);
   const [failed, setFailed] = useState(false);
   const copy = async () => {
@@ -48,8 +48,8 @@ function CliComingSoon() {
   };
   return (
     <div className="flex flex-col items-center gap-2">
-      <div className="inline-flex items-center gap-2 px-2 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-medium mb-1">
-        CLI coming soon
+      <div className="inline-flex items-center gap-2 px-2 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium mb-1">
+        Official CLI
       </div>
       <button
         type="button"
@@ -61,7 +61,7 @@ function CliComingSoon() {
         {copied && <span className="text-xs text-green-400">Copied!</span>}
         {failed && <span className="text-xs text-amber-400">Copy failed</span>}
       </button>
-      <p className="text-xs text-app-muted">Package not published yet — use the web app or API for now.</p>
+      <p className="text-xs text-app-muted">Install globally, then run <span className="font-mono text-white/80">batchtube login</span></p>
     </div>
   );
 }
@@ -189,7 +189,7 @@ export function LandingPage({ onNavigateToLogin, onNavigateToSignUp, onNavigateT
               Start Processing
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </button>
-            <CliComingSoon />
+            <CliInstall />
           </motion.div>
 
           {/* Interactive Hero Visual */}

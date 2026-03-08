@@ -21,14 +21,57 @@ function minimalNetscapeCookies(): string {
 }
 
 /**
+ * Download cookie file from a URL and write to cookiePath.
+ * Used when COOKIES_INIT_URL is set and file is missing (e.g. first deploy on Railway).
+ */
+async function downloadCookiesFromUrl(cookiePath: string, url: string): Promise<boolean> {
+  const p = path.normalize(cookiePath.trim());
+  const dir = path.dirname(p);
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+  } catch (e) {
+    console.error('[cookieRefresh] Failed to create cookie dir:', dir, e);
+    return false;
+  }
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; BatchTube/1.0)' },
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    if (!res.ok) {
+      console.warn('[cookieRefresh] COOKIES_INIT_URL responded', res.status);
+      return false;
+    }
+    const content = await res.text();
+    if (!content || content.length < 50) {
+      console.warn('[cookieRefresh] COOKIES_INIT_URL content too short');
+      return false;
+    }
+    fs.writeFileSync(p, content, 'utf8');
+    console.log(
+      JSON.stringify({ msg: 'cookie_init_done', path: p, bytes: content.length })
+    );
+    return true;
+  } catch (e) {
+    console.error('[cookieRefresh] COOKIES_INIT_URL fetch failed:', (e as Error).message);
+    return false;
+  }
+}
+
+/**
  * True if cookie file is missing, expired, or expiring within REFRESH_BEFORE_DAYS.
+ * When expiry cannot be determined (e.g. session cookies), we do NOT treat as stale
+ * so we never overwrite real user cookies with the template.
  */
 export function isCookieStale(cookiePath: string): boolean {
   const p = cookiePath?.trim();
   if (!p) return false;
-  if (!fs.existsSync(path.normalize(p))) return true;
+  if (!fs.existsSync(path.normalize(p))) return true; // missing: safe to write template
   const info = getYtDlpCookieExpiry(p);
-  if (!info) return true;
+  if (!info) return false; // unknown expiry: do not overwrite (may be real session cookies)
   if (info.isExpired) return true;
   if (info.expiresInDays <= REFRESH_BEFORE_DAYS) return true;
   return false;
@@ -94,15 +137,68 @@ export async function ensureFreshCookies(): Promise<void> {
   const cookiePath = config.ytDlpCookiesPath?.trim();
   if (!cookiePath) return;
 
-  if (!isCookieStale(cookiePath)) {
+  const normalizedPath = path.normalize(cookiePath);
+  if (!fs.existsSync(normalizedPath)) {
+    const initUrl = process.env.COOKIES_INIT_URL?.trim();
+    if (initUrl) {
+      console.log(
+        JSON.stringify({
+          msg: 'cookie_init_start',
+          reason: 'file_missing',
+          path: cookiePath,
+          hint: 'Downloading from COOKIES_INIT_URL (first deploy or after clean deploy).'
+        })
+      );
+      const ok = await downloadCookiesFromUrl(cookiePath, initUrl);
+      if (!ok) console.warn(JSON.stringify({ msg: 'cookie_init_failed', path: cookiePath }));
+      return;
+    }
     console.log(
-      JSON.stringify({ msg: 'cookie_check_skipped', reason: 'cookies_still_valid', path: cookiePath })
+      JSON.stringify({
+        msg: 'cookie_refresh_start',
+        reason: 'file_missing',
+        path: cookiePath,
+        hint: 'Will write template; for age-restricted content set COOKIES_INIT_URL or add file to volume.'
+      })
+    );
+    const ok = await refreshCookies(cookiePath);
+    if (!ok) console.warn(JSON.stringify({ msg: 'cookie_refresh_failed', path: cookiePath }));
+    return;
+  }
+
+  const info = getYtDlpCookieExpiry(cookiePath);
+  if (!info) {
+    console.log(
+      JSON.stringify({
+        msg: 'cookie_check_skipped',
+        reason: 'expiry_unknown',
+        path: cookiePath,
+        hint: 'Cookie file exists but no YouTube/Google expiry found (e.g. session cookies). Not overwriting.'
+      })
+    );
+    return;
+  }
+
+  if (!info.isExpired && info.expiresInDays > REFRESH_BEFORE_DAYS) {
+    console.log(
+      JSON.stringify({
+        msg: 'cookie_check_skipped',
+        reason: 'cookies_still_valid',
+        path: cookiePath,
+        expires_in_days: info.expiresInDays
+      })
     );
     return;
   }
 
   console.log(
-    JSON.stringify({ msg: 'cookie_refresh_start', reason: 'stale_or_expiring', path: cookiePath })
+    JSON.stringify({
+      msg: 'cookie_refresh_start',
+      reason: 'stale_or_expiring',
+      path: cookiePath,
+      expires_in_days: info.expiresInDays,
+      is_expired: info.isExpired
+    })
   );
   const ok = await refreshCookies(cookiePath);
   if (!ok) {

@@ -5,10 +5,11 @@
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "batchtube": "./dist/index.js"
+    "batchtube": "dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "scripts": {
     "build": "tsc",
@@ -26,7 +27,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/batchtube/batchtube.git",
+    "url": "git+https://github.com/JackQuess/batchtube.git",
     "directory": "cli"
   },
   "engines": {

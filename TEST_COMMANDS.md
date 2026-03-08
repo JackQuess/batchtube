@@ -19,10 +19,9 @@ API varsayılan olarak bir portta (örn. 3000) çalışacak. `.env` içindeki `P
 
 ### CLI’yi hazırla
 ```bash
-cd cli
-npm install
-npm run build
+npm install -g @batchtube/cli
 ```
+Kurulumdan sonra `batchtube` komutu global kullanılabilir.
 
 ---
 
@@ -32,54 +31,53 @@ Hesabında **Archivist** veya **Enterprise** planı olan bir kullanıcıyla API 
 
 ### Login
 ```bash
-cd cli
-node dist/index.js login
+batchtube login
 ```
 - API base URL: `http://localhost:3000` (API’nin çalıştığı adres)
 - API key: `bt_live_xxxxxxxx...`
 
 ### Whoami (plan / kredi)
 ```bash
-node dist/index.js whoami
-node dist/index.js whoami --json
+batchtube whoami
+batchtube whoami --json
 ```
 
 ### Tek link download
 ```bash
-node dist/index.js download "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-node dist/index.js download "https://www.youtube.com/watch?v=dQw4w9WgXcQ" --format mp3 --zip
+batchtube download "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+batchtube download "https://www.youtube.com/watch?v=dQw4w9WgXcQ" --format mp3 --zip
 ```
 
 ### Batch (dosyadan veya birden fazla URL)
 ```bash
 echo "https://www.youtube.com/watch?v=dQw4w9WgXcQ" > urls.txt
-node dist/index.js batch urls.txt
-node dist/index.js batch "https://youtube.com/watch?v=abc" "https://tiktok.com/..."
+batchtube batch urls.txt
+batchtube batch "https://youtube.com/watch?v=abc" "https://tiktok.com/..."
 ```
 
 ### Status
 ```bash
 # Önceki komuttan dönen batch id'yi kullan (UUID)
-node dist/index.js status <BATCH_UUID>
-node dist/index.js status <BATCH_UUID> --json
+batchtube status <BATCH_UUID>
+batchtube status <BATCH_UUID> --json
 ```
 
 ### Dosya listesi (GET /v1/files)
 ```bash
-node dist/index.js files
-node dist/index.js files --json
+batchtube files
+batchtube files --json
 ```
 
 ### Dosya indirme linki
 ```bash
 # files veya status/items’tan alınan file id
-node dist/index.js download-file <FILE_UUID>
-node dist/index.js download-file <FILE_UUID> --json
+batchtube download-file <FILE_UUID>
+batchtube download-file <FILE_UUID> --json
 ```
 
 ### Logout
 ```bash
-node dist/index.js logout
+batchtube logout
 ```
 
 ---
@@ -142,8 +140,8 @@ curl -s -H "Authorization: Bearer bt_live_..." "http://localhost:3000/v1/account
 
 ### Login olmadan CLI
 ```bash
-node dist/index.js logout
-node dist/index.js whoami
+batchtube logout
+batchtube whoami
 # Beklenen: "Run \`batchtube login\` first." ve exit 1
 ```
 
@@ -152,10 +150,10 @@ node dist/index.js whoami
 ## 6. Global override (farklı API adresi)
 
 ```bash
-node dist/index.js --api http://localhost:3000 whoami
-node dist/index.js --api https://api.batchtube.net status <BATCH_UUID>
+batchtube --api http://localhost:3000 whoami
+batchtube --api https://api.batchtube.net status <BATCH_UUID>
 ```
 
 ---
 
-**Özet:** Önce API’yi ayağa kaldır, sonra `cli` içinde `node dist/index.js login` ile giriş yapıp yukarıdaki komutları sırayla dene. Loglarda `auth_resolved` ve `authType: 'api_key'` veya `authType: 'jwt'` göreceksin.
+**Özet:** Önce API’yi ayağa kaldır, `npm install -g @batchtube/cli` ile CLI’yı kur, sonra `batchtube login` ile giriş yapıp yukarıdaki komutları dene. Loglarda `auth_resolved` ve `authType: 'api_key'` veya `authType: 'jwt'` göreceksin.
