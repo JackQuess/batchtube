@@ -13,7 +13,8 @@
   "scripts": {
     "build": "tsc",
     "prepare": "npm run build",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "cli": "node dist/index.js"
   },
   "keywords": [
     "batchtube",

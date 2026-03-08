@@ -1,9 +1,19 @@
 import { loadConfig } from '../config.js';
 import { getFileDownload, BatchTubeApiError } from '../api.js';
+import { spawn } from 'node:child_process';
+import { platform } from 'node:os';
 
 export interface DownloadFileOptions {
   json?: boolean;
+  open?: boolean;
   apiBaseUrl?: string;
+}
+
+function openUrl(url: string): void {
+  const args = platform() === 'win32' ? ['/c', 'start', '', url] : [url];
+  const cmd = platform() === 'win32' ? 'cmd' : platform() === 'darwin' ? 'open' : 'xdg-open';
+  const p = spawn(cmd, args, { stdio: 'ignore', shell: platform() === 'win32' });
+  p.on('error', (err) => console.error('Tarayıcı açılamadı:', err.message));
 }
 
 export async function runDownloadFile(fileId: string, opts: DownloadFileOptions): Promise<void> {
@@ -23,10 +33,12 @@ export async function runDownloadFile(fileId: string, opts: DownloadFileOptions)
     const res = await getFileDownload(base, config.apiKey, fileId.trim());
     if (opts.json) {
       console.log(JSON.stringify(res, null, 2));
+      if (opts.open) openUrl(res.url);
       return;
     }
     console.log(res.url);
     console.log('Expires:', res.expires_at);
+    if (opts.open) openUrl(res.url);
   } catch (err) {
     if (err instanceof BatchTubeApiError) {
       if (err.statusCode === 404) console.error('File not found:', fileId);

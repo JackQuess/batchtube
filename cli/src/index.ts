@@ -99,9 +99,10 @@ program
 program
   .command('download-file <fileId>')
   .description('Get signed download URL for a file')
-  .action(async (fileId: string, opts: { json?: boolean }) => {
+  .option('--open', 'Open URL in default browser')
+  .action(async (fileId: string, opts: { json?: boolean; open?: boolean }) => {
     const g = globalOpts();
-    await runDownloadFile(fileId, { apiBaseUrl: g.apiBaseUrl, json: g.json ?? opts.json }).catch(handleApiError);
+    await runDownloadFile(fileId, { apiBaseUrl: g.apiBaseUrl, json: g.json ?? opts.json, open: opts.open }).catch(handleApiError);
   });
 
 function handleApiError(err: unknown): void {
