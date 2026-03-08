@@ -147,7 +147,8 @@ const authPlugin: FastifyPluginAsync = async (app) => {
         select: { plan: true }
       });
       const plan = normalizePlan(profile?.plan);
-      if (!API_KEY_PLANS.includes(plan)) {
+      const isAdminUser = config.adminUserIds.length > 0 && config.adminUserIds.includes(apiKey.user_id);
+      if (!API_KEY_PLANS.includes(plan) && !isAdminUser) {
         request.log.warn(
           { requestId: request.id, userId: apiKey.user_id, plan },
           'auth_api_key_plan_forbidden'
@@ -161,7 +162,7 @@ const authPlugin: FastifyPluginAsync = async (app) => {
       });
 
       request.log.info(
-        { requestId: request.id, userId: apiKey.user_id, plan, authType: 'api_key' },
+        { requestId: request.id, userId: apiKey.user_id, plan, authType: 'api_key', isAdmin: isAdminUser },
         'auth_resolved'
       );
 
@@ -169,7 +170,8 @@ const authPlugin: FastifyPluginAsync = async (app) => {
         user: apiKey.user,
         apiKey,
         tokenType: 'api_key',
-        plan
+        plan,
+        isAdmin: isAdminUser || undefined
       };
       return;
     }

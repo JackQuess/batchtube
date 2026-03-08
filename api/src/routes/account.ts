@@ -30,7 +30,8 @@ const accountRoute: FastifyPluginAsync = async (app) => {
         used: credits.used,
         limit: credits.limit,
         available: credits.available
-      }
+      },
+      is_admin: request.auth.isAdmin === true
     });
   });
 };

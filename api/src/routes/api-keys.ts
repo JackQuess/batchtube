@@ -20,7 +20,7 @@ const apiKeysRoute: FastifyPluginAsync = async (app) => {
     }
 
     const plan = await getPlan(request.auth.user.id);
-    if (plan !== 'archivist' && plan !== 'enterprise') {
+    if (plan !== 'archivist' && plan !== 'enterprise' && !request.auth.isAdmin) {
       return sendError(request, reply, 403, 'forbidden', 'API keys are available for Archivist and Enterprise plans only.');
     }
 
@@ -54,7 +54,7 @@ const apiKeysRoute: FastifyPluginAsync = async (app) => {
     }
 
     const plan = await getPlan(request.auth.user.id);
-    if (plan !== 'archivist' && plan !== 'enterprise') {
+    if (plan !== 'archivist' && plan !== 'enterprise' && !request.auth.isAdmin) {
       return sendError(request, reply, 403, 'forbidden', 'API keys are available for Archivist and Enterprise plans only.');
     }
 
@@ -87,7 +87,7 @@ const apiKeysRoute: FastifyPluginAsync = async (app) => {
     }
 
     const plan = await getPlan(request.auth.user.id);
-    if (plan !== 'archivist' && plan !== 'enterprise') {
+    if (plan !== 'archivist' && plan !== 'enterprise' && !request.auth.isAdmin) {
       return sendError(request, reply, 403, 'forbidden', 'API keys are available for Archivist and Enterprise plans only.');
     }
 

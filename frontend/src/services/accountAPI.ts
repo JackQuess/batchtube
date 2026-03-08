@@ -8,6 +8,8 @@ export interface UsageResponse {
     limit: number;
     available: number;
   };
+  /** True when user is admin (e.g. Supabase app_metadata); allows API keys on any plan. */
+  is_admin?: boolean;
 }
 
 export interface AccountSummary {

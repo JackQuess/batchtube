@@ -11,6 +11,7 @@ const STUDIO_PLANS = new Set(['archivist', 'enterprise']);
 
 export function ApiModal({ onClose }: ApiModalProps) {
   const [plan, setPlan] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loadingPlan, setLoadingPlan] = useState(true);
   const [keys, setKeys] = useState<ApiKeyRow[]>([]);
   const [loadingKeys, setLoadingKeys] = useState(false);
@@ -19,14 +20,16 @@ export function ApiModal({ onClose }: ApiModalProps) {
   const [copiedKey, setCopiedKey] = useState(false);
   const [revokingId, setRevokingId] = useState<string | null>(null);
 
-  const hasStudio = plan !== null && STUDIO_PLANS.has(plan);
+  const hasStudio = plan !== null && (STUDIO_PLANS.has(plan) || isAdmin);
 
   const loadPlan = useCallback(async () => {
     try {
       const usage = await accountAPI.getUsage();
       setPlan(usage.plan);
+      setIsAdmin(usage.is_admin === true);
     } catch {
       setPlan('free');
+      setIsAdmin(false);
     } finally {
       setLoadingPlan(false);
     }
