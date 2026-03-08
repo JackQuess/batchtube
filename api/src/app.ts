@@ -5,6 +5,7 @@ import apiKeyAuthPlugin from './plugins/api-key-auth.js';
 import rateLimitPlugin from './plugins/rate-limit.js';
 import idempotencyPlugin from './plugins/idempotency.js';
 import batchesRoute from './routes/batches.js';
+import sourcesRoute from './routes/sources.js';
 import filesRoute from './routes/files.js';
 import accountRoute from './routes/account.js';
 import apiKeysRoute from './routes/api-keys.js';
@@ -56,6 +57,7 @@ export function createApp() {
   app.register(idempotencyPlugin);
 
   app.register(batchesRoute);
+  app.register(sourcesRoute);
   app.register(filesRoute);
   app.register(accountRoute);
   app.register(apiKeysRoute);

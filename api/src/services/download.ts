@@ -1,5 +1,7 @@
 /**
- * Run yt-dlp to download a single URL. Requires yt-dlp (and ffmpeg for merge) on PATH.
+ * DOWNLOAD ENGINE LAYER
+ * Actual file download only (after user confirms). Uses yt-dlp, retries, format/cookie fallback, ffmpeg, then storage.
+ * Do not use for preview or source resolution. Errors here are download-only and must not pollute preview state.
  */
 
 import { spawn } from 'node:child_process';
@@ -82,6 +84,11 @@ export type YoutubeErrorCode =
   | 'youtube_extractor_error'
   | 'youtube_download_error';
 
+/**
+ * Classify yt-dlp DOWNLOAD stderr into a single code. Used only in the Download Engine path.
+ * Only classify youtube_age_restricted when the error explicitly signals age restriction;
+ * generic "Sign in to confirm" (without "your age") is login_required, not age_restricted.
+ */
 export function classifyYoutubeError(stderr: string): {
   code: YoutubeErrorCode;
   retriable: boolean;
@@ -93,16 +100,17 @@ export function classifyYoutubeError(stderr: string): {
   if (raw.includes('Private video') || raw.includes('private video') || s.includes('private')) {
     return { code: 'youtube_private_video', retriable: false, authError: false };
   }
+  // Explicit age restriction only — do not map generic "Sign in to confirm" to age_restricted
   if (
-    s.includes('sign in to confirm') ||
     s.includes('sign in to confirm your age') ||
     s.includes('confirm your age') ||
-    s.includes('inappropriate') ||
-    s.includes('age-restricted')
+    s.includes('age-restricted') ||
+    s.includes('this video may be inappropriate') ||
+    (s.includes('inappropriate') && (s.includes('age') || s.includes('confirm')))
   ) {
     return { code: 'youtube_age_restricted', retriable: false, authError: true };
   }
-  if (s.includes('login required') || s.includes('login to view')) {
+  if (s.includes('login required') || s.includes('login to view') || s.includes('sign in to confirm')) {
     return { code: 'youtube_login_required', retriable: false, authError: true };
   }
   if (s.includes('video unavailable') || s.includes('unavailable')) {
