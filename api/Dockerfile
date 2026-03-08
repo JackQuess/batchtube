@@ -1,8 +1,9 @@
 FROM node:20-alpine
-# yt-dlp: use Linux PyInstaller binary so we don't need Python (generic 'yt-dlp' can be zipimport script)
+# Alpine uses musl libc → use yt-dlp_musllinux (yt-dlp_linux is glibc)
 RUN apk add --no-cache ffmpeg wget && \
-  wget -q -O /usr/local/bin/yt-dlp "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux" && \
+  wget -q -O /usr/local/bin/yt-dlp "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_musllinux" && \
   chmod +x /usr/local/bin/yt-dlp && \
+  yt-dlp --version && \
   apk del wget
 WORKDIR /app
 COPY package.json package-lock.json* ./
