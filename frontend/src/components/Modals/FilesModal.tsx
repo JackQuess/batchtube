@@ -25,7 +25,11 @@ export function FilesModal({ onClose }: FilesModalProps) {
     let mounted = true;
     const load = async () => {
       try {
-        const { data: batches } = await batchesAPI.list({ status: 'completed', limit: 20 });
+        const [completedRes, partialRes] = await Promise.all([
+          batchesAPI.list({ status: 'completed', limit: 20 }),
+          batchesAPI.list({ status: 'partially_completed', limit: 20 })
+        ]);
+        const batches = [...completedRes.data, ...partialRes.data];
         const rows: FileRow[] = [];
         for (const batch of batches) {
           try {

@@ -35,6 +35,7 @@ enum BatchStatus {
   completed @map("completed")
   failed    @map("failed")
   cancelled @map("cancelled")
+  partially_completed @map("partially_completed")
   resolving_channel   @map("resolving_channel")
   discovering_items   @map("discovering_items")
   queueing_items      @map("queueing_items")
@@ -159,12 +160,15 @@ model File {
   mime_type       String?   @db.VarChar(100)
   expires_at      DateTime  @db.Timestamptz(6)
   created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  /** Optional: for download cache reuse (provider+sourceId+format+quality hash). */
+  cache_key       String?   @db.VarChar(64)
 
   item  BatchItem? @relation(fields: [item_id], references: [id], onDelete: SetNull)
   batch Batch      @relation(fields: [batch_id], references: [id], onDelete: Cascade)
   user  User?      @relation(fields: [user_id], references: [id])
 
   @@index([user_id], map: "idx_files_user")
+  @@index([cache_key, expires_at], map: "idx_files_cache_key_expires")
   @@map("files")
 }
 

@@ -63,5 +63,24 @@ export const config = {
       .split(',')
       .map((id) => id.trim())
       .filter(Boolean);
+  },
+  /** Worker concurrency (default 20). Higher = more parallel item jobs per worker process. */
+  workerConcurrency: Number(process.env.WORKER_CONCURRENCY ?? 20),
+  /**
+   * Optional per-provider concurrency caps. Example: WORKER_CONCURRENCY_YOUTUBE=5, WORKER_CONCURRENCY_VIMEO=15.
+   * Effective concurrency for a provider is min(workerConcurrency, providerCap).
+   * Keys are lowercased (youtube, vimeo, instagram, tiktok, etc.).
+   */
+  get workerConcurrencyByProvider(): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const [key, value] of Object.entries(process.env)) {
+      const m = key.match(/^WORKER_CONCURRENCY_(.+)$/);
+      if (m) {
+        const provider = (m[1] as string).toLowerCase();
+        const n = Number(value);
+        if (Number.isInteger(n) && n >= 1) out[provider] = n;
+      }
+    }
+    return out;
   }
 };

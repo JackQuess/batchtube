@@ -55,6 +55,19 @@ export async function putObject(params: {
   }));
 }
 
+export async function getObject(key: string): Promise<Buffer> {
+  const res = await s3.send(new GetObjectCommand({
+    Bucket: config.s3.bucket,
+    Key: key
+  }));
+  const chunks: Uint8Array[] = [];
+  if (!res.Body) return Buffer.alloc(0);
+  for await (const chunk of res.Body as AsyncIterable<Uint8Array>) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
+
 export async function signedGetUrl(key: string, expiresIn = 3600): Promise<string> {
   return getSignedUrl(
     s3,

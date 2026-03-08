@@ -9,7 +9,7 @@ interface HistoryModalProps {
 }
 
 function statusToDisplay(s: BatchListItem['status']): 'completed' | 'processing' | 'failed' {
-  if (s === 'completed') return 'completed';
+  if (s === 'completed' || s === 'partially_completed') return 'completed';
   if (s === 'failed' || s === 'cancelled') return 'failed';
   return 'processing';
 }

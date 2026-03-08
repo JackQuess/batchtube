@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import type { BatchStatus, ItemStatus } from '@prisma/client';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { enqueueBatch } from '../queues/enqueue.js';
+import { enqueueBatchItems } from '../queues/enqueue.js';
+import { normalizeAndDedupeUrls } from '../services/urlIngestion.js';
 import { writeAuditLog } from '../services/audit.js';
 import { prisma } from '../services/db.js';
 import {
@@ -37,7 +38,7 @@ const listQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   status: z.enum([
     'created', 'queued', 'processing', 'completed', 'failed', 'cancelled',
-    'resolving_channel', 'discovering_items', 'queueing_items'
+    'resolving_channel', 'discovering_items', 'queueing_items', 'partially_completed'
   ]).optional()
 });
 
@@ -55,8 +56,26 @@ function toBatchResponse(batch: {
   items: Array<{ status: ItemStatus }>;
 }) {
   const total = batch.item_count;
-  const completed = batch.items.filter((item) => item.status === 'completed').length;
+  const items = batch.items;
+  const completed = items.filter((i) => i.status === 'completed').length;
+  const failed = items.filter((i) => i.status === 'failed').length;
+  const processing = items.filter((i) => i.status === 'processing').length;
+  const queued = items.filter((i) => i.status === 'queued' || i.status === 'pending').length;
   const progress = total === 0 ? 0 : (completed / total) * 100;
+
+  let throughput_items_per_min: number | undefined;
+  let eta_seconds: number | undefined;
+  if (completed > 0 && total > completed + failed) {
+    const elapsedMs = Date.now() - new Date(batch.created_at).getTime();
+    const elapsedMin = elapsedMs / 60000;
+    if (elapsedMin > 0) {
+      throughput_items_per_min = completed / elapsedMin;
+      const remaining = total - completed - failed;
+      if (throughput_items_per_min > 0 && remaining > 0) {
+        eta_seconds = Math.round((remaining / throughput_items_per_min) * 60);
+      }
+    }
+  }
 
   return {
     id: batch.id,
@@ -64,7 +83,13 @@ function toBatchResponse(batch: {
     status: batch.status,
     progress,
     item_count: total,
-    created_at: batch.created_at.toISOString()
+    created_at: batch.created_at.toISOString(),
+    queued,
+    processing,
+    completed,
+    failed,
+    ...(throughput_items_per_min != null && { throughput_items_per_min: Math.round(throughput_items_per_min * 10) / 10 }),
+    ...(eta_seconds != null && { eta_seconds })
   };
 }
 
@@ -84,27 +109,44 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
     const limits = PLAN_LIMITS[plan];
     const isAdmin = request.auth.isAdmin === true;
 
+    const { urls: dedupedUrls, duplicatesRemoved } = normalizeAndDedupeUrls(body.urls);
+    if (dedupedUrls.length === 0) {
+      return sendError(request, reply, 400, 'validation_error', 'No valid URLs after normalization and deduplication.');
+    }
+
+    for (const url of dedupedUrls) {
+      const validation = isMediaUrlAllowed(url);
+      if (!validation.ok) {
+        return sendError(request, reply, 400, 'validation_error', 'One or more URLs are not allowed.', {
+          url,
+          reason: validation.reason
+        });
+      }
+    }
+
+    const urlCount = dedupedUrls.length;
     request.log.info(
       {
         requestId: request.id,
         userId: request.auth.user.id,
         isAdmin,
         plan,
-        urlCount: body.urls.length,
+        urlCount,
+        duplicatesRemoved,
         maxBatchLinks: limits.maxBatchLinks
       },
       'batch_create_start'
     );
 
     if (!isAdmin) {
-      const batchAllowed = await enforceBatchLimit(body.urls.length, plan);
+      const batchAllowed = await enforceBatchLimit(urlCount, plan);
       request.log.info(
-        { requestId: request.id, batchAllowed, urlCount: body.urls.length, plan, maxBatchLinks: limits.maxBatchLinks },
+        { requestId: request.id, batchAllowed, urlCount, plan, maxBatchLinks: limits.maxBatchLinks },
         'batch_create_check_batch_limit'
       );
       if (!batchAllowed) {
         request.log.warn(
-          { requestId: request.id, userId: request.auth.user.id, plan, maxBatchLinks: limits.maxBatchLinks, urlCount: body.urls.length },
+          { requestId: request.id, userId: request.auth.user.id, plan, maxBatchLinks: limits.maxBatchLinks, urlCount },
           'batch_create_429_batch_limit'
         );
         return sendError(request, reply, 429, 'rate_limit_exceeded', 'You have exceeded your plan limits.', {
@@ -114,16 +156,6 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
       }
     } else {
       request.log.info({ requestId: request.id }, 'batch_create_skip_batch_limit_admin');
-    }
-
-    for (const url of body.urls) {
-      const validation = isMediaUrlAllowed(url);
-      if (!validation.ok) {
-        return sendError(request, reply, 400, 'validation_error', 'One or more URLs are not allowed.', {
-          url,
-          reason: validation.reason
-        });
-      }
     }
 
     if (!isAdmin) {
@@ -160,7 +192,7 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
     }
 
     if (!isAdmin) {
-      const creditCheck = await checkCreditsAvailability(request.auth.user.id, plan, body.urls.length);
+      const creditCheck = await checkCreditsAvailability(request.auth.user.id, plan, urlCount);
       request.log.info(
         {
           requestId: request.id,
@@ -237,30 +269,29 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
     request.log.info({ requestId: request.id, isAdmin, plan }, 'batch_create_checks_passed_proceeding_to_tx');
 
     const batchId = randomUUID();
+    const itemIds = dedupedUrls.map(() => randomUUID());
     let batch: Awaited<ReturnType<typeof prisma.batch.create>>;
     try {
       batch = await prisma.$transaction(async (tx) => {
-        // STEP 1: Create batch first (must exist before credit_ledger references it)
         const createdBatch = await tx.batch.create({
           data: {
             id: batchId,
             user_id: request.auth!.user.id,
             name: body.name ?? null,
-            status: autoStart ? 'queued' : 'created',
+            status: autoStart ? 'processing' : 'created',
             options: {
               format: body.options?.format ?? 'mp4',
               quality: body.options?.quality ?? 'best',
               archive_as_zip: body.options?.archive_as_zip ?? false
             },
             callback_url: body.callback_url ?? null,
-            item_count: body.urls.length
+            item_count: urlCount
           }
         });
 
-        // STEP 2: Create batch items (reference created batch)
         await tx.batchItem.createMany({
-          data: body.urls.map((url) => ({
-            id: randomUUID(),
+          data: dedupedUrls.map((url, i) => ({
+            id: itemIds[i]!,
             batch_id: createdBatch.id,
             user_id: request.auth!.user.id,
             original_url: url,
@@ -269,13 +300,12 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
           }))
         });
 
-        // STEP 3 & 4: For non-admin, deduct credits and create credit_ledger; admin has no credit limit
         if (!isAdmin) {
           const creditDeduction = await deductCreditsForBatchTx(
             tx,
             request.auth!.user.id,
             plan,
-            body.urls.length
+            urlCount
           );
           if (!creditDeduction.ok) {
             throw new Error(`INSUFFICIENT_CREDITS:${creditDeduction.needed}:${creditDeduction.available}`);
@@ -334,8 +364,8 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
     if (autoStart) {
       try {
         const planForEnqueue = isAdmin ? 'enterprise' : plan;
-        await enqueueBatch(batch.id, request.auth.user.id, planForEnqueue);
-        request.log.debug({ batchId: batch.id, isAdmin }, 'enqueue_batch_ok');
+        await enqueueBatchItems(batch.id, request.auth.user.id, itemIds, planForEnqueue);
+        request.log.debug({ batchId: batch.id, itemCount: itemIds.length, isAdmin }, 'enqueue_batch_items_ok');
       } catch (enqueueError) {
         request.log.error(
           {
@@ -361,13 +391,18 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
     });
 
     request.log.info({ requestId: request.id, batchId: batch.id, isAdmin }, 'batch_create_201_success');
+    const initialQueued = autoStart ? batch.item_count : 0;
     return reply.status(201).send({
       id: batch.id,
       name: batch.name,
       status: batch.status,
       progress: 0,
       item_count: batch.item_count,
-      created_at: batch.created_at.toISOString()
+      created_at: batch.created_at.toISOString(),
+      queued: initialQueued,
+      processing: 0,
+      completed: 0,
+      failed: 0
     });
   });
 
@@ -581,7 +616,7 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
       return sendError(request, reply, 404, 'not_found', 'Batch not found.', { id });
     }
 
-    if (batch.status !== 'completed' || !batch.zip_file_path) {
+    if (batch.status !== 'completed' && batch.status !== 'partially_completed' || !batch.zip_file_path) {
       return sendError(request, reply, 403, 'forbidden', 'Batch ZIP is not available.', {
         status: batch.status
       });

@@ -1,7 +1,7 @@
 import { Redis } from 'ioredis';
 import { config } from '../config.js';
 
-/** Backoff for Redis connection/rea connection (e.g. Railway internal DNS EAI_AGAIN). */
+/** Backoff for Redis connection/reconnection (e.g. Railway internal DNS EAI_AGAIN). */
 function redisRetryStrategy(times: number): number {
   const delay = Math.min(2000 * Math.pow(2, times), 30000);
   return delay;
@@ -11,7 +11,7 @@ export const redis = new Redis(config.redisUrl, {
   maxRetriesPerRequest: null,
   enableReadyCheck: true,
   retryStrategy: redisRetryStrategy,
-  connectTimeout: 10000
+  connectTimeout: 15000
 });
 
 redis.on('error', (err) => {

@@ -4,7 +4,7 @@ import { prisma } from './db.js';
 export async function sendBatchWebhook(params: {
   batchId: string;
   event: 'batch.completed' | 'batch.failed';
-  status: 'completed' | 'failed';
+  status: 'completed' | 'failed' | 'partially_completed';
   successfulItems: number;
   failedItems: number;
 }) {

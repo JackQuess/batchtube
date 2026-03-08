@@ -6,8 +6,15 @@ export interface BatchJob {
   batchId: string;
   userId: string;
 }
-export type BatchJobName = 'process-batch' | 'channel-archive';
 
-export const defaultQueue = new Queue<BatchJob, void, BatchJobName>(QUEUE_NAME, {
+export interface ItemJob {
+  batchId: string;
+  itemId: string;
+  userId: string;
+}
+
+export type BatchJobName = 'process-batch' | 'channel-archive' | 'process-item' | 'batch-finalize';
+
+export const defaultQueue = new Queue<BatchJob | ItemJob, void, BatchJobName>(QUEUE_NAME, {
   connection: { url: config.redisUrl }
 });

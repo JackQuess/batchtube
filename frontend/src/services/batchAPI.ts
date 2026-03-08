@@ -49,7 +49,7 @@ interface BatchResponse {
 
 interface BatchDetails {
   status: 'created' | 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled' |
-    'resolving_channel' | 'discovering_items' | 'queueing_items';
+    'resolving_channel' | 'discovering_items' | 'queueing_items' | 'partially_completed';
   progress: number;
 }
 
@@ -124,6 +124,7 @@ export const batchAPI = {
       queueing_items: 'active',
       processing: 'active',
       completed: 'completed',
+      partially_completed: 'completed',
       failed: 'failed',
       cancelled: 'failed'
     };

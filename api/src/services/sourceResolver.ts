@@ -38,6 +38,25 @@ export function normalizeUrlForResolver(input: string): string | null {
   }
 }
 
+const RESOLVE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const resolveCache = new Map<string, { result: ResolveResult; fetchedAt: number }>();
+
+export function getCachedResolve(input: string): ResolveResult | null {
+  const key = (normalizeUrlForResolver(input) ?? input.trim()).toLowerCase();
+  const entry = resolveCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.fetchedAt > RESOLVE_CACHE_TTL_MS) {
+    resolveCache.delete(key);
+    return null;
+  }
+  return entry.result;
+}
+
+export function setCachedResolve(input: string, result: ResolveResult): void {
+  const key = result.url.toLowerCase();
+  resolveCache.set(key, { result, fetchedAt: Date.now() });
+}
+
 /**
  * Infer source type from URL path/query using heuristics. Data-driven from provider support.
  */
@@ -67,20 +86,25 @@ export function detectSourceTypeFromUrl(url: string): SourceType {
 
 /**
  * Resolve input to provider + source type. Does not fetch metadata or list items.
+ * Uses short-TTL preview cache for repeated links.
  */
 export function resolveSource(input: string): ResolveResult | null {
+  const cached = getCachedResolve(input);
+  if (cached) return cached;
   const url = normalizeUrlForResolver(input);
   if (!url) return null;
   const validation = isMediaUrlAllowed(url);
   const provider = detectProvider(url);
   const sourceType = detectSourceTypeFromUrl(url);
-  return {
+  const result: ResolveResult = {
     url,
     provider,
     sourceType,
     allowed: validation.ok,
     reason: validation.reason
   };
+  setCachedResolve(input, result);
+  return result;
 }
 
 /**

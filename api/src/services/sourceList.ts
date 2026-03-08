@@ -44,7 +44,11 @@ export async function listSourceItems(
   }
 
   const { page = 1, limit = 50 } = options;
-  const end = Math.min(MAX_ENTRIES, page * limit);
+  const start = (page - 1) * limit;
+  const end = Math.min(MAX_ENTRIES, start + limit);
+  if (start >= end) {
+    return Promise.resolve({ data: [], meta: { total: 0 } });
+  }
 
   return new Promise((resolve, reject) => {
     const args = [
@@ -53,8 +57,8 @@ export async function listSourceItems(
       '--no-warnings',
       '--no-download',
       '--no-check-certificate',
-      `--playlist-end`,
-      String(end),
+      '--playlist-start', String(start + 1),
+      '--playlist-end', String(end),
       url
     ];
 
@@ -119,10 +123,8 @@ export async function listSourceItems(
         }
       }
 
-      const start = (page - 1) * limit;
-      const data = raw.slice(start, start + limit);
       resolve({
-        data,
+        data: raw,
         meta: { total: raw.length }
       });
     });
@@ -131,6 +133,39 @@ export async function listSourceItems(
 
 const DISCOVERY_PAGE_SIZE = 50;
 const MAX_ARCHIVE_ITEMS = 500;
+
+/**
+ * Yield pages of source items one at a time for progressive discovery.
+ * Use in channel-archive worker to enqueue item jobs as each page is discovered.
+ */
+export async function* listSourceItemsPaginated(
+  url: string,
+  type: 'channel' | 'playlist' | 'profile',
+  options: { maxItems: number; pageSize?: number }
+): AsyncGenerator<SourceListItem[], void, undefined> {
+  const { maxItems, pageSize = DISCOVERY_PAGE_SIZE } = options;
+  const capped = Math.min(maxItems, MAX_ARCHIVE_ITEMS);
+  const seen = new Set<string>();
+  let page = 1;
+  let totalYielded = 0;
+  for (;;) {
+    const result = await listSourceItems(url, type, { page, limit: pageSize });
+    if (result.data.length === 0) return;
+    const deduped: SourceListItem[] = [];
+    for (const item of result.data) {
+      if (seen.has(item.url)) continue;
+      seen.add(item.url);
+      deduped.push(item);
+      if (totalYielded + deduped.length >= capped) break;
+    }
+    if (deduped.length > 0) {
+      totalYielded += deduped.length;
+      yield deduped;
+    }
+    if (result.data.length < pageSize || totalYielded >= capped) return;
+    page++;
+  }
+}
 
 /**
  * Fetch up to `maxItems` from a source using parallel page requests for speed.

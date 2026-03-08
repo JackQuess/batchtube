@@ -4,7 +4,7 @@ export interface BatchListItem {
   id: string;
   name: string | null;
   status: 'created' | 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled' |
-    'resolving_channel' | 'discovering_items' | 'queueing_items';
+    'resolving_channel' | 'discovering_items' | 'queueing_items' | 'partially_completed';
   progress: number;
   item_count: number;
   created_at: string;

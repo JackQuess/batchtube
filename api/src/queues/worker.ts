@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import JSZip from 'jszip';
 import { prisma } from '../services/db.js';
 import { detectProvider, getDefaultFormatForProvider } from '../services/providers.js';
-import { putObject } from '../storage/s3.js';
+import { putObject, getObject } from '../storage/s3.js';
 import { PLAN_LIMITS, getPlan, incrementBandwidth, deductCreditsForBatch } from '../services/plans.js';
 import { sendBatchWebhook } from '../services/webhooks.js';
 import {
@@ -12,9 +12,9 @@ import {
   type DownloadFormat,
   type DownloadQuality
 } from '../services/download.js';
-import type { BatchJob } from './bull.js';
-import { enqueueBatch } from './enqueue.js';
-import { listSourceItems, listSourceItemsParallel } from '../services/sourceList.js';
+import type { BatchJob, ItemJob } from './bull.js';
+import { enqueueBatch, enqueueBatchItems, enqueueBatchFinalize } from './enqueue.js';
+import { listSourceItems, listSourceItemsParallel, listSourceItemsPaginated } from '../services/sourceList.js';
 import { config } from '../config.js';
 import {
   validateRuntimeConfig,
@@ -23,6 +23,12 @@ import {
 } from '../runtime-config.js';
 import { getYtDlpCookieExpiry } from '../services/cookieExpiry.js';
 import { ensureFreshCookies } from '../services/cookieRefresh.js';
+import { acquire as acquireProviderSlot, release as releaseProviderSlot } from '../services/providerConcurrency.js';
+import {
+  extractSourceId,
+  computeDownloadCacheKey,
+  findCachedFile
+} from '../services/downloadCache.js';
 
 type BatchOptions = {
   format?: string;
@@ -47,6 +53,186 @@ function toDownloadOptions(
       ? (requestedFormat as DownloadFormat)
       : getDefaultFormatForProvider(provider);
   return { format, quality };
+}
+
+async function processItem(job: Job<ItemJob>) {
+  const { batchId, itemId, userId } = job.data;
+
+  const item = await prisma.batchItem.findFirst({
+    where: { id: itemId, batch_id: batchId },
+    include: { batch: true }
+  });
+  if (!item || !item.batch) return;
+  if (item.status === 'completed' || item.status === 'failed' || item.status === 'cancelled') return;
+
+  const provider = item.provider ?? detectProvider(item.original_url);
+  await acquireProviderSlot(provider);
+  try {
+    const batch = item.batch;
+    const batchOptions = (batch.options as BatchOptions) ?? {};
+    const plan = await getPlan(userId);
+    const retentionHours = PLAN_LIMITS[plan].fileTtlHours;
+
+    if (batch.status === 'queued') {
+      await prisma.batch.update({ where: { id: batchId }, data: { status: 'processing' } });
+    }
+
+    await prisma.batchItem.update({
+      where: { id: itemId },
+      data: { status: 'processing', provider, progress: 25, updated_at: new Date() }
+    });
+
+    const downloadOpts = toDownloadOptions(batchOptions, provider);
+    const sourceId = extractSourceId(provider, item.original_url);
+    const cacheKey =
+      sourceId != null
+        ? computeDownloadCacheKey(provider, sourceId, downloadOpts.format, downloadOpts.quality)
+        : null;
+
+    const cached = cacheKey ? await findCachedFile(cacheKey) : null;
+    if (cached) {
+      await prisma.file.create({
+        data: {
+          id: randomUUID(),
+          item_id: item.id,
+          batch_id: batchId,
+          user_id: userId,
+          storage_path: cached.storage_path,
+          filename: cached.filename,
+          file_size_bytes: cached.file_size_bytes,
+          mime_type: cached.mime_type,
+          expires_at: cached.expires_at,
+          cache_key: cacheKey
+        }
+      });
+      await prisma.batchItem.update({
+        where: { id: itemId },
+        data: { status: 'completed', progress: 100, updated_at: new Date() }
+      });
+      const terminalCount = await prisma.batchItem.count({
+        where: { batch_id: batchId, status: { in: ['completed', 'failed', 'cancelled'] } }
+      });
+      if (terminalCount >= batch.item_count) {
+        await enqueueBatchFinalize(batchId, userId, plan);
+      }
+      return;
+    }
+
+    try {
+      const downloadOpts = toDownloadOptions(batchOptions, provider);
+      const result = await downloadWithYtDlp(item.original_url, downloadOpts, item.id, provider);
+      const { buffer: content } = readDownloadAndCleanup(result);
+
+      const ext = result.ext;
+      const key = `results/${batchId}/${item.id}.${ext}`;
+
+      await putObject({ key, body: content, contentType: result.mimeType });
+
+      const fileCacheKey =
+        sourceId != null
+          ? computeDownloadCacheKey(provider, sourceId, downloadOpts.format, downloadOpts.quality)
+          : null;
+      await prisma.file.create({
+        data: {
+          id: randomUUID(),
+          item_id: item.id,
+          batch_id: batchId,
+          user_id: userId,
+          storage_path: key,
+          filename: `${item.id}.${ext}`,
+          file_size_bytes: BigInt(content.byteLength),
+          mime_type: result.mimeType,
+          expires_at: new Date(Date.now() + retentionHours * 3600 * 1000),
+          ...(fileCacheKey ? { cache_key: fileCacheKey } : {})
+        }
+      });
+
+      await prisma.batchItem.update({
+        where: { id: itemId },
+        data: { status: 'completed', progress: 100, updated_at: new Date() }
+      });
+
+      await incrementBandwidth(userId, BigInt(content.byteLength));
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      const youtubeCodeMatch = errMsg.match(/^(youtube_(?:private_video|age_restricted|login_required|unavailable|extractor_error|download_error)):/);
+      const errorMessageToStore = youtubeCodeMatch ? youtubeCodeMatch[1] : errMsg;
+      console.error(
+        JSON.stringify({ msg: 'worker_item_failed', batchId, itemId, url: item.original_url, error: errMsg })
+      );
+      await prisma.batchItem.update({
+        where: { id: itemId },
+        data: { status: 'failed', error_message: errorMessageToStore, updated_at: new Date() }
+      });
+    }
+
+    const terminalCount = await prisma.batchItem.count({
+      where: { batch_id: batchId, status: { in: ['completed', 'failed', 'cancelled'] } }
+    });
+    if (terminalCount >= batch.item_count) {
+      await enqueueBatchFinalize(batchId, userId, plan);
+    }
+  } finally {
+    releaseProviderSlot(provider);
+  }
+}
+
+async function processBatchFinalize(job: Job<BatchJob>) {
+  const { batchId, userId } = job.data;
+
+  const batch = await prisma.batch.findUnique({
+    where: { id: batchId },
+    include: { items: { where: { status: 'completed' }, include: { files: true } } }
+  });
+  if (!batch) return;
+  if (batch.status === 'completed' || batch.status === 'partially_completed' || batch.status === 'failed') return;
+
+  const completedCount = batch.items.length;
+  const failedCount = await prisma.batchItem.count({
+    where: { batch_id: batchId, status: 'failed' }
+  });
+
+  const finalStatus =
+    completedCount === 0 ? 'failed' : failedCount > 0 ? 'partially_completed' : 'completed';
+
+  let zipKey: string | null = null;
+  if (completedCount > 0 && batch.items.length > 0) {
+    const zip = new JSZip();
+    for (const item of batch.items) {
+      const file = item.files?.[0];
+      if (!file?.storage_path) continue;
+      try {
+        const content = await getObject(file.storage_path);
+        const ext = file.filename?.split('.').pop() ?? 'bin';
+        zip.file(`${item.id}.${ext}`, content);
+      } catch {
+        // skip file if not found
+      }
+    }
+    const fileCount = Object.keys(zip.files).length;
+    if (fileCount > 0) {
+      zipKey = `archives/${batchId}.zip`;
+      const zipBody = await zip.generateAsync({ type: 'nodebuffer' });
+      await putObject({ key: zipKey, body: zipBody, contentType: 'application/zip' });
+    }
+  }
+
+  await prisma.batch.update({
+    where: { id: batchId },
+    data: {
+      status: finalStatus,
+      completed_at: new Date(),
+      zip_file_path: zipKey
+    }
+  });
+
+  await sendBatchWebhook({
+    batchId,
+    event: finalStatus === 'completed' ? 'batch.completed' : finalStatus === 'partially_completed' ? 'batch.completed' : 'batch.failed',
+    status: finalStatus,
+    successfulItems: completedCount,
+    failedItems: failedCount
+  });
 }
 
 async function processBatch(job: Job<BatchJob>) {
@@ -224,15 +410,44 @@ async function processChannelArchive(job: Job<BatchJob>) {
     return;
   }
 
-  let itemUrls: string[];
+  const limit =
+    mode === 'all' ? Math.min(maxItems, 500) : mode === 'latest_n' ? Math.min(latestN, maxItems) : Math.min(25, maxItems);
+  let totalEnqueued = 0;
+  const DISCOVERY_PAGE_SIZE = 50;
+
   try {
-    if (mode === 'all') {
-      const items = await listSourceItemsParallel(sourceUrl, sourceType, Math.min(maxItems, 500));
-      itemUrls = items.map((i) => i.url);
-    } else {
-      const limit = mode === 'latest_n' ? Math.min(latestN, maxItems) : Math.min(25, maxItems);
-      const result = await listSourceItems(sourceUrl, sourceType, { page: 1, limit });
-      itemUrls = result.data.slice(0, limit).map((i) => i.url);
+    for await (const chunk of listSourceItemsPaginated(sourceUrl, sourceType, {
+      maxItems: limit,
+      pageSize: DISCOVERY_PAGE_SIZE
+    })) {
+      if (chunk.length === 0) continue;
+
+      try {
+        await prisma.batch.update({ where: { id: batchId }, data: { status: 'queueing_items' } });
+      } catch {
+        return;
+      }
+
+      const provider = detectProvider(sourceUrl);
+      const itemIds = chunk.map(() => randomUUID());
+      await prisma.batchItem.createMany({
+        data: chunk.map((item, i) => ({
+          id: itemIds[i]!,
+          batch_id: batchId,
+          user_id: userId,
+          original_url: item.url,
+          provider,
+          status: 'queued' as const
+        }))
+      });
+
+      totalEnqueued += chunk.length;
+      await prisma.batch.update({
+        where: { id: batchId },
+        data: { item_count: totalEnqueued, status: 'processing' }
+      });
+
+      await enqueueBatchItems(batchId, userId, itemIds, plan);
     }
   } catch (err) {
     console.error(JSON.stringify({ msg: 'channel_archive_discovery_failed', batchId, error: String(err) }));
@@ -240,18 +455,12 @@ async function processChannelArchive(job: Job<BatchJob>) {
     return;
   }
 
-  if (itemUrls.length === 0) {
+  if (totalEnqueued === 0) {
     await prisma.batch.update({ where: { id: batchId }, data: { status: 'failed' } });
     return;
   }
 
-  try {
-    await prisma.batch.update({ where: { id: batchId }, data: { status: 'queueing_items' } });
-  } catch {
-    return;
-  }
-
-  const creditCheck = await deductCreditsForBatch(batchId, userId, plan, itemUrls.length);
+  const creditCheck = await deductCreditsForBatch(batchId, userId, plan, totalEnqueued);
   if (!creditCheck.ok) {
     console.error(
       JSON.stringify({
@@ -262,27 +471,11 @@ async function processChannelArchive(job: Job<BatchJob>) {
       })
     );
     await prisma.batch.update({ where: { id: batchId }, data: { status: 'failed' } });
-    return;
+    await prisma.batchItem.updateMany({
+      where: { batch_id: batchId },
+      data: { status: 'cancelled', updated_at: new Date() }
+    });
   }
-
-  const provider = detectProvider(sourceUrl);
-  await prisma.batchItem.createMany({
-    data: itemUrls.map((url) => ({
-      id: randomUUID(),
-      batch_id: batchId,
-      user_id: userId,
-      original_url: url,
-      provider,
-      status: 'queued' as const
-    }))
-  });
-
-  await prisma.batch.update({
-    where: { id: batchId },
-    data: { status: 'queued', item_count: itemUrls.length }
-  });
-
-  await enqueueBatch(batchId, userId, plan);
 }
 
 // Fail fast: validate config before starting worker
@@ -316,21 +509,24 @@ function redisRetryStrategy(times: number): number {
   return Math.min(2000 * Math.pow(2, times), 30000);
 }
 
-new Worker<BatchJob>(
+new Worker<BatchJob | ItemJob>(
   QUEUE_NAME,
   async (job) => {
-    if (job.name === 'channel-archive') return processChannelArchive(job);
-    return processBatch(job);
+    if (job.name === 'process-item') return processItem(job as Job<ItemJob>);
+    if (job.name === 'batch-finalize') return processBatchFinalize(job as Job<BatchJob>);
+    if (job.name === 'channel-archive') return processChannelArchive(job as Job<BatchJob>);
+    return processBatch(job as Job<BatchJob>);
   },
   {
-  connection: {
-    url: config.redisUrl,
-    maxRetriesPerRequest: null,
-    retryStrategy: redisRetryStrategy,
-    connectTimeout: 10000
-  },
-  concurrency: 20
-});
+    connection: {
+      url: config.redisUrl,
+      maxRetriesPerRequest: null,
+      retryStrategy: redisRetryStrategy,
+      connectTimeout: 10000
+    },
+    concurrency: config.workerConcurrency
+  }
+);
 
 console.log(
   JSON.stringify({
