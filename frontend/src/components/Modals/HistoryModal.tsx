@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { CheckCircle2, XCircle, Loader2, ChevronRight, Clock } from 'lucide-react';
+import { CheckCircle2, XCircle, Loader2, ChevronRight, Clock, Download } from 'lucide-react';
 import { batchesAPI, type BatchListItem } from '../../services/batchesAPI';
+import { batchAPI } from '../../services/batchAPI';
 
 interface HistoryModalProps {
   onClose: () => void;
@@ -17,6 +18,7 @@ export function HistoryModal({ onClose, onSelectBatch }: HistoryModalProps) {
   const [list, setList] = useState<BatchListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -58,6 +60,21 @@ export function HistoryModal({ onClose, onSelectBatch }: HistoryModalProps) {
     }
   };
 
+  const handleDownloadZip = async (e: React.MouseEvent, batchId: string) => {
+    e.stopPropagation();
+    setDownloadingId(batchId);
+    try {
+      const url = await batchAPI.getSignedDownloadUrl(batchId);
+      window.location.href = url;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'ZIP alınamadı.';
+      console.error('Download ZIP failed:', err);
+      alert(message);
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full max-h-[70vh]">
       <div className="p-6 flex flex-col gap-2 overflow-y-auto">
@@ -73,17 +90,19 @@ export function HistoryModal({ onClose, onSelectBatch }: HistoryModalProps) {
           <p className="text-sm text-app-muted py-4">No batches yet.</p>
         )}
         {!loading && !error && list.map((batch) => (
-          <button
-            type="button"
+          <div
             key={batch.id}
+            role="button"
+            tabIndex={0}
             onClick={() => onSelectBatch?.(batch.id)}
-            className="w-full text-left flex items-center justify-between p-4 rounded-xl border border-app-border bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all cursor-pointer group"
+            onKeyDown={(e) => e.key === 'Enter' && onSelectBatch?.(batch.id)}
+            className="w-full flex items-center justify-between p-4 rounded-xl border border-app-border bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all cursor-pointer group"
           >
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-lg bg-black/50 flex items-center justify-center group-hover:scale-110 transition-transform">
+            <div className="flex items-center gap-4 min-w-0 flex-1">
+              <div className="w-10 h-10 rounded-lg bg-black/50 flex items-center justify-center group-hover:scale-110 transition-transform shrink-0">
                 <StatusIcon status={statusToDisplay(batch.status)} />
               </div>
-              <div className="flex flex-col">
+              <div className="flex flex-col min-w-0">
                 <span className="text-sm font-medium text-white group-hover:text-app-primary transition-colors">
                   {batch.name ?? `Batch ${batch.id.slice(0, 8)}`}
                 </span>
@@ -96,8 +115,28 @@ export function HistoryModal({ onClose, onSelectBatch }: HistoryModalProps) {
                 </div>
               </div>
             </div>
-            <ChevronRight className="w-5 h-5 text-app-muted opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
-          </button>
+            <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+              {statusToDisplay(batch.status) === 'completed' && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDownloadZip(e, batch.id);
+                  }}
+                  disabled={downloadingId === batch.id}
+                  title="Download ZIP"
+                  className="p-2 rounded-lg text-app-primary hover:bg-app-primary/20 disabled:opacity-50 transition-colors"
+                >
+                  {downloadingId === batch.id ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4" />
+                  )}
+                </button>
+              )}
+              <ChevronRight className="w-5 h-5 text-app-muted opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+            </div>
+          </div>
         ))}
       </div>
 
