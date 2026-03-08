@@ -174,7 +174,20 @@ if (dbHostCategory === 'supabase_host_detected') {
   console.warn('[worker] DATABASE_URL points to Supabase; use Railway Postgres for worker.');
 }
 
-new Worker<BatchJob>(QUEUE_NAME, processBatch, { connection: { url: config.redisUrl }, concurrency: 20 });
+// Retry connection on DNS/network errors (e.g. Railway redis.railway.internal EAI_AGAIN)
+function redisRetryStrategy(times: number): number {
+  return Math.min(2000 * Math.pow(2, times), 30000);
+}
+
+new Worker<BatchJob>(QUEUE_NAME, processBatch, {
+  connection: {
+    url: config.redisUrl,
+    maxRetriesPerRequest: null,
+    retryStrategy: redisRetryStrategy,
+    connectTimeout: 10000
+  },
+  concurrency: 20
+});
 
 console.log(
   JSON.stringify({

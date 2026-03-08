@@ -59,10 +59,12 @@ API and Worker must use the **exact same** `DATABASE_URL`, `DIRECT_URL`, and `RE
 
 ## How to set on Railway
 
-1. Add **Postgres** and **Redis** services.
+1. Add **Postgres** and **Redis** to the **same project** as the API and Worker.
 2. **batchtube** → Variables: reference Postgres `DATABASE_URL` (and set `DIRECT_URL` to same), reference Redis `REDIS_URL`.
 3. **worker** → Variables: same `DATABASE_URL`, `DIRECT_URL`, `REDIS_URL`.
 4. Redeploy both after changes.
+
+**If you see `getaddrinfo EAI_AGAIN redis.railway.internal`:** Redis must be in the same Railway project so internal DNS resolves. The app now retries the connection with backoff; ensure Redis is added and `REDIS_URL` is set from Railway’s Redis service variable.
 
 ---
 
