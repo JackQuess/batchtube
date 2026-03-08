@@ -43,7 +43,12 @@ async function runStartupDiagnostics(): Promise<void> {
       database_provider: 'postgres',
       db_host_category: dbHostCategory,
       redis_status: redisStatus,
-      queue_name: QUEUE_NAME
+      queue_name: QUEUE_NAME,
+      supabase_auth: {
+        has_url: Boolean(config.supabase?.url?.trim()),
+        has_jwks_url: Boolean(config.supabase?.jwksUrl?.trim()),
+        has_jwt_issuer: Boolean(config.supabase?.jwtIssuer?.trim())
+      }
     },
     'startup_diagnostics'
   );

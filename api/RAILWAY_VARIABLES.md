@@ -37,6 +37,13 @@ Do **not** set `DATABASE_URL` or `DIRECT_URL` to a Supabase host for the API/Wor
 | `SUPABASE_URL`    | **Yes** (JWT auth) | Supabase project URL. |
 | `SUPABASE_JWKS_URL` or `SUPABASE_JWT_ISSUER` | **Yes** (JWT) | For JWT verification. |
 
+**Supabase değişkenleri (admin + JWT için):** Railway'de sadece **batchtube** servisine ekleyin. Supabase Dashboard → Project Settings → API:
+- **SUPABASE_URL**: Project URL (örn. `https://xxxx.supabase.co`)
+- **SUPABASE_JWT_ISSUER**: `https://xxxx.supabase.co/auth/v1` (kendi project URL'iniz + `/auth/v1`)
+- **SUPABASE_JWKS_URL** (isteğe bağlı): `https://xxxx.supabase.co/auth/v1/.well-known/jwks.json`
+
+Değişkenleri ekledikten sonra batchtube servisini yeniden deploy edin.
+
 ### worker service
 
 | Variable | Required | Description |

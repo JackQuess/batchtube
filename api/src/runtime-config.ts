@@ -40,10 +40,12 @@ export interface RuntimeValidationResult {
 
 /**
  * Validate required runtime config. Fail-fast for DB and Redis.
+ * @param options.role - If 'worker', Supabase warnings are skipped (worker does not verify JWT).
  */
-export function validateRuntimeConfig(): RuntimeValidationResult {
+export function validateRuntimeConfig(options?: { role?: 'api' | 'worker' }): RuntimeValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
+  const isWorker = options?.role === 'worker';
 
   if (!config.databaseUrl || config.databaseUrl.trim() === '') {
     errors.push('DATABASE_URL is missing or empty. Set it to Railway Postgres (or local Postgres) connection string.');
@@ -53,13 +55,15 @@ export function validateRuntimeConfig(): RuntimeValidationResult {
     errors.push('REDIS_URL is missing or empty. Set it to Railway Redis (or local Redis) connection string.');
   }
 
-  const supabaseUrl = config.supabase.url?.trim();
-  const hasJwks = (config.supabase.jwksUrl?.trim() ?? '').length > 0;
-  const hasJwtIssuer = (config.supabase.jwtIssuer?.trim() ?? '').length > 0;
-  if (!supabaseUrl) {
-    warnings.push('SUPABASE_URL is not set. JWT auth will not work until you set Supabase auth env vars.');
-  } else if (!hasJwks && !hasJwtIssuer) {
-    warnings.push('SUPABASE_JWKS_URL or SUPABASE_JWT_ISSUER should be set for JWT verification.');
+  if (!isWorker) {
+    const supabaseUrl = config.supabase.url?.trim();
+    const hasJwks = (config.supabase.jwksUrl?.trim() ?? '').length > 0;
+    const hasJwtIssuer = (config.supabase.jwtIssuer?.trim() ?? '').length > 0;
+    if (!supabaseUrl) {
+      warnings.push('SUPABASE_URL is not set. JWT auth will not work until you set Supabase auth env vars.');
+    } else if (!hasJwks && !hasJwtIssuer) {
+      warnings.push('SUPABASE_JWKS_URL or SUPABASE_JWT_ISSUER should be set for JWT verification.');
+    }
   }
 
   return {

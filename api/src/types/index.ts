@@ -6,6 +6,8 @@ export interface AuthContext {
   apiKey?: ApiKey;
   tokenType: 'supabase_jwt' | 'api_key';
   plan: SaaSPlan;
+  /** True if JWT has app_metadata.role admin/owner or service_role (no plan limits). */
+  isAdmin?: boolean;
 }
 
 export interface AdminSession {

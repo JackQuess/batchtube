@@ -79,12 +79,38 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
     const body = parsed.data;
     const plan = await getPlan(request.auth.user.id);
     const limits = PLAN_LIMITS[plan];
-    const batchAllowed = await enforceBatchLimit(body.urls.length, plan);
-    if (!batchAllowed) {
-      return sendError(request, reply, 429, 'rate_limit_exceeded', 'You have exceeded your plan limits.', {
+    const isAdmin = request.auth.isAdmin === true;
+
+    request.log.info(
+      {
+        requestId: request.id,
+        userId: request.auth.user.id,
+        isAdmin,
         plan,
-        max_batch_links: limits.maxBatchLinks
-      });
+        urlCount: body.urls.length,
+        maxBatchLinks: limits.maxBatchLinks
+      },
+      'batch_create_start'
+    );
+
+    if (!isAdmin) {
+      const batchAllowed = await enforceBatchLimit(body.urls.length, plan);
+      request.log.info(
+        { requestId: request.id, batchAllowed, urlCount: body.urls.length, plan, maxBatchLinks: limits.maxBatchLinks },
+        'batch_create_check_batch_limit'
+      );
+      if (!batchAllowed) {
+        request.log.warn(
+          { requestId: request.id, userId: request.auth.user.id, plan, maxBatchLinks: limits.maxBatchLinks, urlCount: body.urls.length },
+          'batch_create_429_batch_limit'
+        );
+        return sendError(request, reply, 429, 'rate_limit_exceeded', 'You have exceeded your plan limits.', {
+          plan,
+          max_batch_links: limits.maxBatchLinks
+        });
+      }
+    } else {
+      request.log.info({ requestId: request.id }, 'batch_create_skip_batch_limit_admin');
     }
 
     for (const url of body.urls) {
@@ -97,22 +123,70 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
       }
     }
 
-    const concurrency = await enforceConcurrency(request.auth.user.id, plan);
-    if (!concurrency.allowed) {
-      return sendError(request, reply, 429, 'rate_limit_exceeded', 'You have exceeded your plan limits.', {
-        plan,
-        concurrency: concurrency.limit,
-        current_active_items: concurrency.active
-      });
+    if (!isAdmin) {
+      const concurrency = await enforceConcurrency(request.auth.user.id, plan);
+      request.log.info(
+        {
+          requestId: request.id,
+          allowed: concurrency.allowed,
+          limit: concurrency.limit,
+          active: concurrency.active,
+          plan
+        },
+        'batch_create_check_concurrency'
+      );
+      if (!concurrency.allowed) {
+        request.log.warn(
+          {
+            requestId: request.id,
+            userId: request.auth.user.id,
+            plan,
+            concurrencyLimit: concurrency.limit,
+            currentActive: concurrency.active
+          },
+          'batch_create_429_concurrency'
+        );
+        return sendError(request, reply, 429, 'rate_limit_exceeded', 'You have exceeded your plan limits.', {
+          plan,
+          concurrency: concurrency.limit,
+          current_active_items: concurrency.active
+        });
+      }
+    } else {
+      request.log.info({ requestId: request.id }, 'batch_create_skip_concurrency_admin');
     }
 
-    const creditCheck = await checkCreditsAvailability(request.auth.user.id, plan, body.urls.length);
-    if (!creditCheck.ok) {
-      return sendError(request, reply, 402, 'insufficient_credits', 'Not enough credits to start this batch.', {
-        needed: creditCheck.needed,
-        available: creditCheck.available,
-        plan
-      });
+    if (!isAdmin) {
+      const creditCheck = await checkCreditsAvailability(request.auth.user.id, plan, body.urls.length);
+      request.log.info(
+        {
+          requestId: request.id,
+          creditCheckOk: creditCheck.ok,
+          needed: creditCheck.needed,
+          available: creditCheck.available,
+          plan
+        },
+        'batch_create_check_credits'
+      );
+      if (!creditCheck.ok) {
+        request.log.warn(
+          {
+            requestId: request.id,
+            userId: request.auth.user.id,
+            needed: creditCheck.needed,
+            available: creditCheck.available,
+            plan
+          },
+          'batch_create_402_insufficient_credits'
+        );
+        return sendError(request, reply, 402, 'insufficient_credits', 'Not enough credits to start this batch.', {
+          needed: creditCheck.needed,
+          available: creditCheck.available,
+          plan
+        });
+      }
+    } else {
+      request.log.info({ requestId: request.id }, 'batch_create_skip_credits_admin');
     }
 
     // --- 503 sources (POST /v1/batches):
@@ -128,11 +202,15 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
         defaultQueue.getDelayedCount()
       ]);
       queueSize = waitingCount + delayedCount;
-      request.log.debug(
-        { queueWaiting: waitingCount, queueDelayed: delayedCount, queueSize },
-        'queue_health_check'
+      request.log.info(
+        { requestId: request.id, queueWaiting: waitingCount, queueDelayed: delayedCount, queueSize, isAdmin },
+        'batch_create_queue_health'
       );
-      if (queueSize > 5000) {
+      if (queueSize > 5000 && !isAdmin) {
+        request.log.warn(
+          { requestId: request.id, userId: request.auth.user.id, queueSize, threshold: 5000 },
+          'batch_create_429_queue_full'
+        );
         return sendError(request, reply, 429, 'system_busy', 'System busy. Please retry shortly.', {
           queue_size: queueSize
         });
@@ -152,6 +230,8 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
     }
 
     const autoStart = body.auto_start ?? false;
+
+    request.log.info({ requestId: request.id, isAdmin, plan }, 'batch_create_checks_passed_proceeding_to_tx');
 
     const batchId = randomUUID();
     let batch: Awaited<ReturnType<typeof prisma.batch.create>>;
@@ -186,29 +266,33 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
           }))
         });
 
-        // STEP 3: Deduct credits (usage counter only); then create credit_ledger with createdBatch.id in same tx
-        const creditDeduction = await deductCreditsForBatchTx(
-          tx,
-          request.auth!.user.id,
-          plan,
-          body.urls.length
-        );
-        if (!creditDeduction.ok) {
-          throw new Error(`INSUFFICIENT_CREDITS:${creditDeduction.needed}:${creditDeduction.available}`);
-        }
-
-        // STEP 4: Create credit_ledger referencing the batch we just created (same transaction, FK guaranteed)
-        await tx.creditLedger.create({
-          data: {
-            user_id: request.auth!.user.id,
-            amount: creditDeduction.needed,
-            reason: 'batch_start',
-            batch_id: createdBatch.id
+        // STEP 3 & 4: For non-admin, deduct credits and create credit_ledger; admin has no credit limit
+        if (!isAdmin) {
+          const creditDeduction = await deductCreditsForBatchTx(
+            tx,
+            request.auth!.user.id,
+            plan,
+            body.urls.length
+          );
+          if (!creditDeduction.ok) {
+            throw new Error(`INSUFFICIENT_CREDITS:${creditDeduction.needed}:${creditDeduction.available}`);
           }
-        });
+          await tx.creditLedger.create({
+            data: {
+              user_id: request.auth!.user.id,
+              amount: creditDeduction.needed,
+              reason: 'batch_start',
+              batch_id: createdBatch.id
+            }
+          });
+        }
 
         return createdBatch;
       });
+    request.log.info(
+      { requestId: request.id, batchId: batch.id, userId: request.auth!.user.id, isAdmin },
+      'batch_create_tx_ok'
+    );
     } catch (error: unknown) {
       if (error instanceof Error && error.message.startsWith('INSUFFICIENT_CREDITS:')) {
         const [, neededRaw, availableRaw] = error.message.split(':');
@@ -246,8 +330,9 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
 
     if (autoStart) {
       try {
-        await enqueueBatch(batch.id, request.auth.user.id, plan);
-        request.log.debug({ batchId: batch.id }, 'enqueue_batch_ok');
+        const planForEnqueue = isAdmin ? 'enterprise' : plan;
+        await enqueueBatch(batch.id, request.auth.user.id, planForEnqueue);
+        request.log.debug({ batchId: batch.id, isAdmin }, 'enqueue_batch_ok');
       } catch (enqueueError) {
         request.log.error(
           {
@@ -272,6 +357,7 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
       resourceId: batch.id
     });
 
+    request.log.info({ requestId: request.id, batchId: batch.id, isAdmin }, 'batch_create_201_success');
     return reply.status(201).send({
       id: batch.id,
       name: batch.name,

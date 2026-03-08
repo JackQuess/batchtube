@@ -114,7 +114,7 @@ async function processBatch(job: Job<BatchJob>) {
 }
 
 // Fail fast: validate config before starting worker
-const validation = validateRuntimeConfig();
+const validation = validateRuntimeConfig({ role: 'worker' });
 if (!validation.ok) {
   console.error('[worker] runtime_config_validation_failed', validation.errors);
   validation.errors.forEach((m) => console.error(m));

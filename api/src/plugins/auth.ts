@@ -127,7 +127,11 @@ const authPlugin: FastifyPluginAsync = async (app) => {
     let payload: JWTPayload;
     try {
       payload = await verifySupabaseJWT(token);
-    } catch {
+    } catch (err) {
+      request.log.warn(
+        { requestId: request.id, error: err instanceof Error ? err.message : String(err), path: request.url },
+        'auth_jwt_verify_failed'
+      );
       return sendError(request, reply, 401, 'unauthorized', 'Invalid or expired token');
     }
 
@@ -164,10 +168,30 @@ const authPlugin: FastifyPluginAsync = async (app) => {
 
     const effectivePlan = normalizePlan(profile?.plan);
 
+    const appMeta = payload.app_metadata && typeof payload.app_metadata === 'object' ? payload.app_metadata as Record<string, unknown> : null;
+    const role = appMeta?.role;
+    const isOwner = appMeta?.is_owner;
+    const isAdmin = payload.role === 'service_role' || role === 'admin' || role === 'owner' || isOwner === true;
+
+    request.log.info(
+      {
+        userId: sub,
+        isAdmin,
+        authDiagnostic: {
+          payloadRole: payload.role ?? null,
+          appMetaRole: role ?? null,
+          appMetaIsOwner: isOwner ?? null,
+          hasAppMeta: !!appMeta
+        }
+      },
+      'auth_jwt_resolved'
+    );
+
     request.auth = {
       user,
       tokenType: 'supabase_jwt',
-      plan: effectivePlan
+      plan: effectivePlan,
+      isAdmin: isAdmin || undefined
     };
   });
 };
