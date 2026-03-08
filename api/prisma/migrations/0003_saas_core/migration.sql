@@ -6,7 +6,7 @@ BEGIN
 END $$;
 
 CREATE TABLE IF NOT EXISTS profiles (
-  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
   plan profile_plan NOT NULL DEFAULT 'free',
   paddle_customer_id TEXT,
   paddle_subscription_id TEXT,
@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS profiles (
 );
 
 CREATE TABLE IF NOT EXISTS usage_counters (
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
   period_start DATE NOT NULL,
   batches_processed INT DEFAULT 0,
   bandwidth_bytes BIGINT DEFAULT 0,
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS usage_counters (
 
 CREATE TABLE IF NOT EXISTS api_keys (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   key_hash VARCHAR(64) UNIQUE NOT NULL,
   key_prefix VARCHAR(10) NOT NULL DEFAULT 'bt_live_',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

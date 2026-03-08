@@ -139,8 +139,12 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
       }
     } catch (queueError) {
       request.log.warn(
-        { err: queueError, requestId: request.id },
-        'queue_health_check_failed_redis_unavailable'
+        {
+          requestId: request.id,
+          root_cause: 'redis_unavailable',
+          message: 'Queue health check failed: Redis unreachable or connection refused'
+        },
+        'batch_create_503_redis_unavailable'
       );
       return sendError(request, reply, 503, 'service_unavailable', 'Queue temporarily unavailable. Please retry.', {
         reason: 'redis_unavailable'
@@ -224,7 +228,13 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
         prismaError?.code === 'P1017'
       ) {
         request.log.error(
-          { err: error, requestId: request.id, code: prismaError?.code, name: prismaError?.name },
+          {
+            requestId: request.id,
+            root_cause: 'database_unavailable',
+            code: prismaError?.code,
+            name: prismaError?.name,
+            message: 'Prisma cannot reach database server. Set DATABASE_URL to Railway Postgres for API runtime.'
+          },
           'batch_create_503_database_unavailable'
         );
         return sendError(request, reply, 503, 'service_unavailable', 'Database temporarily unavailable. Please retry.', {
@@ -240,8 +250,13 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
         request.log.debug({ batchId: batch.id }, 'enqueue_batch_ok');
       } catch (enqueueError) {
         request.log.error(
-          { err: enqueueError, batchId: batch.id, requestId: request.id },
-          'enqueue_batch_failed'
+          {
+            requestId: request.id,
+            batchId: batch.id,
+            root_cause: 'queue_unavailable',
+            message: 'Batch created in DB but enqueue to Redis failed. Check REDIS_URL and that worker is running.'
+          },
+          'batch_create_503_enqueue_failed'
         );
         return sendError(request, reply, 503, 'service_unavailable', 'Batch created but queue unavailable. Please retry or use the batch later.', {
           reason: 'queue_unavailable',

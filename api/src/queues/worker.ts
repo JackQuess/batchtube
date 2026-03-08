@@ -7,6 +7,11 @@ import { PLAN_LIMITS, getPlan, incrementBandwidth } from '../services/plans.js';
 import { sendBatchWebhook } from '../services/webhooks.js';
 import type { BatchJob } from './bull.js';
 import { config } from '../config.js';
+import {
+  validateRuntimeConfig,
+  getDbHostCategory,
+  QUEUE_NAME
+} from '../runtime-config.js';
 
 async function processBatch(job: Job<BatchJob>) {
   const { batchId, userId } = job.data;
@@ -108,7 +113,27 @@ async function processBatch(job: Job<BatchJob>) {
   });
 }
 
-new Worker<BatchJob>('batchtube-default', processBatch, { connection: { url: config.redisUrl }, concurrency: 20 });
+// Fail fast: validate config before starting worker
+const validation = validateRuntimeConfig();
+if (!validation.ok) {
+  console.error('[worker] runtime_config_validation_failed', validation.errors);
+  validation.errors.forEach((m) => console.error(m));
+  process.exit(1);
+}
+validation.warnings.forEach((m) => console.warn('[worker]', m));
+const dbHostCategory = getDbHostCategory();
+if (dbHostCategory === 'supabase_host_detected') {
+  console.warn('[worker] DATABASE_URL points to Supabase; use Railway Postgres for worker.');
+}
 
-// eslint-disable-next-line no-console
-console.log('BatchTube worker started');
+new Worker<BatchJob>(QUEUE_NAME, processBatch, { connection: { url: config.redisUrl }, concurrency: 20 });
+
+console.log(
+  JSON.stringify({
+    msg: 'worker_started',
+    database_provider: 'postgres',
+    db_host_category: dbHostCategory,
+    queue_name: QUEUE_NAME,
+    redis_configured: Boolean(config.redisUrl && config.redisUrl.length > 0)
+  })
+);

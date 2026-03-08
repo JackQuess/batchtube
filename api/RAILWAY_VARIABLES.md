@@ -1,56 +1,85 @@
-# Railway – API servisi için ortam değişkenleri
+# Railway – Runtime configuration (BatchTube API & Worker)
 
-## Zorunlu (500 hatası almamak için)
+## Target architecture
 
-| Variable | Açıklama | Örnek |
-|----------|----------|--------|
-| `DATABASE_URL` | PostgreSQL bağlantı URL’si (Supabase / Neon / Railway Postgres) | `postgresql://user:pass@host:5432/db?sslmode=require` |
-| `REDIS_URL` | Redis bağlantı URL’si (Redis iş kuyruğu için) | `redis://default:xxx@host:6379` |
-| `ALLOWED_ORIGIN` | Frontend origin (CORS) | `https://batchtube.net` |
-| `ALLOWED_ORIGIN_2` | İkinci frontend origin (CORS) | `https://www.batchtube.net` |
+| Component    | Use |
+|-------------|-----|
+| **Frontend** | Vercel |
+| **Auth**     | Supabase (JWT only; no Supabase Postgres for app data) |
+| **API DB**   | **Railway Postgres** (Prisma runtime) |
+| **Worker DB**| **Railway Postgres** (same as API) |
+| **Queue**    | **Railway Redis** (BullMQ) |
 
-## CORS 500 / “Origin not allowed” önlemek için
+**Important:** API and Worker must **not** use Supabase Postgres for Prisma at runtime. Use **Railway Postgres** only. Supabase is for auth (JWT verification) only.
 
-- `ALLOWED_ORIGIN` ve `ALLOWED_ORIGIN_2` **boş bırakılmamalı**.
-- İstersen tek değişken: `CORS_ALLOWED_ORIGINS=https://batchtube.net,https://www.batchtube.net`
+---
 
-## 500 – “Invalid prisma.batch.count()” önlemek için
+## Prisma datasource
 
-Bu hata, **veritabanında tabloların olmamasından** (migration’ların çalışmamış olmasından) kaynaklanır.
+- **`DATABASE_URL`** – Used by Prisma at runtime (API and Worker). Must point to **Railway Postgres**.
+- **`DIRECT_URL`** – Used by `prisma migrate deploy`. On Railway, set to the **same** Railway Postgres URL.
 
-**Yapman gereken:**
+Do **not** set `DATABASE_URL` or `DIRECT_URL` to a Supabase host for the API/Worker services.
 
-1. **Production’da migration’ları çalıştır**  
-   API’nin kullandığı `DATABASE_URL` ile aynı veritabanına bağlanıp:
+---
 
-   ```bash
-   cd api
-   npx prisma migrate deploy
-   ```
+## Required env vars
 
-   Bunu yerelde, `DATABASE_URL` production DB’yi gösterirken bir kez çalıştırabilirsin; veya Railway’de bir “migrate” job / build step ile yapabilirsin.
+### batchtube (API service)
 
-2. **Railway’de DATABASE_URL**  
-   API servisinin Variables’ında `DATABASE_URL` mutlaka production Postgres URL’si olmalı (Supabase transaction pooler, Neon, Railway Postgres vb.).
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | **Yes** | Railway Postgres connection string. |
+| `DIRECT_URL`   | **Yes** | Same as `DATABASE_URL` (Railway Postgres). |
+| `REDIS_URL`    | **Yes** | Railway Redis connection string. |
+| `ALLOWED_ORIGIN`  | **Yes** | e.g. `https://batchtube.net` |
+| `ALLOWED_ORIGIN_2`| Recommended | e.g. `https://www.batchtube.net` |
+| `SUPABASE_URL`    | **Yes** (JWT auth) | Supabase project URL. |
+| `SUPABASE_JWKS_URL` or `SUPABASE_JWT_ISSUER` | **Yes** (JWT) | For JWT verification. |
 
-3. **Migration’dan sonra**  
-   API’yi yeniden başlat (Redeploy). Bundan sonra `POST /v1/batches` 500 yerine normal 201/4xx dönmeli.
+### worker service
 
-## Opsiyonel (Supabase auth, S3, Paddle)
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | **Yes** | **Same** Railway Postgres URL as API. |
+| `DIRECT_URL`   | **Yes** | Same as `DATABASE_URL`. |
+| `REDIS_URL`    | **Yes** | **Same** Railway Redis URL as API. |
 
-| Variable | Açıklama |
-|----------|----------|
-| `SUPABASE_URL` | Supabase project URL |
-| `SUPABASE_JWKS_URL` | Supabase JWKS (JWT doğrulama) |
-| `SUPABASE_JWT_ISSUER` | JWT issuer |
-| `SUPABASE_JWT_AUDIENCE` | JWT audience |
-| `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET` | Dosya depolama (MinIO / R2 / S3) |
-| `PADDLE_*` | Paddle billing (abonelik) |
+API and Worker must use the **exact same** `DATABASE_URL`, `DIRECT_URL`, and `REDIS_URL`. Queue name in code: `batchtube-default`.
 
-## Özet checklist
+---
 
-- [ ] `DATABASE_URL` production Postgres’e ayarlı
-- [ ] `REDIS_URL` production Redis’e ayarlı
-- [ ] `ALLOWED_ORIGIN` = `https://batchtube.net` (ve gerekiyorsa `ALLOWED_ORIGIN_2`)
-- [ ] Aynı `DATABASE_URL` ile `npx prisma migrate deploy` çalıştırıldı
-- [ ] API redeploy edildi
+## How to set on Railway
+
+1. Add **Postgres** and **Redis** services.
+2. **batchtube** → Variables: reference Postgres `DATABASE_URL` (and set `DIRECT_URL` to same), reference Redis `REDIS_URL`.
+3. **worker** → Variables: same `DATABASE_URL`, `DIRECT_URL`, `REDIS_URL`.
+4. Redeploy both after changes.
+
+---
+
+## Migrations
+
+```bash
+cd api
+# DATABASE_URL and DIRECT_URL = Railway Postgres, then:
+npx prisma migrate deploy
+```
+
+---
+
+## Startup diagnostics (no secrets)
+
+API logs: `db_host_category` (railway_postgres | supabase_host_detected | local | other), `redis_status`, `queue_name`. If `DATABASE_URL` or `REDIS_URL` is missing, API exits with a clear error.
+
+---
+
+## Checklist
+
+- [ ] **batchtube**: `DATABASE_URL` = Railway Postgres
+- [ ] **batchtube**: `DIRECT_URL` = Railway Postgres
+- [ ] **batchtube**: `REDIS_URL` = Railway Redis
+- [ ] **batchtube**: Supabase auth vars set
+- [ ] **worker**: same `DATABASE_URL`, `DIRECT_URL`, `REDIS_URL` as API
+- [ ] `prisma migrate deploy` run against Railway Postgres
+- [ ] Redeploy API and Worker

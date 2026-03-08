@@ -3,8 +3,11 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+  // Runtime: API and Worker must use Railway Postgres (DATABASE_URL and DIRECT_URL).
+  // Use Supabase only for auth (JWT); do not use Supabase Postgres for Prisma runtime.
 }
 
 enum PlanTier {

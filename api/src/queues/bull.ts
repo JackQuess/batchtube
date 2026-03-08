@@ -1,5 +1,6 @@
 import { Queue } from 'bullmq';
 import { config } from '../config.js';
+import { QUEUE_NAME } from '../runtime-config.js';
 
 export interface BatchJob {
   batchId: string;
@@ -7,6 +8,6 @@ export interface BatchJob {
 }
 export type BatchJobName = 'process-batch';
 
-export const defaultQueue = new Queue<BatchJob, void, BatchJobName>('batchtube-default', {
+export const defaultQueue = new Queue<BatchJob, void, BatchJobName>(QUEUE_NAME, {
   connection: { url: config.redisUrl }
 });

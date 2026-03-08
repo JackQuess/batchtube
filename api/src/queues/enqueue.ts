@@ -10,7 +10,7 @@ export async function enqueueBatch(batchId: string, userId: string, plan: SaaSPl
   };
 
   await defaultQueue.add('process-batch', { batchId, userId }, {
-    jobId: `batch:${batchId}`,
+    jobId: `batch-${batchId}`,
     priority: priorityByPlan[plan],
     removeOnComplete: true,
     removeOnFail: 200
