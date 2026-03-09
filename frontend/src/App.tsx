@@ -329,30 +329,8 @@ const App: React.FC = () => {
 
       <div className="bg-grid" />
 
-      <div className="absolute top-6 left-6 z-10 flex items-center gap-3">
+      <div className="absolute top-6 left-6 z-10 flex items-center gap-2">
         <BatchTubeLogo size="sm" />
-        <button
-          type="button"
-          onClick={() => navigate('/app')}
-          className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-            !isUpScalePath
-              ? 'bg-white text-black border-white'
-              : 'bg-transparent text-app-muted border-white/20 hover:border-white/40 hover:text-white'
-          }`}
-        >
-          Batch
-        </button>
-        <button
-          type="button"
-          onClick={() => navigate('/upscale')}
-          className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-            isUpScalePath
-              ? 'bg-white text-black border-white'
-              : 'bg-transparent text-app-muted border-white/20 hover:border-white/40 hover:text-white'
-          }`}
-        >
-          UpScale
-        </button>
       </div>
 
       <div className="absolute top-6 right-6 z-10">

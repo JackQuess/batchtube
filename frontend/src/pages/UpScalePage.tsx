@@ -18,6 +18,8 @@ import {
   Video,
   FileArchive
 } from 'lucide-react';
+import { accountAPI } from '../services/accountAPI';
+import { navigate } from '../lib/simpleRouter';
 
 type UpScaleStatus = 'locked' | 'empty' | 'files_added' | 'processing' | 'completed';
 
@@ -36,6 +38,7 @@ export function UpScalePage() {
   const [status, setStatus] = useState<UpScaleStatus>('empty');
   const [overallProgress, setOverallProgress] = useState(0);
   const [files, setFiles] = useState<ProcessFile[]>([]);
+  const [logicalPlan, setLogicalPlan] = useState<'free' | 'pro' | 'ultra' | null>(null);
 
   const handleUpload = () => {
     setFiles([
@@ -115,20 +118,63 @@ export function UpScalePage() {
     }
   }, [status]);
 
+  useEffect(() => {
+    let active = true;
+    const loadPlan = async () => {
+      try {
+        const usage = await accountAPI.getUsage();
+        if (!active) return;
+        const planLogical: 'free' | 'pro' | 'ultra' =
+          usage.plan_logical ??
+          (usage.plan === 'pro' ? 'pro' : usage.plan === 'free' ? 'free' : 'ultra');
+        setLogicalPlan(planLogical);
+      } catch {
+        if (!active) return;
+        setLogicalPlan(null);
+      }
+    };
+    void loadPlan();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   return (
     <div className="flex-1 flex flex-col w-full max-w-7xl mx-auto p-6 relative z-10 mt-16">
       {/* Header */}
       <div className="mb-8 flex items-end justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-white mb-2 tracking-tight flex items-center gap-3">
-            UpScale{' '}
-            <span className="text-[10px] uppercase tracking-widest font-bold bg-app-primary/20 text-app-primary px-2 py-1 rounded-md border border-app-primary/30">
-              Pro Workspace
-            </span>
-          </h1>
-          <p className="text-app-muted">
-            Premium media processing, resolution upscaling, and format conversion.
-          </p>
+        <div className="space-y-3">
+          <div className="inline-flex items-center gap-1 rounded-full bg-black/50 border border-white/10 px-1 py-1 text-[11px]">
+            <button
+              type="button"
+              onClick={() => navigate('/app')}
+              className="px-3 py-1 rounded-full text-xs font-medium text-app-muted hover:text-white hover:bg-white/5 transition-colors"
+            >
+              Dashboard
+            </button>
+            <button
+              type="button"
+              className="px-3 py-1 rounded-full text-xs font-semibold bg-white text-black"
+            >
+              UpScale
+              {logicalPlan === 'free' && (
+                <span className="ml-2 text-[9px] uppercase tracking-[0.18em] px-1.5 py-0.5 rounded-full bg-[#981b3c] text-white">
+                  PRO
+                </span>
+              )}
+            </button>
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold text-white mb-2 tracking-tight flex items-center gap-3">
+              UpScale{' '}
+              <span className="text-[10px] uppercase tracking-widest font-bold bg-app-primary/20 text-app-primary px-2 py-1 rounded-md border border-app-primary/30">
+                Pro Workspace
+              </span>
+            </h1>
+            <p className="text-app-muted">
+              Premium media processing, resolution upscaling, and format conversion.
+            </p>
+          </div>
         </div>
 
         {/* Debug State Toggle */}
