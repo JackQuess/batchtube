@@ -357,61 +357,63 @@ const App: React.FC = () => {
 
       <div className="bg-grid" />
 
-      {/* Top nav */}
-      <div className="absolute top-6 left-6 z-10 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => navigate('/app')}
-          className="flex items-center gap-2 cursor-pointer"
-        >
-          <BatchTubeLogo size="sm" />
-        </button>
-      </div>
-
-      <div className="absolute top-6 left-1/2 -translate-x-1/2 z-10 flex items-center">
-        <div className="inline-flex items-center gap-1 rounded-full bg-black/50 border border-white/10 px-1 py-1 text-[11px]">
+      {/* Top nav — higher z-index so clicks are not captured by main */}
+      <header className="absolute inset-x-0 top-0 h-16 z-20 pointer-events-none">
+        <div className="absolute top-6 left-6 pointer-events-auto">
           <button
             type="button"
             onClick={() => navigate('/app')}
-            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${
-              !isUpScalePath
-                ? 'bg-white text-black'
-                : 'text-app-muted hover:text-white hover:bg-white/5'
-            }`}
+            className="flex items-center gap-2 cursor-pointer"
           >
-            Dashboard
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate('/upscale')}
-            className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors cursor-pointer ${
-              isUpScalePath
-                ? 'bg-white text-black'
-                : 'text-app-muted hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <span>UpScale</span>
-            {logicalPlan === 'free' && (
-              <span className="ml-2 text-[9px] uppercase tracking-[0.18em] px-1.5 py-0.5 rounded-full bg-[#981b3c] text-white">
-                PRO
-              </span>
-            )}
+            <BatchTubeLogo size="sm" />
           </button>
         </div>
-      </div>
 
-      <div className="absolute top-6 right-6 z-10">
-        <button
-          type="button"
-          onClick={() => setActiveModal('profile')}
-          className="flex items-center gap-3 p-1.5 pr-4 rounded-full glass-panel hover:bg-white/10 transition-all duration-300 hover:shadow-[0_0_20px_rgba(255,255,255,0.1)] group"
-        >
-          <div className="w-7 h-7 rounded-full bg-app-primary/20 flex items-center justify-center text-app-primary text-xs font-medium border border-app-primary/30">
-            {initials}
+        <div className="absolute top-6 left-1/2 -translate-x-1/2 pointer-events-auto">
+          <div className="inline-flex items-center gap-1 rounded-full bg-black/50 border border-white/10 px-1 py-1 text-[11px]">
+            <button
+              type="button"
+              onClick={() => navigate('/app')}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                !isUpScalePath
+                  ? 'bg-white text-black'
+                  : 'text-app-muted hover:text-white hover:bg-white/5'
+              }`}
+            >
+              Dashboard
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/upscale')}
+              className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors cursor-pointer ${
+                isUpScalePath
+                  ? 'bg-white text-black'
+                  : 'text-app-muted hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <span>UpScale</span>
+              {logicalPlan === 'free' && (
+                <span className="ml-2 text-[9px] uppercase tracking-[0.18em] px-1.5 py-0.5 rounded-full bg-[#981b3c] text-white">
+                  PRO
+                </span>
+              )}
+            </button>
           </div>
-          <span className="text-xs font-medium text-app-muted group-hover:text-white transition-colors">{displayName}</span>
-        </button>
-      </div>
+        </div>
+
+        <div className="absolute top-6 right-6 pointer-events-auto">
+          <button
+            type="button"
+            onClick={() => setActiveModal('profile')}
+            className="flex items-center gap-3 p-1.5 pr-4 rounded-full glass-panel hover:bg-white/10 transition-all duration-300 hover:shadow-[0_0_20px_rgba(255,255,255,0.1)] group"
+          >
+            <div className="w-7 h-7 rounded-full bg-app-primary/20 flex items-center justify-center text-app-primary text-xs font-medium border border-app-primary/30">
+              {initials}
+            </div>
+            <span className="text-xs font-medium text-app-muted group-hover:text-white transition-colors">{displayName}</span>
+          </button>
+        </div>
+      </header>
 
       <main className="flex-1 flex flex-col items-center justify-center p-6 relative z-10 w-full">
         {isUpScalePath ? (
