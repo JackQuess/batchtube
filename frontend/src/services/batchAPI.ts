@@ -7,6 +7,7 @@ export interface BatchJobRequest {
   }>;
   format: 'mp3' | 'mp4' | 'mkv';
   quality?: 'best' | '720p' | '1080p' | '4k';
+  processing?: 'none' | 'upscale_4k';
 }
 
 export interface BatchJobResponse {
@@ -74,7 +75,8 @@ export const batchAPI = {
         options: {
           format: request.format,
           quality: request.quality ?? 'best',
-          archive_as_zip: true
+          archive_as_zip: true,
+          ...(request.processing ? { processing: request.processing } : {})
         }
       })
     });
@@ -88,6 +90,7 @@ export const batchAPI = {
     latest_n?: number;
     format?: 'mp3' | 'mp4' | 'mkv';
     quality?: 'best' | '720p' | '1080p' | '4k';
+    processing?: 'none' | 'upscale_4k';
   }): Promise<BatchJobResponse & { channel?: { title: string; thumbnail: string | null } }> => {
     const data = await apiClient<BatchResponse & { channel_detected?: boolean; channel?: { title: string; thumbnail: string | null } }>(
       '/v1/archive',
@@ -100,7 +103,8 @@ export const batchAPI = {
           options: {
             format: request.format ?? 'mp4',
             quality: request.quality ?? 'best',
-            archive_as_zip: true
+            archive_as_zip: true,
+            ...(request.processing ? { processing: request.processing } : {})
           }
         })
       }

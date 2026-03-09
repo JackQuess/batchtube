@@ -12,14 +12,15 @@ import {
   type DownloadFormat,
   type DownloadQuality
 } from '../services/download.js';
-import type { BatchJob, ItemJob } from './bull.js';
-import { enqueueBatch, enqueueBatchItems, enqueueBatchFinalize } from './enqueue.js';
+import type { BatchJob, ItemJob, ProcessingJob } from './bull.js';
+import { enqueueBatch, enqueueBatchItems, enqueueBatchFinalize, enqueueProcessingJob } from './enqueue.js';
 import { listSourceItems, listSourceItemsParallel, listSourceItemsPaginated } from '../services/sourceList.js';
 import { config } from '../config.js';
 import {
   validateRuntimeConfig,
   getDbHostCategory,
-  QUEUE_NAME
+  QUEUE_NAME,
+  QUEUE_NAME_PROCESSING
 } from '../runtime-config.js';
 import { getYtDlpCookieExpiry } from '../services/cookieExpiry.js';
 import { ensureFreshCookies } from '../services/cookieRefresh.js';
@@ -38,6 +39,7 @@ type BatchOptions = {
   archive_source_type?: 'channel' | 'playlist' | 'profile';
   archive_mode?: string;
   archive_latest_n?: number;
+  processing?: 'none' | 'upscale_4k';
 };
 
 const ALLOWED_FORMATS: DownloadFormat[] = ['mp4', 'mp3', 'mkv'];
@@ -70,6 +72,7 @@ async function processItem(job: Job<ItemJob>) {
   try {
     const batch = item.batch;
     const batchOptions = (batch.options as BatchOptions) ?? {};
+    const processingMode = batchOptions.processing === 'upscale_4k' ? 'upscale_4k' : 'none';
     const plan = await getPlan(userId);
     const retentionHours = PLAN_LIMITS[plan].fileTtlHours;
     const entitlements = getEntitlements(plan);
@@ -80,11 +83,28 @@ async function processItem(job: Job<ItemJob>) {
 
     await prisma.batchItem.update({
       where: { id: itemId },
-      data: { status: 'processing', provider, progress: 25, updated_at: new Date() }
+      data: {
+        status: 'processing',
+        provider,
+        progress: 25,
+        updated_at: new Date()
+      }
     });
 
     // Worker-side guard for disallowed options (defence in depth).
     if (batchOptions.quality === '4k' && !entitlements.canUseUpscale4k) {
+      await prisma.batchItem.update({
+        where: { id: itemId },
+        data: {
+          status: 'failed',
+          error_message: 'upscale_4k_not_allowed',
+          updated_at: new Date()
+        }
+      });
+      return;
+    }
+
+    if (batchOptions.processing === 'upscale_4k' && !entitlements.canUseUpscale4k) {
       await prisma.batchItem.update({
         where: { id: itemId },
         data: {
@@ -105,7 +125,7 @@ async function processItem(job: Job<ItemJob>) {
 
     const cached = cacheKey ? await findCachedFile(cacheKey) : null;
     if (cached) {
-      await prisma.file.create({
+      const createdFile = await prisma.file.create({
         data: {
           id: randomUUID(),
           item_id: item.id,
@@ -119,15 +139,30 @@ async function processItem(job: Job<ItemJob>) {
           cache_key: cacheKey
         }
       });
-      await prisma.batchItem.update({
-        where: { id: itemId },
-        data: { status: 'completed', progress: 100, updated_at: new Date() }
-      });
-      const terminalCount = await prisma.batchItem.count({
-        where: { batch_id: batchId, status: { in: ['completed', 'failed', 'cancelled'] } }
-      });
-      if (terminalCount >= batch.item_count) {
-        await enqueueBatchFinalize(batchId, userId, plan);
+
+      if (processingMode === 'none') {
+        await prisma.batchItem.update({
+          where: { id: itemId },
+          data: { status: 'completed', progress: 100, updated_at: new Date() }
+        });
+        const terminalCount = await prisma.batchItem.count({
+          where: { batch_id: batchId, status: { in: ['completed', 'failed', 'cancelled'] } }
+        });
+        if (terminalCount >= batch.item_count) {
+          await enqueueBatchFinalize(batchId, userId, plan);
+        }
+      } else {
+        await prisma.batchItem.update({
+          where: { id: itemId },
+          data: {
+            processing_mode: 'upscale_4k',
+            processing_status: 'queued',
+            processing_error: null,
+            processing_output_file_id: null,
+            updated_at: new Date()
+          }
+        });
+        await enqueueProcessingJob(batchId, itemId, userId, plan);
       }
       return;
     }
@@ -146,7 +181,7 @@ async function processItem(job: Job<ItemJob>) {
         sourceId != null
           ? computeDownloadCacheKey(provider, sourceId, downloadOpts.format, downloadOpts.quality)
           : null;
-      await prisma.file.create({
+      const createdFile = await prisma.file.create({
         data: {
           id: randomUUID(),
           item_id: item.id,
@@ -161,12 +196,26 @@ async function processItem(job: Job<ItemJob>) {
         }
       });
 
-      await prisma.batchItem.update({
-        where: { id: itemId },
-        data: { status: 'completed', progress: 100, updated_at: new Date() }
-      });
-
       await incrementBandwidth(userId, BigInt(content.byteLength));
+
+      if (processingMode === 'none') {
+        await prisma.batchItem.update({
+          where: { id: itemId },
+          data: { status: 'completed', progress: 100, updated_at: new Date() }
+        });
+      } else {
+        await prisma.batchItem.update({
+          where: { id: itemId },
+          data: {
+            processing_mode: 'upscale_4k',
+            processing_status: 'queued',
+            processing_error: null,
+            processing_output_file_id: null,
+            updated_at: new Date()
+          }
+        });
+        await enqueueProcessingJob(batchId, itemId, userId, plan);
+      }
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
       const youtubeCodeMatch = errMsg.match(/^(youtube_(?:private_video|age_restricted|login_required|unavailable|extractor_error|download_error)):/);
@@ -180,14 +229,108 @@ async function processItem(job: Job<ItemJob>) {
       });
     }
 
-    const terminalCount = await prisma.batchItem.count({
-      where: { batch_id: batchId, status: { in: ['completed', 'failed', 'cancelled'] } }
-    });
-    if (terminalCount >= batch.item_count) {
-      await enqueueBatchFinalize(batchId, userId, plan);
+    if (processingMode === 'none') {
+      const terminalCount = await prisma.batchItem.count({
+        where: { batch_id: batchId, status: { in: ['completed', 'failed', 'cancelled'] } }
+      });
+      if (terminalCount >= batch.item_count) {
+        await enqueueBatchFinalize(batchId, userId, plan);
+      }
     }
   } finally {
     releaseProviderSlot(provider);
+  }
+}
+
+async function processMedia(job: Job<ProcessingJob>) {
+  const { batchId, itemId, userId } = job.data;
+
+  const item = await prisma.batchItem.findFirst({
+    where: { id: itemId, batch_id: batchId }
+  });
+  if (!item) return;
+  if (item.status === 'completed' || item.status === 'failed' || item.status === 'cancelled') return;
+  if (item.processing_mode === 'none') return;
+
+  const plan = await getPlan(userId);
+  const entitlements = getEntitlements(plan);
+
+  if (item.processing_mode === 'upscale_4k' && !entitlements.canUseUpscale4k) {
+    await prisma.batchItem.update({
+      where: { id: itemId },
+      data: {
+        status: 'failed',
+        processing_status: 'failed',
+        processing_error: 'upscale_4k_not_allowed',
+        updated_at: new Date()
+      }
+    });
+    return;
+  }
+
+  try {
+    await prisma.batchItem.update({
+      where: { id: itemId },
+      data: {
+        processing_status: 'processing',
+        updated_at: new Date()
+      }
+    });
+
+    // MVP: no-op processing. Use the existing source file as output.
+    const sourceFile = await prisma.file.findFirst({
+      where: { batch_id: batchId, item_id: itemId },
+      orderBy: { created_at: 'desc' }
+    });
+
+    if (!sourceFile) {
+      await prisma.batchItem.update({
+        where: { id: itemId },
+        data: {
+          status: 'failed',
+          processing_status: 'failed',
+          processing_error: 'source_file_missing',
+          updated_at: new Date()
+        }
+      });
+      return;
+    }
+
+    await prisma.batchItem.update({
+      where: { id: itemId },
+      data: {
+        status: 'completed',
+        processing_status: 'completed',
+        processing_output_file_id: sourceFile.id,
+        processed_at: new Date(),
+        updated_at: new Date()
+      }
+    });
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error(JSON.stringify({ msg: 'worker_processing_failed', batchId, itemId, error: errMsg }));
+    await prisma.batchItem.update({
+      where: { id: itemId },
+      data: {
+        status: 'failed',
+        processing_status: 'failed',
+        processing_error: errMsg,
+        updated_at: new Date()
+      }
+    });
+  }
+
+  const batch = await prisma.batch.findUnique({
+    where: { id: batchId },
+    select: { item_count: true }
+  });
+  if (!batch) return;
+
+  const terminalCount = await prisma.batchItem.count({
+    where: { batch_id: batchId, status: { in: ['completed', 'failed', 'cancelled'] } }
+  });
+  if (terminalCount >= batch.item_count) {
+    await enqueueBatchFinalize(batchId, userId, plan);
   }
 }
 
@@ -530,6 +673,22 @@ new Worker<BatchJob | ItemJob>(
     if (job.name === 'batch-finalize') return processBatchFinalize(job as Job<BatchJob>);
     if (job.name === 'channel-archive') return processChannelArchive(job as Job<BatchJob>);
     return processBatch(job as Job<BatchJob>);
+  },
+  {
+    connection: {
+      url: config.redisUrl,
+      maxRetriesPerRequest: null,
+      retryStrategy: redisRetryStrategy,
+      connectTimeout: 10000
+    },
+    concurrency: config.workerConcurrency
+  }
+);
+
+new Worker<ProcessingJob>(
+  QUEUE_NAME_PROCESSING,
+  async (job) => {
+    return processMedia(job as Job<ProcessingJob>);
   },
   {
     connection: {

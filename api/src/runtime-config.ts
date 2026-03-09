@@ -74,3 +74,4 @@ export function validateRuntimeConfig(options?: { role?: 'api' | 'worker' }): Ru
 }
 
 export const QUEUE_NAME = 'batchtube-default' as const;
+export const QUEUE_NAME_PROCESSING = 'batchtube-processing' as const;

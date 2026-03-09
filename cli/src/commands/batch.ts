@@ -4,6 +4,7 @@ import { createBatch, BatchTubeApiError } from '../api.js';
 
 type Format = 'mp4' | 'mp3';
 type Quality = 'best' | '1080p' | '720p';
+type ProcessingMode = 'none' | 'upscale_4k';
 
 export interface BatchOptions {
   format?: Format;
@@ -11,6 +12,7 @@ export interface BatchOptions {
   zip?: boolean;
   json?: boolean;
   apiBaseUrl?: string;
+  processing?: ProcessingMode;
 }
 
 const URL_RE = /^https?:\/\/[^\s]+$/i;
@@ -62,7 +64,8 @@ export async function runBatch(fileOrUrls: string[], opts: BatchOptions): Promis
       options: {
         format: format === 'mp3' ? 'mp3' : 'mp4',
         quality,
-        archive_as_zip: opts.zip ?? false
+        archive_as_zip: opts.zip ?? false,
+        ...(opts.processing ? { processing: opts.processing } : {})
       },
       auto_start: true
     });

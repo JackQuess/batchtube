@@ -1,4 +1,4 @@
-import { defaultQueue } from './bull.js';
+import { defaultQueue, processingQueue } from './bull.js';
 import type { SaaSPlan } from '../services/plans.js';
 
 const priorityByPlan: Record<SaaSPlan, number> = {
@@ -52,6 +52,20 @@ export async function enqueueBatchFinalize(batchId: string, userId: string, plan
 export async function enqueueChannelArchive(batchId: string, userId: string, plan: SaaSPlan) {
   await defaultQueue.add('channel-archive', { batchId, userId }, {
     jobId: `channel-archive-${batchId}`,
+    priority: priorityByPlan[plan],
+    removeOnComplete: true,
+    removeOnFail: 200
+  });
+}
+
+export async function enqueueProcessingJob(
+  batchId: string,
+  itemId: string,
+  userId: string,
+  plan: SaaSPlan
+): Promise<void> {
+  await processingQueue.add('process-media', { batchId, itemId, userId }, {
+    jobId: `processing-${batchId}-${itemId}`,
     priority: priorityByPlan[plan],
     removeOnComplete: true,
     removeOnFail: 200
