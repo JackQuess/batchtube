@@ -2,6 +2,7 @@ import React from 'react';
 import { AppLink, navigate } from '../lib/simpleRouter';
 import { AuthUser, Translations } from '../types';
 import { subscriptionAPI } from '../services/subscriptionAPI';
+import { LEMON_CHECKOUT_PRO } from '../constants';
 import { Check, X } from 'lucide-react';
 
 interface PricingPageProps {
@@ -19,8 +20,8 @@ interface Row {
 export const PricingPage: React.FC<PricingPageProps> = ({ t, user, onUpgrade }) => {
   const rows: Row[] = [
     { label: t.pricingRowProviders, free: t.pricingFreeProviders, pro: t.pricingProProviders },
-    { label: t.pricingRowVideosPerBatch, free: '3', pro: '50' },
-    { label: t.pricingRowMaxQuality, free: '720p', pro: '1080p+ / 4K' },
+    { label: t.pricingRowVideosPerBatch, free: '20', pro: '200' },
+    { label: t.pricingRowMaxQuality, free: '1080p', pro: '1080p' },
     { label: t.pricingRowQueue, free: t.pricingFreeQueue, pro: t.pricingProQueue },
     { label: t.pricingRowZipSpeed, free: t.pricingFreeZip, pro: t.pricingProZip },
     { label: t.pricingRowAds, free: t.adsEnabled, pro: t.noAds },
@@ -30,6 +31,10 @@ export const PricingPage: React.FC<PricingPageProps> = ({ t, user, onUpgrade }) 
   ];
 
   const startPro = async () => {
+    if (LEMON_CHECKOUT_PRO) {
+      window.location.href = LEMON_CHECKOUT_PRO;
+      return;
+    }
     if (!user) {
       onUpgrade?.();
       return;
@@ -58,7 +63,7 @@ export const PricingPage: React.FC<PricingPageProps> = ({ t, user, onUpgrade }) 
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <div className="glass-panel p-8 rounded-2xl border border-white/10 relative">
-            <h3 className="text-2xl font-bold text-white mb-2">Hobby</h3>
+            <h3 className="text-2xl font-bold text-white mb-2">Free</h3>
             <div className="flex items-baseline gap-2 mb-6">
               <span className="text-4xl font-bold text-white">$0</span>
               <span className="text-app-muted">/month</span>
@@ -66,19 +71,19 @@ export const PricingPage: React.FC<PricingPageProps> = ({ t, user, onUpgrade }) 
             <p className="text-sm text-app-muted mb-8">Perfect for occasional downloads and personal use.</p>
             <ul className="space-y-4 mb-8">
               <li className="flex items-center gap-3 text-sm text-white">
-                <Check className="w-5 h-5 text-green-400 shrink-0" /> 10 downloads per day
+                <Check className="w-5 h-5 text-green-400 shrink-0" /> 100 videos monthly
               </li>
               <li className="flex items-center gap-3 text-sm text-white">
-                <Check className="w-5 h-5 text-green-400 shrink-0" /> Max 720p resolution
+                <Check className="w-5 h-5 text-green-400 shrink-0" /> Max 20 links per batch
               </li>
               <li className="flex items-center gap-3 text-sm text-white">
-                <Check className="w-5 h-5 text-green-400 shrink-0" /> Basic audio extraction
+                <Check className="w-5 h-5 text-green-400 shrink-0" /> Up to 1080p quality
               </li>
               <li className="flex items-center gap-3 text-sm text-app-muted/50">
-                <X className="w-5 h-5 shrink-0" /> No batch processing
+                <X className="w-5 h-5 shrink-0" /> No CLI / API
               </li>
               <li className="flex items-center gap-3 text-sm text-app-muted/50">
-                <X className="w-5 h-5 shrink-0" /> No API access
+                <X className="w-5 h-5 shrink-0" /> No automation / webhooks
               </li>
             </ul>
             <button
@@ -96,25 +101,25 @@ export const PricingPage: React.FC<PricingPageProps> = ({ t, user, onUpgrade }) 
             <div className="absolute inset-0 bg-gradient-to-br from-app-primary/10 to-transparent pointer-events-none" />
             <h3 className="text-2xl font-bold text-white mb-2 relative">Pro</h3>
             <div className="flex items-baseline gap-2 mb-6 relative">
-              <span className="text-4xl font-bold text-white">$12</span>
+              <span className="text-4xl font-bold text-white">$20</span>
               <span className="text-app-muted">/month</span>
             </div>
-            <p className="text-sm text-app-muted mb-8 relative">For power users who need speed, quality, and automation.</p>
+            <p className="text-sm text-app-muted mb-8 relative">For power users who need higher limits and speed.</p>
             <ul className="space-y-4 mb-8 relative">
               <li className="flex items-center gap-3 text-sm text-white">
-                <Check className="w-5 h-5 text-app-primary shrink-0" /> Unlimited downloads
+                <Check className="w-5 h-5 text-app-primary shrink-0" /> 1000 videos monthly
               </li>
               <li className="flex items-center gap-3 text-sm text-white">
-                <Check className="w-5 h-5 text-app-primary shrink-0" /> Up to 4K resolution
+                <Check className="w-5 h-5 text-app-primary shrink-0" /> Large batch downloads
               </li>
               <li className="flex items-center gap-3 text-sm text-white">
-                <Check className="w-5 h-5 text-app-primary shrink-0" /> High-quality audio extraction
+                <Check className="w-5 h-5 text-app-primary shrink-0" /> CLI access & channel archive
               </li>
-              <li className="flex items-center gap-3 text-sm text-white">
-                <Check className="w-5 h-5 text-app-primary shrink-0" /> Unlimited batch processing
+              <li className="flex items-center gap-3 text-sm text-app-muted/50">
+                <X className="w-5 h-5 shrink-0" /> No API access
               </li>
-              <li className="flex items-center gap-3 text-sm text-white">
-                <Check className="w-5 h-5 text-app-primary shrink-0" /> Full API access
+              <li className="flex items-center gap-3 text-sm text-app-muted/50">
+                <X className="w-5 h-5 shrink-0" /> No automation / webhooks
               </li>
             </ul>
             <button

@@ -3,6 +3,8 @@ import { SupportedLanguage, Translations, LegalDocType, InfoDocType } from './ty
 export const APP_VERSION = 'v3.6.0 (Batch Queue)';
 // Use environment variable in production, fallback to relative path for Vite proxy in development
 export const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+export const LEMON_CHECKOUT_PRO = import.meta.env.VITE_LEMON_CHECKOUT_PRO || '';
+export const LEMON_CHECKOUT_ULTRA = import.meta.env.VITE_LEMON_CHECKOUT_ULTRA || '';
 
 const BASE_TRANSLATIONS: Translations = {
   heroTitle: 'Batch Download. Simplified.',
@@ -149,7 +151,7 @@ const BASE_TRANSLATIONS: Translations = {
   createAccountButton: 'Create account',
   noAccountYet: 'No account yet?',
   alreadyHaveAccount: 'Already have an account?',
-  upgradeForQualityTooltip: 'Upgrade to Pro for higher quality.',
+  upgradeForQualityTooltip: 'Upgrade to Ultra for 4K quality.',
   freeBatchLimitMessage: 'Free plan allows up to 3 videos per batch.',
   checkoutUnavailable: 'Checkout is currently unavailable. Please try again shortly.',
   loginToUpgrade: 'Please log in to upgrade to Pro.',

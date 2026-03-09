@@ -132,7 +132,7 @@ export function ApiModal({ onClose }: ApiModalProps) {
           <div className="p-4 rounded-xl bg-app-primary/10 border border-app-primary/20 flex items-start gap-3">
             <Code className="w-5 h-5 text-app-primary shrink-0 mt-0.5" />
             <div className="flex flex-col gap-1">
-              <h4 className="text-sm font-medium text-app-primary">Developer API (Studio)</h4>
+              <h4 className="text-sm font-medium text-app-primary">Developer API & Webhooks</h4>
               <p className="text-xs text-app-primary/80 leading-relaxed">
                 API keys and webhooks are available on Ultra plans only. Upgrade to create keys and receive batch webhooks.
               </p>

@@ -17,7 +17,7 @@ export function SettingsModal({ onNavigate, onLogout }: SettingsModalProps) {
 
   const secondaryItems = [
     { id: 'supportedSites' as const, label: 'Supported Sites', description: 'Platforms we support', icon: Globe, action: () => onNavigate('supportedSites') },
-    { id: 'api' as const, label: 'API & Webhooks', description: 'Studio plan only', icon: Code, action: () => onNavigate('api') },
+    { id: 'api' as const, label: 'API & Webhooks', description: 'Ultra plan only', icon: Code, action: () => onNavigate('api') },
   ];
 
   return (
