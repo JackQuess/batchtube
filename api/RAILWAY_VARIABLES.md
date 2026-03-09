@@ -59,12 +59,14 @@ Değişkenleri ekledikten sonra batchtube servisini yeniden deploy edin.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `SERVICE_ENTRY` | **Yes** | `processing-worker` |
+| `SERVICE_ENTRY` | **Yes** | Must be exactly `processing-worker`. |
 | `DATABASE_URL` | **Yes** | **Same** Railway Postgres URL as API. |
 | `DIRECT_URL`   | **Yes** | Same as `DATABASE_URL`. |
 | `REDIS_URL`    | **Yes** | **Same** Railway Redis URL as API. |
 | `S3_*` (endpoint, bucket, keys) | **Yes** | Processing worker reads/writes media from S3; use same S3 vars as batchtube. |
 | `WORKER_CONCURRENCY_PROCESSING` | Recommended | Processing worker concurrency (defaults to `WORKER_CONCURRENCY`, typically lower). |
+
+**Role:** This worker runs **only** UpScale jobs (uploaded files). It does **not** run YouTube/URL downloads. If you see `youtube_*` or `worker_item_failed` in this service’s logs, set `SERVICE_ENTRY=processing-worker` (not `download-worker`).
 
 API and both worker services must use the **exact same** `DATABASE_URL`, `DIRECT_URL`, and `REDIS_URL`.
 Queue names in code:

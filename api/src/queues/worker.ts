@@ -13,7 +13,7 @@ import {
   type DownloadQuality
 } from '../services/download.js';
 import type { BatchJob, ItemJob, ProcessingJob } from './bull.js';
-import { enqueueBatch, enqueueBatchItems, enqueueBatchFinalize, enqueueProcessingJob } from './enqueue.js';
+import { enqueueBatch, enqueueBatchItems, enqueueBatchFinalize } from './enqueue.js';
 import { listSourceItems, listSourceItemsParallel, listSourceItemsPaginated } from '../services/sourceList.js';
 import { config } from '../config.js';
 import {
@@ -71,7 +71,7 @@ export async function processItem(job: Job<ItemJob>) {
   try {
     const batch = item.batch;
     const batchOptions = (batch.options as BatchOptions) ?? {};
-    const processingMode = batchOptions.processing === 'upscale_4k' ? 'upscale_4k' : 'none';
+    // URL-based batches never use the processing queue; only UpScale (upload) jobs do.
     const plan = await getPlan(userId);
     const retentionHours = PLAN_LIMITS[plan].fileTtlHours;
     const entitlements = getEntitlements(plan);
@@ -92,18 +92,6 @@ export async function processItem(job: Job<ItemJob>) {
 
     // Worker-side guard for disallowed options (defence in depth).
     if (batchOptions.quality === '4k' && !entitlements.canUseUpscale4k) {
-      await prisma.batchItem.update({
-        where: { id: itemId },
-        data: {
-          status: 'failed',
-          error_message: 'upscale_4k_not_allowed',
-          updated_at: new Date()
-        }
-      });
-      return;
-    }
-
-    if (batchOptions.processing === 'upscale_4k' && !entitlements.canUseUpscale4k) {
       await prisma.batchItem.update({
         where: { id: itemId },
         data: {
@@ -139,30 +127,16 @@ export async function processItem(job: Job<ItemJob>) {
         }
       });
 
-      if (processingMode === 'none') {
-        await prisma.batchItem.update({
-          where: { id: itemId },
-          data: { status: 'completed', progress: 100, updated_at: new Date() }
-        });
-        const terminalCount = await prisma.batchItem.count({
-          where: { batch_id: batchId, status: { in: ['completed', 'failed', 'cancelled'] } }
-        });
-        if (terminalCount >= batch.item_count) {
-          await enqueueBatchFinalize(batchId, userId, plan);
-        }
-      } else {
-        await prisma.batchItem.update({
-          where: { id: itemId },
-          data: {
-            processing_mode: 'upscale_4k',
-            processing_status: 'queued',
-            progress: 50,
-            processing_error: null,
-            processing_output_file_id: null,
-            updated_at: new Date()
-          }
-        });
-        await enqueueProcessingJob(batchId, itemId, userId, plan);
+      // URL-based items: always complete here; processing queue is only for UpScale uploads.
+      await prisma.batchItem.update({
+        where: { id: itemId },
+        data: { status: 'completed', progress: 100, updated_at: new Date() }
+      });
+      const terminalCount = await prisma.batchItem.count({
+        where: { batch_id: batchId, status: { in: ['completed', 'failed', 'cancelled'] } }
+      });
+      if (terminalCount >= batch.item_count) {
+        await enqueueBatchFinalize(batchId, userId, plan);
       }
       return;
     }
@@ -198,35 +172,11 @@ export async function processItem(job: Job<ItemJob>) {
 
       await incrementBandwidth(userId, BigInt(content.byteLength));
 
-      // Download + upload to storage completed.
+      // Download + upload to storage completed. URL-based items: always complete; no processing queue.
       await prisma.batchItem.update({
         where: { id: itemId },
-        data: {
-          // Keep status as 'processing' here; final status decided below or in processMedia.
-          progress: processingMode === 'none' ? 90 : 60,
-          updated_at: new Date()
-        }
+        data: { status: 'completed', progress: 100, updated_at: new Date() }
       });
-
-      if (processingMode === 'none') {
-        await prisma.batchItem.update({
-          where: { id: itemId },
-          data: { status: 'completed', progress: 100, updated_at: new Date() }
-        });
-      } else {
-        await prisma.batchItem.update({
-          where: { id: itemId },
-          data: {
-            processing_mode: 'upscale_4k',
-            processing_status: 'queued',
-            progress: 60,
-            processing_error: null,
-            processing_output_file_id: null,
-            updated_at: new Date()
-          }
-        });
-        await enqueueProcessingJob(batchId, itemId, userId, plan);
-      }
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
       const youtubeCodeMatch = errMsg.match(/^(youtube_(?:private_video|age_restricted|login_required|unavailable|extractor_error|download_error)):/);
@@ -240,13 +190,11 @@ export async function processItem(job: Job<ItemJob>) {
       });
     }
 
-    if (processingMode === 'none') {
-      const terminalCount = await prisma.batchItem.count({
-        where: { batch_id: batchId, status: { in: ['completed', 'failed', 'cancelled'] } }
-      });
-      if (terminalCount >= batch.item_count) {
-        await enqueueBatchFinalize(batchId, userId, plan);
-      }
+    const terminalCount = await prisma.batchItem.count({
+      where: { batch_id: batchId, status: { in: ['completed', 'failed', 'cancelled'] } }
+    });
+    if (terminalCount >= batch.item_count) {
+      await enqueueBatchFinalize(batchId, userId, plan);
     }
   } finally {
     releaseProviderSlot(provider);
