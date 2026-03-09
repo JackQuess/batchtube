@@ -78,16 +78,6 @@ const archiveRoute: FastifyPluginAsync = async (app) => {
         { plan: logicalPlan }
       );
     }
-    if (options?.processing === 'upscale_4k' && !entitlements.canUseUpscale4k && !request.auth.isAdmin) {
-      return sendError(
-        request,
-        reply,
-         403,
-        'upscale_4k_not_allowed',
-        '4K processing is only available on Ultra plan.',
-        { plan: logicalPlan }
-      );
-    }
     if (!request.auth.isAdmin) {
       // Enforce max playlist/archive size by plan.
       const maxItems = entitlements.maxPlaylistItems;
@@ -141,7 +131,7 @@ const archiveRoute: FastifyPluginAsync = async (app) => {
       archive_source_type: resolved.sourceType,
       archive_mode: mode,
       archive_latest_n: mode === 'latest_n' ? (latest_n ?? 25) : mode === 'latest_25' ? 25 : undefined,
-      processing: options?.processing ?? 'none'
+      processing: 'none'
     };
 
     await prisma.batch.create({

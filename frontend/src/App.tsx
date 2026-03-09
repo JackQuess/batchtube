@@ -43,6 +43,7 @@ import { FeaturesPage } from './pages/FeaturesPage';
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
 import { TermsOfServicePage } from './pages/TermsOfServicePage';
 import { TRANSLATIONS } from './constants';
+import { UpScalePage } from './pages/UpScalePage';
 
 function normalizeAuthError(message: string): string {
   const lower = message.toLowerCase();
@@ -65,7 +66,7 @@ const App: React.FC = () => {
   const [sourceSelection, setSourceSelection] = useState<{ url: string; type: 'channel' | 'playlist' | 'profile'; provider: string } | null>(null);
 
   const isAuthPath = pathname === '/login' || pathname === '/signup';
-  const isAppPath = pathname === '/app';
+  const isAppPath = pathname === '/app' || pathname === '/upscale';
 
   useEffect(() => {
     if (!user && isAppPath) {
@@ -309,6 +310,7 @@ const App: React.FC = () => {
 
   const displayName = user.email?.split('@')[0] ?? 'User';
   const initials = displayName.slice(0, 2).toUpperCase();
+  const isUpScalePath = pathname === '/upscale';
 
   return (
     <div className="min-h-screen bg-app-bg text-app-text relative overflow-hidden flex flex-col">
@@ -327,8 +329,30 @@ const App: React.FC = () => {
 
       <div className="bg-grid" />
 
-      <div className="absolute top-6 left-6 z-10 flex items-center gap-2">
+      <div className="absolute top-6 left-6 z-10 flex items-center gap-3">
         <BatchTubeLogo size="sm" />
+        <button
+          type="button"
+          onClick={() => navigate('/app')}
+          className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+            !isUpScalePath
+              ? 'bg-white text-black border-white'
+              : 'bg-transparent text-app-muted border-white/20 hover:border-white/40 hover:text-white'
+          }`}
+        >
+          Batch
+        </button>
+        <button
+          type="button"
+          onClick={() => navigate('/upscale')}
+          className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+            isUpScalePath
+              ? 'bg-white text-black border-white'
+              : 'bg-transparent text-app-muted border-white/20 hover:border-white/40 hover:text-white'
+          }`}
+        >
+          UpScale
+        </button>
       </div>
 
       <div className="absolute top-6 right-6 z-10">
@@ -344,28 +368,34 @@ const App: React.FC = () => {
         </button>
       </div>
 
-      <main className="flex-1 flex flex-col items-center justify-center p-6 relative z-10">
-        {batchCreating && (
-          <div className="absolute top-24 left-1/2 -translate-x-1/2 z-30 text-sm text-app-muted bg-white/5 border border-app-border rounded-xl px-4 py-2 flex items-center gap-2">
-            <span className="inline-block w-4 h-4 border-2 border-app-primary border-t-transparent rounded-full animate-spin" />
-            Creating batch...
-          </div>
+      <main className="flex-1 flex flex-col items-center justify-center p-6 relative z-10 w-full">
+        {isUpScalePath ? (
+          <UpScalePage />
+        ) : (
+          <>
+            {batchCreating && (
+              <div className="absolute top-24 left-1/2 -translate-x-1/2 z-30 text-sm text-app-muted bg-white/5 border border-app-border rounded-xl px-4 py-2 flex items-center gap-2">
+                <span className="inline-block w-4 h-4 border-2 border-app-primary border-t-transparent rounded-full animate-spin" />
+                Creating batch...
+              </div>
+            )}
+            {batchError && (
+              <div className="absolute top-24 left-1/2 -translate-x-1/2 z-30 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-2">
+                {batchError}
+              </div>
+            )}
+            <SmartBar
+              onCommand={handleCommand}
+              onStartProcessing={handleStartProcessing}
+              onOpenSourcePicker={(url, provider, kind) => {
+                setSourceSelection({ url, type: kind, provider });
+                setActiveModal('sourceSelection');
+              }}
+              onStartBatch={handleStartBatch}
+              onStartArchive={handleStartArchive}
+            />
+          </>
         )}
-        {batchError && (
-          <div className="absolute top-24 left-1/2 -translate-x-1/2 z-30 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-2">
-            {batchError}
-          </div>
-        )}
-        <SmartBar
-          onCommand={handleCommand}
-          onStartProcessing={handleStartProcessing}
-          onOpenSourcePicker={(url, provider, kind) => {
-            setSourceSelection({ url, type: kind, provider });
-            setActiveModal('sourceSelection');
-          }}
-          onStartBatch={handleStartBatch}
-          onStartArchive={handleStartArchive}
-        />
       </main>
 
       <div className="absolute bottom-6 left-6 z-10">

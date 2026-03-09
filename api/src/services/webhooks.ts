@@ -1,6 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { prisma } from './db.js';
-import { getPlan, getEntitlements, toLogicalPlan } from './plans.js';
+import { getPlan, getEntitlements } from './plans.js';
+import { signedGetUrl } from '../storage/s3.js';
 
 export async function sendBatchWebhook(params: {
   batchId: string;
@@ -34,7 +35,8 @@ export async function sendBatchWebhook(params: {
       batch_id: params.batchId,
       status: params.status,
       successful_items: params.successfulItems,
-      failed_items: params.failedItems
+      failed_items: params.failedItems,
+      zip_url: batch.zip_file_path ? await signedGetUrl(batch.zip_file_path, 3600) : null
     }
   };
 

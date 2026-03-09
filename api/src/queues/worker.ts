@@ -371,7 +371,11 @@ export async function processBatchFinalize(job: Job<BatchJob>) {
   if (completedCount > 0 && batch.items.length > 0) {
     const zip = new JSZip();
     for (const item of batch.items) {
-      const file = item.files?.[0];
+      const outputFileId = item.processing_output_file_id;
+      const file =
+        (outputFileId
+          ? item.files?.find((f) => f.id === outputFileId)
+          : undefined) || item.files?.[0];
       if (!file?.storage_path) continue;
       try {
         const content = await getObject(file.storage_path);

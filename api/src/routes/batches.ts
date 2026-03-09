@@ -314,17 +314,6 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
       );
     }
 
-    if (body.options?.processing === 'upscale_4k' && !entitlements.canUseUpscale4k && !isAdmin) {
-      return sendError(
-        request,
-        reply,
-        403,
-        'upscale_4k_not_allowed',
-        '4K processing is only available on Ultra plan.',
-        { plan: logicalPlan }
-      );
-    }
-
     request.log.info({ requestId: request.id, isAdmin, plan }, 'batch_create_checks_passed_proceeding_to_tx');
 
     const batchId = randomUUID();
@@ -342,7 +331,7 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
               format: body.options?.format ?? 'mp4',
               quality: body.options?.quality ?? 'best',
               archive_as_zip: body.options?.archive_as_zip ?? false,
-              processing: body.options?.processing ?? 'none'
+              processing: 'none'
             },
             callback_url: effectiveCallbackUrl,
             item_count: urlCount

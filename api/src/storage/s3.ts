@@ -78,3 +78,15 @@ export async function signedGetUrl(key: string, expiresIn = 3600): Promise<strin
     { expiresIn }
   );
 }
+
+export async function signedPutUrl(key: string, contentType: string, expiresIn = 3600): Promise<string> {
+  return getSignedUrl(
+    s3,
+    new PutObjectCommand({
+      Bucket: config.s3.bucket,
+      Key: key,
+      ContentType: contentType
+    }),
+    { expiresIn }
+  );
+}
