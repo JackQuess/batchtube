@@ -130,31 +130,7 @@ export function UpScalePage() {
             Premium media processing, resolution upscaling, and format conversion.
           </p>
         </div>
-
-        {/* Debug State Toggle */}
-        <div className="hidden md:flex items-center gap-2 bg-white/5 p-1 rounded-lg border border-white/10">
-          {(['locked', 'empty', 'files_added', 'processing', 'completed'] as UpScaleStatus[]).map(
-            (s) => (
-              <button
-                key={s}
-                onClick={() => {
-                  setStatus(s);
-                  if (s === 'empty' || s === 'locked') setFiles([]);
-                  if (s === 'files_added') handleUpload();
-                  if (s === 'completed') {
-                    setOverallProgress(100);
-                    setFiles((f) => f.map((file) => ({ ...file, status: 'completed', progress: 100 })));
-                  }
-                }}
-                className={`text-[10px] uppercase tracking-wider px-2 py-1 rounded font-medium transition-colors ${
-                  status === s ? 'bg-white/10 text-white' : 'text-app-muted hover:text-white'
-                }`}
-              >
-                {s}
-              </button>
-            )
-          )}
-        </div>
+        {/* (Optional) debug state toggle was here; removed from production to avoid mock feeling */}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 relative">

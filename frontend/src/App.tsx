@@ -359,7 +359,13 @@ const App: React.FC = () => {
 
       {/* Top nav */}
       <div className="absolute top-6 left-6 z-10 flex items-center gap-2">
-        <BatchTubeLogo size="sm" />
+        <button
+          type="button"
+          onClick={() => navigate('/app')}
+          className="flex items-center gap-2 cursor-pointer"
+        >
+          <BatchTubeLogo size="sm" />
+        </button>
       </div>
 
       <div className="absolute top-6 left-1/2 -translate-x-1/2 z-10 flex items-center">
@@ -367,7 +373,7 @@ const App: React.FC = () => {
           <button
             type="button"
             onClick={() => navigate('/app')}
-            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${
               !isUpScalePath
                 ? 'bg-white text-black'
                 : 'text-app-muted hover:text-white hover:bg-white/5'
@@ -378,7 +384,7 @@ const App: React.FC = () => {
           <button
             type="button"
             onClick={() => navigate('/upscale')}
-            className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
+            className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors cursor-pointer ${
               isUpScalePath
                 ? 'bg-white text-black'
                 : 'text-app-muted hover:text-white hover:bg-white/5'
