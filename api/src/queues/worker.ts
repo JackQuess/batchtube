@@ -1,5 +1,6 @@
 import { Worker, type Job } from 'bullmq';
 import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
 import JSZip from 'jszip';
 import { prisma } from '../services/db.js';
 import { detectProvider, getDefaultFormatForProvider } from '../services/providers.js';
@@ -663,14 +664,32 @@ console.log(
     redis_configured: Boolean(config.redisUrl && config.redisUrl.length > 0),
     ...(config.ytDlpCookiesPath?.trim()
       ? (() => {
-          const c = getYtDlpCookieExpiry(config.ytDlpCookiesPath!);
-          return c
-            ? {
-                yt_dlp_cookie_configured: true,
-                yt_dlp_cookie_expires_in_days: c.expiresInDays,
-                yt_dlp_cookie_expired: c.isExpired
-              }
-            : { yt_dlp_cookie_configured: true, yt_dlp_cookie_expires_in_days: null };
+          const p = config.ytDlpCookiesPath!;
+          let sizeBytes: number | null = null;
+          let exists = false;
+          try {
+            if (fs.existsSync(p)) {
+              exists = true;
+              sizeBytes = fs.statSync(p).size;
+            }
+          } catch {
+            /* ignore */
+          }
+          const c = exists ? getYtDlpCookieExpiry(p) : null;
+          return {
+            yt_dlp_cookie_configured: true,
+            yt_dlp_cookie_path: p,
+            yt_dlp_cookie_file_exists: exists,
+            ...(sizeBytes !== null && { yt_dlp_cookie_file_bytes: sizeBytes }),
+            ...(c
+              ? {
+                  yt_dlp_cookie_expires_in_days: c.expiresInDays,
+                  yt_dlp_cookie_expired: c.isExpired
+                }
+              : exists
+                ? { yt_dlp_cookie_expires_in_days: null }
+                : { yt_dlp_cookie_hint: 'File missing – set COOKIES_INIT_URL or mount volume with cookies.txt' })
+          };
         })()
       : { yt_dlp_cookie_configured: false })
   })

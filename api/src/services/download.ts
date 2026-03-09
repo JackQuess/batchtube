@@ -224,7 +224,8 @@ function logYoutube(
 }
 
 /**
- * YouTube-only pipeline: no-cookie first, then cookie retry on auth errors;
+ * YouTube-only pipeline: when cookies are configured, use them from the first attempt
+ * (same as local: yt-dlp --cookies cookies.txt). Otherwise try without, then cookie retry on auth errors;
  * format fallback bestvideo+bestaudio/best → best → bestaudio;
  * up to 2 retries with exponential backoff for transient errors.
  */
@@ -237,6 +238,22 @@ async function downloadYouTube(
 ): Promise<{ filePath: string; mimeType: string; ext: string }> {
   const cookiesPath = config.ytDlpCookiesPath?.trim();
   const cookieFileExists = Boolean(cookiesPath && fs.existsSync(cookiesPath));
+  const useCookiesFirst = cookieFileExists;
+
+  if (cookieFileExists) {
+    try {
+      const stat = fs.statSync(cookiesPath);
+      logYoutube('youtube_cookie_file_used', {
+        itemId,
+        url,
+        cookiesPath,
+        sizeBytes: stat.size,
+        hint: 'Using cookies on first attempt (same as local yt-dlp --cookies).'
+      });
+    } catch {
+      logYoutube('youtube_cookie_file_used', { itemId, url, cookiesPath, hint: 'Cookie file exists.' });
+    }
+  }
 
   logYoutube('youtube_metadata_start', { itemId, url, format, quality });
   logYoutube('youtube_download_start', { itemId, url, format, quality });
@@ -260,11 +277,11 @@ async function downloadYouTube(
       });
     }
 
-    // Step 1: try without cookies
+    // Step 1: try with or without cookies (cookies on first attempt when configured, like local)
     try {
-      const result = await runYtDlp(url, format, formatSelector, outputFileName, false);
+      const result = await runYtDlp(url, format, formatSelector, outputFileName, useCookiesFirst);
       logYoutube('youtube_metadata_success', { itemId, url });
-      logYoutube('youtube_download_success', { itemId, url, formatSelector });
+      logYoutube('youtube_download_success', { itemId, url, formatSelector, usedCookies: useCookiesFirst });
       return result;
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
