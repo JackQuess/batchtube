@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { writeAuditLog } from '../services/audit.js';
-import { getCreditsUsage, getPlan } from '../services/plans.js';
+import { getCreditsUsage, getPlan, toLogicalPlan, getEntitlements } from '../services/plans.js';
 import { getCycleReset } from '../services/usage.js';
 import { sendError } from '../utils/errors.js';
 
@@ -10,8 +10,10 @@ const accountRoute: FastifyPluginAsync = async (app) => {
 
     let plan: 'free' | 'pro' | 'archivist' | 'enterprise' = 'free';
     let credits = { used: 0, limit: 100, available: 100 };
+    let logicalPlan: 'free' | 'pro' | 'ultra' = 'free';
     try {
       plan = await getPlan(request.auth.user.id);
+      logicalPlan = toLogicalPlan(plan);
       credits = await getCreditsUsage(request.auth.user.id, plan);
     } catch (error) {
       request.log.error({ err: error, requestId: request.id, userId: request.auth.user.id }, 'account_usage_compute_failed');
@@ -25,6 +27,7 @@ const accountRoute: FastifyPluginAsync = async (app) => {
 
     return reply.send({
       plan,
+      plan_logical: logicalPlan,
       cycle_reset: getCycleReset(),
       credits: {
         used: credits.used,

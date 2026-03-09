@@ -4,7 +4,7 @@ import JSZip from 'jszip';
 import { prisma } from '../services/db.js';
 import { detectProvider, getDefaultFormatForProvider } from '../services/providers.js';
 import { putObject, getObject } from '../storage/s3.js';
-import { PLAN_LIMITS, getPlan, incrementBandwidth, deductCreditsForBatch } from '../services/plans.js';
+import { PLAN_LIMITS, getPlan, getEntitlements, toLogicalPlan, incrementBandwidth, deductCreditsForBatch } from '../services/plans.js';
 import { sendBatchWebhook } from '../services/webhooks.js';
 import {
   downloadWithYtDlp,
@@ -72,6 +72,7 @@ async function processItem(job: Job<ItemJob>) {
     const batchOptions = (batch.options as BatchOptions) ?? {};
     const plan = await getPlan(userId);
     const retentionHours = PLAN_LIMITS[plan].fileTtlHours;
+    const entitlements = getEntitlements(plan);
 
     if (batch.status === 'queued') {
       await prisma.batch.update({ where: { id: batchId }, data: { status: 'processing' } });
@@ -81,6 +82,19 @@ async function processItem(job: Job<ItemJob>) {
       where: { id: itemId },
       data: { status: 'processing', provider, progress: 25, updated_at: new Date() }
     });
+
+    // Worker-side guard for disallowed options (defence in depth).
+    if (batchOptions.quality === '4k' && !entitlements.canUseUpscale4k) {
+      await prisma.batchItem.update({
+        where: { id: itemId },
+        data: {
+          status: 'failed',
+          error_message: 'upscale_4k_not_allowed',
+          updated_at: new Date()
+        }
+      });
+      return;
+    }
 
     const downloadOpts = toDownloadOptions(batchOptions, provider);
     const sourceId = extractSourceId(provider, item.original_url);

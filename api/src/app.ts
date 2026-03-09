@@ -11,6 +11,7 @@ import filesRoute from './routes/files.js';
 import accountRoute from './routes/account.js';
 import apiKeysRoute from './routes/api-keys.js';
 import billingRoute from './routes/billing.js';
+import lemonsqueezyWebhookRoute from './routes/lemonsqueezy-webhook.js';
 import { config } from './config.js';
 import { sendError } from './utils/errors.js';
 
@@ -64,6 +65,7 @@ export function createApp() {
   app.register(accountRoute);
   app.register(apiKeysRoute);
   app.register(billingRoute);
+  app.register(lemonsqueezyWebhookRoute);
 
   app.setNotFoundHandler((request, reply) => {
     return sendError(request, reply, 404, 'not_found', 'Resource not found.');

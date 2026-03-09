@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { enqueueChannelArchive } from '../queues/enqueue.js';
 import { writeAuditLog } from '../services/audit.js';
 import { prisma } from '../services/db.js';
-import { getPlan } from '../services/plans.js';
+import { getPlan, getEntitlements, toLogicalPlan } from '../services/plans.js';
 import { getChannelMetadata } from '../services/channelMetadata.js';
 import { resolveSource, type SourceType } from '../services/sourceResolver.js';
 import { sendError } from '../utils/errors.js';
@@ -51,6 +51,64 @@ const archiveRoute: FastifyPluginAsync = async (app) => {
     }
 
     const plan = await getPlan(request.auth.user.id);
+    const entitlements = getEntitlements(plan);
+    const logicalPlan = toLogicalPlan(plan);
+
+    if (!entitlements.canArchiveChannels && !request.auth.isAdmin) {
+      return sendError(
+        request,
+        reply,
+        403,
+        'channel_archive_not_allowed',
+        'Channel archive is not available on your plan.',
+        { plan: logicalPlan }
+      );
+    }
+
+    if (options?.quality === '4k' && !entitlements.canUseUpscale4k && !request.auth.isAdmin) {
+      return sendError(
+        request,
+        reply,
+        403,
+        'upscale_4k_not_allowed',
+        '4K quality is only available on Ultra plan.',
+        { plan: logicalPlan }
+      );
+    }
+    if (!request.auth.isAdmin) {
+      // Enforce max playlist/archive size by plan.
+      const maxItems = entitlements.maxPlaylistItems;
+      if (mode === 'latest_25' && maxItems < 25) {
+        return sendError(
+          request,
+          reply,
+          403,
+          'playlist_too_large_for_plan',
+          `Your plan allows up to ${maxItems} items per archive request.`,
+          { plan: logicalPlan, max_playlist_items: maxItems, requested: 25 }
+        );
+      }
+      if (mode === 'latest_n' && typeof latest_n === 'number' && latest_n > maxItems) {
+        return sendError(
+          request,
+          reply,
+          403,
+          'playlist_too_large_for_plan',
+          `Your plan allows up to ${maxItems} items per archive request.`,
+          { plan: logicalPlan, max_playlist_items: maxItems, requested: latest_n }
+        );
+      }
+      if (mode === 'all' && maxItems < 5000) {
+        return sendError(
+          request,
+          reply,
+          403,
+          'playlist_too_large_for_plan',
+          `Your plan does not support full channel archives. Try a smaller selection or upgrade.`,
+          { plan: logicalPlan, max_playlist_items: maxItems, requested: 'all' }
+        );
+      }
+    }
     const isAdmin = request.auth.isAdmin === true;
 
     // Optional: fast channel metadata for instant UI (don't block on failure)

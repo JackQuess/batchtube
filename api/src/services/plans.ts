@@ -6,6 +6,7 @@ export type SaaSPlan = 'free' | 'pro' | 'archivist' | 'enterprise';
 
 export interface PlanLimits {
   maxBatchLinks: number;
+  /** Monthly item limit (processed media items). */
   monthlyCredits: number;
   concurrency: number;
   rateLimitPerMinute: number;
@@ -31,7 +32,8 @@ export interface CreditCheckResult {
 
 export const PLAN_LIMITS: Record<SaaSPlan, PlanLimits> = {
   free: {
-    maxBatchLinks: 10,
+    // Free: up to 20 items per batch, 100 items/month
+    maxBatchLinks: 20,
     monthlyCredits: 100,
     concurrency: 1,
     rateLimitPerMinute: 30,
@@ -40,7 +42,8 @@ export const PLAN_LIMITS: Record<SaaSPlan, PlanLimits> = {
     costPerUrl: 1
   },
   pro: {
-    maxBatchLinks: 50,
+    // Pro: larger batches and 1000 items/month
+    maxBatchLinks: 200,
     monthlyCredits: 1000,
     concurrency: 3,
     rateLimitPerMinute: 120,
@@ -49,8 +52,9 @@ export const PLAN_LIMITS: Record<SaaSPlan, PlanLimits> = {
     costPerUrl: 1
   },
   archivist: {
-    maxBatchLinks: 50,
-    monthlyCredits: 5000,
+    // Archivist/Enterprise map to logical Ultra plan (effectively very high limits)
+    maxBatchLinks: 5000,
+    monthlyCredits: 1000000,
     concurrency: 10,
     rateLimitPerMinute: 500,
     fileTtlHours: 168,
@@ -58,13 +62,72 @@ export const PLAN_LIMITS: Record<SaaSPlan, PlanLimits> = {
     costPerUrl: 1
   },
   enterprise: {
-    maxBatchLinks: 50,
-    monthlyCredits: 10000,
+    maxBatchLinks: 5000,
+    monthlyCredits: 1000000,
     concurrency: 20,
     rateLimitPerMinute: 1000,
     fileTtlHours: 168,
     apiAccess: true,
     costPerUrl: 1
+  }
+};
+
+// Logical plans used for entitlements/pricing docs.
+export type LogicalPlan = 'free' | 'pro' | 'ultra';
+
+export interface PlanEntitlements {
+  /** Monthly processed item limit (videos/audio). */
+  monthlyItemLimit: number;
+  /** Max playlist/archive items per request (where applicable). */
+  maxPlaylistItems: number;
+  /** Max allowed quality label (e.g. '1080p' or '4k'). */
+  maxQuality: '1080p' | '4k';
+  canArchiveChannels: boolean;
+  canUseCli: boolean;
+  canUseApi: boolean;
+  canUseAutomation: boolean;
+  canUseUpscale4k: boolean;
+  canUseAdvancedProcessing: boolean;
+  /** Lower number = higher priority in BullMQ. */
+  queuePriority: number;
+}
+
+export const PLAN_ENTITLEMENTS: Record<LogicalPlan, PlanEntitlements> = {
+  free: {
+    monthlyItemLimit: 100,
+    maxPlaylistItems: 20,
+    maxQuality: '1080p',
+    canArchiveChannels: false,
+    canUseCli: false,
+    canUseApi: false,
+    canUseAutomation: false,
+    canUseUpscale4k: false,
+    canUseAdvancedProcessing: false,
+    queuePriority: 8
+  },
+  pro: {
+    monthlyItemLimit: 1000,
+    maxPlaylistItems: 1000,
+    maxQuality: '1080p',
+    canArchiveChannels: true,
+    canUseCli: true,
+    canUseApi: false,
+    canUseAutomation: false,
+    canUseUpscale4k: false,
+    canUseAdvancedProcessing: false,
+    queuePriority: 4
+  },
+  ultra: {
+    monthlyItemLimit: 1000000,
+    maxPlaylistItems: 100000,
+    maxQuality: '4k',
+    canArchiveChannels: true,
+    canUseCli: true,
+    canUseApi: true,
+    canUseAutomation: true,
+    canUseUpscale4k: true,
+    canUseAdvancedProcessing: true,
+    queuePriority: 1
   }
 };
 
@@ -96,6 +159,18 @@ export const normalizePlan = (value: string | null | undefined): SaaSPlan => {
   if (value === 'starter') return 'free';
   if (value === 'power_user') return 'pro';
   return 'free';
+};
+
+/** Map stored SaaSPlan to logical pricing plan (free, pro, ultra). */
+export const toLogicalPlan = (plan: SaaSPlan): LogicalPlan => {
+  if (plan === 'free') return 'free';
+  if (plan === 'pro') return 'pro';
+  // archivist and enterprise are treated as Ultra for entitlements
+  return 'ultra';
+};
+
+export const getEntitlements = (plan: SaaSPlan): PlanEntitlements => {
+  return PLAN_ENTITLEMENTS[toLogicalPlan(plan)];
 };
 
 export async function getPlan(userId: string): Promise<SaaSPlan> {

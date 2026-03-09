@@ -1,7 +1,7 @@
 import fp from 'fastify-plugin';
 import type { FastifyPluginAsync } from 'fastify';
 import { prisma } from '../services/db.js';
-import { normalizePlan, type SaaSPlan } from '../services/plans.js';
+import { normalizePlan, getEntitlements, toLogicalPlan } from '../services/plans.js';
 import { sendError } from '../utils/errors.js';
 import { sha256 } from '../utils/crypto.js';
 import type { AuthContext } from '../types/index.js';
@@ -11,8 +11,6 @@ declare module 'fastify' {
     auth?: AuthContext;
   }
 }
-
-const API_ENABLED: SaaSPlan[] = ['archivist', 'enterprise'];
 
 const verifyApiKeyPlugin: FastifyPluginAsync = async (app) => {
   app.addHook('preHandler', async (request, reply) => {
@@ -44,8 +42,16 @@ const verifyApiKeyPlugin: FastifyPluginAsync = async (app) => {
       select: { plan: true }
     });
     const plan = normalizePlan(profile?.plan);
-    if (!API_ENABLED.includes(plan)) {
-      return sendError(request, reply, 403, 'forbidden', 'API access requires Archivist or Enterprise.');
+    const entitlements = getEntitlements(plan);
+    if (!entitlements.canUseApi) {
+      return sendError(
+        request,
+        reply,
+        403,
+        'api_access_not_allowed',
+        'API access requires Ultra plan.',
+        { plan: toLogicalPlan(plan) }
+      );
     }
 
     await prisma.apiKey.update({

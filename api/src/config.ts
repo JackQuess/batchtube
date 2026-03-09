@@ -34,6 +34,11 @@ export const config = {
     jwtIssuer: process.env.SUPABASE_JWT_ISSUER ?? '',
     jwtAudience: process.env.SUPABASE_JWT_AUDIENCE ?? 'authenticated'
   },
+  lemonsqueezy: {
+    webhookSecret: process.env.LEMONSQUEEZY_WEBHOOK_SECRET ?? '',
+    variantPro: process.env.LEMONSQUEEZY_VARIANT_PRO ?? '',
+    variantUltra: process.env.LEMONSQUEEZY_VARIANT_ULTRA ?? ''
+  },
   paddle: {
     apiBase: process.env.PADDLE_API_BASE ?? 'https://api.paddle.com',
     apiKey: process.env.PADDLE_API_KEY ?? '',

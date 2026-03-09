@@ -4,7 +4,7 @@ import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
 import { Prisma, type User } from '@prisma/client';
 import { config } from '../config.js';
 import { prisma } from '../services/db.js';
-import { normalizePlan, type SaaSPlan } from '../services/plans.js';
+import { normalizePlan, getEntitlements, toLogicalPlan, type SaaSPlan } from '../services/plans.js';
 import { sendError } from '../utils/errors.js';
 import { sha256 } from '../utils/crypto.js';
 import type { AuthContext } from '../types/index.js';
@@ -21,9 +21,6 @@ type ProfileRow = {
 };
 
 const FALLBACK_PASSWORD_HASH = '__supabase_jwt_auth__';
-
-/** Plans that allow API key access to main /v1 routes (batches, files, account). */
-const API_KEY_PLANS: SaaSPlan[] = ['archivist', 'enterprise'];
 
 const supabaseUrl = config.supabase.url.replace(/\/+$/, '');
 const jwksUrl = config.supabase.jwksUrl || (supabaseUrl ? `${supabaseUrl}/auth/v1/.well-known/jwks.json` : '');
@@ -148,12 +145,20 @@ const authPlugin: FastifyPluginAsync = async (app) => {
       });
       const plan = normalizePlan(profile?.plan);
       const isAdminUser = config.adminUserIds.length > 0 && config.adminUserIds.includes(apiKey.user_id);
-      if (!API_KEY_PLANS.includes(plan) && !isAdminUser) {
+      const entitlements = getEntitlements(plan);
+      if (!entitlements.canUseCli && !isAdminUser) {
         request.log.warn(
-          { requestId: request.id, userId: apiKey.user_id, plan },
-          'auth_api_key_plan_forbidden'
+          { requestId: request.id, userId: apiKey.user_id, plan: toLogicalPlan(plan) },
+          'auth_api_key_cli_forbidden'
         );
-        return sendError(request, reply, 403, 'forbidden', 'API access requires Archivist or Enterprise.');
+        return sendError(
+          request,
+          reply,
+          403,
+          'cli_access_not_allowed',
+          'CLI access requires Pro or Ultra plan.',
+          { plan: toLogicalPlan(plan) }
+        );
       }
 
       await prisma.apiKey.update({

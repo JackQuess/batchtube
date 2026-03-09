@@ -12,7 +12,9 @@ import {
   deductCreditsForBatchTx,
   enforceBatchLimit,
   enforceConcurrency,
-  getPlan
+  getPlan,
+  getEntitlements,
+  toLogicalPlan
 } from '../services/plans.js';
 import { detectProvider, isMediaUrlAllowed } from '../services/providers.js';
 import { defaultQueue } from '../queues/bull.js';
@@ -107,6 +109,8 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
     const body = parsed.data;
     const plan = await getPlan(request.auth.user.id);
     const limits = PLAN_LIMITS[plan];
+    const entitlements = getEntitlements(plan);
+    const logicalPlan = toLogicalPlan(plan);
     const isAdmin = request.auth.isAdmin === true;
 
     const { urls: dedupedUrls, duplicatesRemoved } = normalizeAndDedupeUrls(body.urls);
@@ -265,6 +269,29 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
     }
 
     const autoStart = body.auto_start ?? false;
+
+    // Feature gating: automation/webhooks and quality caps
+    if (body.callback_url && !entitlements.canUseAutomation && !isAdmin) {
+      return sendError(
+        request,
+        reply,
+        403,
+        'automation_not_allowed',
+        'Webhooks and automation are only available on Ultra plan.',
+        { plan: logicalPlan }
+      );
+    }
+
+    if (body.options?.quality === '4k' && !entitlements.canUseUpscale4k && !isAdmin) {
+      return sendError(
+        request,
+        reply,
+        403,
+        'upscale_4k_not_allowed',
+        '4K quality is only available on Ultra plan.',
+        { plan: logicalPlan }
+      );
+    }
 
     request.log.info({ requestId: request.id, isAdmin, plan }, 'batch_create_checks_passed_proceeding_to_tx');
 

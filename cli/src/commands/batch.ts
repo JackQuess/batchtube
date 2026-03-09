@@ -75,7 +75,15 @@ export async function runBatch(fileOrUrls: string[], opts: BatchOptions): Promis
     console.log('Items:', batch.item_count);
   } catch (err) {
     if (err instanceof BatchTubeApiError) {
-      console.error(err.message);
+      if (err.code === 'cli_access_not_allowed') {
+        console.error('CLI access requires a Pro or Ultra plan. Please upgrade your plan to use the CLI.');
+      } else if (err.code === 'upscale_4k_not_allowed') {
+        console.error('4K quality is only available on the Ultra plan. Try 1080p or upgrade to Ultra.');
+      } else if (err.code === 'plan_limit_reached' || err.code === 'insufficient_credits') {
+        console.error('You have reached your monthly video limit for your current plan.');
+      } else {
+        console.error(err.message);
+      }
       process.exit(err.statusCode >= 500 ? 2 : 1);
     }
     throw err;

@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { prisma } from './db.js';
+import { getPlan, getEntitlements, toLogicalPlan } from './plans.js';
 
 export async function sendBatchWebhook(params: {
   batchId: string;
@@ -13,6 +14,18 @@ export async function sendBatchWebhook(params: {
 
   const user = await prisma.user.findUnique({ where: { id: batch.user_id } });
   if (!user?.webhook_secret) return;
+
+  // Ultra-only: only send webhooks when automation is allowed for this plan.
+  try {
+    const plan = await getPlan(batch.user_id);
+    const entitlements = getEntitlements(plan);
+    if (!entitlements.canUseAutomation) {
+      return;
+    }
+  } catch {
+    // Fail-closed for automation if plan lookup fails.
+    return;
+  }
 
   const payload = {
     event: params.event,
