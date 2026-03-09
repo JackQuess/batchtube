@@ -83,10 +83,22 @@ export function PricingModal({ onClose }: PricingModalProps) {
   }, []);
 
   const openCheckout = (target: LogicalPlan) => {
-    if (target === 'pro' && LEMON_CHECKOUT_PRO) {
-      window.location.href = LEMON_CHECKOUT_PRO;
-    } else if (target === 'ultra' && LEMON_CHECKOUT_ULTRA) {
-      window.location.href = LEMON_CHECKOUT_ULTRA;
+    if (target === 'pro') {
+      if (LEMON_CHECKOUT_PRO) {
+        window.location.href = LEMON_CHECKOUT_PRO;
+      } else {
+        console.warn('[pricing] VITE_LEMON_CHECKOUT_PRO is not configured.');
+        alert('Checkout is currently unavailable. Please try again later or contact support.');
+      }
+      return;
+    }
+    if (target === 'ultra') {
+      if (LEMON_CHECKOUT_ULTRA) {
+        window.location.href = LEMON_CHECKOUT_ULTRA;
+      } else {
+        console.warn('[pricing] VITE_LEMON_CHECKOUT_ULTRA is not configured.');
+        alert('Checkout is currently unavailable. Please try again later or contact support.');
+      }
     }
   };
 
@@ -108,10 +120,12 @@ export function PricingModal({ onClose }: PricingModalProps) {
 
           const handleClick = () => {
             if (loading || isCurrent) return;
-            if (logical === 'pro' || logical === 'ultra') openCheckout(logical);
+            if (logical === 'pro' || logical === 'ultra') {
+              openCheckout(logical);
+            }
           };
 
-          const disabled = loading || logical === 'free' || isCurrent || (logical === 'pro' && !LEMON_CHECKOUT_PRO) || (logical === 'ultra' && !LEMON_CHECKOUT_ULTRA);
+          const disabled = loading || logical === 'free' || isCurrent;
 
           return (
           <div
