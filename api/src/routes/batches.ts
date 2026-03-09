@@ -270,8 +270,16 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
 
     const autoStart = body.auto_start ?? false;
 
+    // Load default webhook URL for this user (used when callback_url not explicitly provided)
+    const userRow = await prisma.user.findUnique({
+      where: { id: request.auth.user.id },
+      select: { webhook_url: true }
+    });
+    const defaultWebhookUrl = userRow?.webhook_url ?? null;
+    const effectiveCallbackUrl = body.callback_url ?? defaultWebhookUrl;
+
     // Feature gating: automation/webhooks and quality caps
-    if (body.callback_url && !entitlements.canUseAutomation && !isAdmin) {
+    if (effectiveCallbackUrl && !entitlements.canUseAutomation && !isAdmin) {
       return sendError(
         request,
         reply,
@@ -311,7 +319,7 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
               quality: body.options?.quality ?? 'best',
               archive_as_zip: body.options?.archive_as_zip ?? false
             },
-            callback_url: body.callback_url ?? null,
+            callback_url: effectiveCallbackUrl,
             item_count: urlCount
           }
         });

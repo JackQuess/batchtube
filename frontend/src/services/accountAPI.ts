@@ -8,6 +8,7 @@ export interface UsageResponse {
     limit: number;
     available: number;
   };
+  webhook_url?: string | null;
   /** True when user is admin (e.g. Supabase app_metadata); allows API keys on any plan. */
   is_admin?: boolean;
 }
@@ -24,6 +25,7 @@ export interface AccountSummary {
     itemsCount: number;
     maxPerBatch: number;
   };
+  webhookUrl?: string | null;
 }
 
 export const accountAPI = {
@@ -44,7 +46,8 @@ export const accountAPI = {
         batchesCount: usage.credits.used,
         itemsCount: usage.credits.used,
         maxPerBatch: usage.plan === 'free' ? 10 : 50
-      }
+      },
+      webhookUrl: usage.webhook_url ?? null
     };
   }
 };

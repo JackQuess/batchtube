@@ -14,38 +14,38 @@ export const PricingScreen: React.FC<PricingScreenProps> = ({ onNavigate }) => {
       period: 'monthly',
       description: 'Start with core workflows.',
       features: [
-        { text: '100 monthly credits', included: true },
-        { text: 'Max 10 links per batch', included: true },
-        { text: 'Retention: 6 hours', included: true },
+        { text: '100 videos per month', included: true },
+        { text: 'Up to 20 items per batch', included: true },
+        { text: 'Quality up to 1080p', included: true },
         { text: 'Priority processing', included: false },
-        { text: 'API access (coming soon)', included: false }
+        { text: 'API access', included: false }
       ]
     },
     {
       name: 'Pro',
-      price: '$12',
+      price: '$9',
       period: 'per month',
       description: 'For creators and teams with frequent runs.',
       highlight: true,
       features: [
-        { text: '1000 monthly credits', included: true },
-        { text: 'Max 50 links per batch', included: true },
-        { text: 'Retention: 24 hours', included: true },
+        { text: '1000 videos per month', included: true },
+        { text: 'Up to 200 items per batch', included: true },
+        { text: 'Quality up to 1080p', included: true },
         { text: 'Priority processing', included: true },
-        { text: 'API access (coming soon)', included: false }
+        { text: 'CLI access', included: true }
       ]
     },
     {
-      name: 'Studio',
-      price: '$49',
+      name: 'Ultra',
+      price: '$29',
       period: 'per month',
-      description: 'High-volume archival and operations.',
+      description: 'High-volume automation and archival.',
       features: [
-        { text: '5000 monthly credits', included: true },
-        { text: 'Max 50 links per batch', included: true },
+        { text: 'Effectively unlimited videos', included: true },
+        { text: 'Massive batches', included: true },
         { text: 'Retention: 7 days', included: true },
-        { text: 'Higher queue priority', included: true },
-        { text: 'API access (coming soon)', included: true }
+        { text: 'Highest queue priority', included: true },
+        { text: 'API access & webhooks', included: true }
       ]
     }
   ];
@@ -54,9 +54,9 @@ export const PricingScreen: React.FC<PricingScreenProps> = ({ onNavigate }) => {
     <div className="w-full max-w-7xl mx-auto px-6 py-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="text-center max-w-3xl mx-auto mb-16">
         <h1 className="text-4xl md:text-5xl font-bold text-white mb-6 tracking-tight">
-          Plans based on <span className="text-primary">monthly credits</span>
+          Plans based on <span className="text-primary">monthly videos</span>
         </h1>
-        <p className="text-gray-400 text-lg">Each processed URL costs 1 credit. Choose the limit that matches your volume.</p>
+        <p className="text-gray-400 text-lg">Each processed video counts toward your monthly limit. Choose the volume that fits you.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">

@@ -71,7 +71,7 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({ onNavigate }) => {
 
               <div className="flex flex-wrap gap-4">
                 <Button className="w-auto px-6" onClick={handleUpgrade}>
-                  Upgrade to Pro
+                  Upgrade plan
                 </Button>
                 <button onClick={handleManage} className="px-6 py-2 border border-white/20 text-white text-sm font-medium rounded-lg hover:bg-white/10 transition-colors h-12">
                   Manage Subscription

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Code, Copy, Check, Plus, Trash2, Loader2 } from 'lucide-react';
 import { accountAPI } from '../../services/accountAPI';
 import { apiKeysAPI, type ApiKeyRow, type CreateApiKeyResponse } from '../../services/apiKeysAPI';
+import { apiClient } from '../../lib/apiClient';
 
 interface ApiModalProps {
   onClose: () => void;
@@ -19,6 +20,10 @@ export function ApiModal({ onClose }: ApiModalProps) {
   const [creating, setCreating] = useState(false);
   const [copiedKey, setCopiedKey] = useState(false);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [webhookUrl, setWebhookUrl] = useState('');
+  const [savingWebhook, setSavingWebhook] = useState(false);
+  const [webhookSaved, setWebhookSaved] = useState(false);
+  const [webhookError, setWebhookError] = useState<string | null>(null);
 
   const hasStudio = plan !== null && (STUDIO_PLANS.has(plan) || isAdmin);
 
@@ -27,9 +32,11 @@ export function ApiModal({ onClose }: ApiModalProps) {
       const usage = await accountAPI.getUsage();
       setPlan(usage.plan);
       setIsAdmin(usage.is_admin === true);
+      setWebhookUrl(usage.webhook_url ?? '');
     } catch {
       setPlan('free');
       setIsAdmin(false);
+      setWebhookUrl('');
     } finally {
       setLoadingPlan(false);
     }
@@ -89,6 +96,27 @@ export function ApiModal({ onClose }: ApiModalProps) {
     }
   };
 
+  const handleSaveWebhook = async () => {
+    if (!hasStudio) return;
+    setSavingWebhook(true);
+    setWebhookSaved(false);
+    setWebhookError(null);
+    try {
+      await apiClient<{ webhook_url: string | null }>('/v1/account/webhook', {
+        method: 'POST',
+        body: JSON.stringify({
+          url: webhookUrl.trim() ? webhookUrl.trim() : null
+        })
+      });
+      setWebhookSaved(true);
+      setTimeout(() => setWebhookSaved(false), 2000);
+    } catch (err: any) {
+      setWebhookError(err?.message || 'Webhook URL could not be saved.');
+    } finally {
+      setSavingWebhook(false);
+    }
+  };
+
   if (loadingPlan) {
     return (
       <div className="p-6 flex items-center justify-center min-h-[200px]">
@@ -106,7 +134,7 @@ export function ApiModal({ onClose }: ApiModalProps) {
             <div className="flex flex-col gap-1">
               <h4 className="text-sm font-medium text-app-primary">Developer API (Studio)</h4>
               <p className="text-xs text-app-primary/80 leading-relaxed">
-                API keys are available on Archivist and Enterprise plans only. Upgrade to create keys and integrate with your apps.
+                API keys and webhooks are available on Ultra plans only. Upgrade to create keys and receive batch webhooks.
               </p>
             </div>
           </div>
@@ -205,15 +233,28 @@ export function ApiModal({ onClose }: ApiModalProps) {
 
         <div className="flex flex-col gap-1.5 pt-2 border-t border-app-border">
           <label className="text-xs font-medium text-app-muted uppercase tracking-wider">Webhook URL</label>
-          <input
-            type="url"
-            placeholder="https://your-domain.com/webhook"
-            readOnly
-            className="w-full bg-black/40 border border-app-border rounded-xl px-4 py-3 text-sm text-app-muted placeholder:text-app-muted/50 cursor-not-allowed"
-          />
+          <div className="flex gap-2">
+            <input
+              type="url"
+              placeholder="https://your-domain.com/webhook"
+              value={webhookUrl}
+              onChange={(e) => setWebhookUrl(e.target.value)}
+              className="w-full bg-black/40 border border-app-border rounded-xl px-4 py-3 text-sm text-app-muted placeholder:text-app-muted/50"
+            />
+            <button
+              type="button"
+              onClick={handleSaveWebhook}
+              disabled={savingWebhook}
+              className="px-4 py-2 bg-app-primary hover:bg-app-primary-hover text-white text-xs font-medium rounded-lg disabled:opacity-50 flex items-center gap-2"
+            >
+              {savingWebhook ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              {webhookSaved ? 'Saved' : 'Save'}
+            </button>
+          </div>
           <p className="text-xs text-app-muted">
-            Webhook URL configuration is not yet available. We'll send POST requests here when batches complete. (Coming soon.)
+            We&apos;ll send POST requests here when batches complete. Only Ultra plans can receive webhooks.
           </p>
+          {webhookError && <p className="text-xs text-red-400 mt-1">{webhookError}</p>}
         </div>
       </div>
 
