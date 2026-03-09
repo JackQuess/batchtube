@@ -335,16 +335,17 @@ export function UpScalePage() {
                 </div>
                 <div>
                   <h3 className="text-sm font-semibold text-white">Processing preset</h3>
-                  <p className="text-xs text-app-muted">Choose how your media is transformed.</p>
+                  <p className="text-xs text-app-muted">Start with 4K pipeline. Extra presets are on the way.</p>
                 </div>
               </div>
               <span className="text-[10px] uppercase tracking-[0.16em] font-semibold text-app-muted flex items-center gap-1">
                 <Sparkles className="w-3 h-3 text-app-primary" />
-                AI-Ready
+                Pipeline-Ready
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 gap-3">
+              {/* Primary preset – matches current backend support (4K pipeline). */}
               <button className="group border border-app-primary/50 rounded-2xl p-3.5 text-left bg-app-primary/10 hover:bg-app-primary/20 transition-all relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-app-primary/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                 <div className="relative z-10 flex flex-col gap-2">
@@ -358,31 +359,8 @@ export function UpScalePage() {
                     </span>
                   </div>
                   <p className="text-[11px] text-app-muted leading-relaxed">
-                    Sharpen details and upscale to cinematic 4K with smart anti-noise filters.
-                  </p>
-                </div>
-              </button>
-
-              <button className="group border border-white/10 rounded-2xl p-3.5 text-left hover:bg-white/5 transition-all relative overflow-hidden">
-                <div className="relative z-10 flex flex-col gap-2">
-                  <span className="text-xs font-semibold text-white flex items-center gap-1.5">
-                    <Cpu className="w-3.5 h-3.5" />
-                    Smart Re-encode
-                  </span>
-                  <p className="text-[11px] text-app-muted leading-relaxed">
-                    Normalize bitrate, fix variable frame-rate issues and prepare for editing.
-                  </p>
-                </div>
-              </button>
-
-              <button className="group border border-white/10 rounded-2xl p-3.5 text-left hover:bg-white/5 transition-all relative overflow-hidden">
-                <div className="relative z-10 flex flex-col gap-2">
-                  <span className="text-xs font-semibold text-white flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    Clean & Compress
-                  </span>
-                  <p className="text-[11px] text-app-muted leading-relaxed">
-                    Denoise, normalize loudness and compress for faster delivery.
+                    Sends uploaded files through the 4K processing pipeline. Future updates will add
+                    real AI/video upscaling here.
                   </p>
                 </div>
               </button>
