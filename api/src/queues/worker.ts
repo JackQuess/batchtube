@@ -19,8 +19,7 @@ import { config } from '../config.js';
 import {
   validateRuntimeConfig,
   getDbHostCategory,
-  QUEUE_NAME,
-  QUEUE_NAME_PROCESSING
+  QUEUE_NAME
 } from '../runtime-config.js';
 import { getYtDlpCookieExpiry } from '../services/cookieExpiry.js';
 import { ensureFreshCookies } from '../services/cookieRefresh.js';
@@ -57,7 +56,7 @@ function toDownloadOptions(
   return { format, quality };
 }
 
-async function processItem(job: Job<ItemJob>) {
+export async function processItem(job: Job<ItemJob>) {
   const { batchId, itemId, userId } = job.data;
 
   const item = await prisma.batchItem.findFirst({
@@ -86,7 +85,7 @@ async function processItem(job: Job<ItemJob>) {
       data: {
         status: 'processing',
         provider,
-        progress: 25,
+        progress: 10,
         updated_at: new Date()
       }
     });
@@ -157,6 +156,7 @@ async function processItem(job: Job<ItemJob>) {
           data: {
             processing_mode: 'upscale_4k',
             processing_status: 'queued',
+            progress: 50,
             processing_error: null,
             processing_output_file_id: null,
             updated_at: new Date()
@@ -198,6 +198,16 @@ async function processItem(job: Job<ItemJob>) {
 
       await incrementBandwidth(userId, BigInt(content.byteLength));
 
+      // Download + upload to storage completed.
+      await prisma.batchItem.update({
+        where: { id: itemId },
+        data: {
+          // Keep status as 'processing' here; final status decided below or in processMedia.
+          progress: processingMode === 'none' ? 90 : 60,
+          updated_at: new Date()
+        }
+      });
+
       if (processingMode === 'none') {
         await prisma.batchItem.update({
           where: { id: itemId },
@@ -209,6 +219,7 @@ async function processItem(job: Job<ItemJob>) {
           data: {
             processing_mode: 'upscale_4k',
             processing_status: 'queued',
+            progress: 60,
             processing_error: null,
             processing_output_file_id: null,
             updated_at: new Date()
@@ -242,7 +253,7 @@ async function processItem(job: Job<ItemJob>) {
   }
 }
 
-async function processMedia(job: Job<ProcessingJob>) {
+export async function processMedia(job: Job<ProcessingJob>) {
   const { batchId, itemId, userId } = job.data;
 
   const item = await prisma.batchItem.findFirst({
@@ -273,6 +284,8 @@ async function processMedia(job: Job<ProcessingJob>) {
       where: { id: itemId },
       data: {
         processing_status: 'processing',
+        // Processing phase: bump progress towards completion.
+        progress: 80,
         updated_at: new Date()
       }
     });
@@ -301,6 +314,7 @@ async function processMedia(job: Job<ProcessingJob>) {
       data: {
         status: 'completed',
         processing_status: 'completed',
+        progress: 100,
         processing_output_file_id: sourceFile.id,
         processed_at: new Date(),
         updated_at: new Date()
@@ -314,6 +328,7 @@ async function processMedia(job: Job<ProcessingJob>) {
       data: {
         status: 'failed',
         processing_status: 'failed',
+        // Keep last known progress; don't overwrite to 0.
         processing_error: errMsg,
         updated_at: new Date()
       }
@@ -334,7 +349,7 @@ async function processMedia(job: Job<ProcessingJob>) {
   }
 }
 
-async function processBatchFinalize(job: Job<BatchJob>) {
+export async function processBatchFinalize(job: Job<BatchJob>) {
   const { batchId, userId } = job.data;
 
   const batch = await prisma.batch.findUnique({
@@ -392,7 +407,7 @@ async function processBatchFinalize(job: Job<BatchJob>) {
   });
 }
 
-async function processBatch(job: Job<BatchJob>) {
+export async function processBatch(job: Job<BatchJob>) {
   const { batchId, userId } = job.data;
 
   const plan = await getPlan(userId);
@@ -539,7 +554,7 @@ async function processBatch(job: Job<BatchJob>) {
   });
 }
 
-async function processChannelArchive(job: Job<BatchJob>) {
+export async function processChannelArchive(job: Job<BatchJob>) {
   const { batchId, userId } = job.data;
 
   const batch = await prisma.batch.findUnique({ where: { id: batchId } });
@@ -635,17 +650,17 @@ async function processChannelArchive(job: Job<BatchJob>) {
   }
 }
 
-// Fail fast: validate config before starting worker
+// Fail fast: validate config before starting download worker
 const validation = validateRuntimeConfig({ role: 'worker' });
 if (!validation.ok) {
-  console.error('[worker] runtime_config_validation_failed', validation.errors);
+  console.error('[download-worker] runtime_config_validation_failed', validation.errors);
   validation.errors.forEach((m) => console.error(m));
   process.exit(1);
 }
-validation.warnings.forEach((m) => console.warn('[worker]', m));
+validation.warnings.forEach((m) => console.warn('[download-worker]', m));
 const dbHostCategory = getDbHostCategory();
 if (dbHostCategory === 'supabase_host_detected') {
-  console.warn('[worker] DATABASE_URL points to Supabase; use Railway Postgres for worker.');
+  console.warn('[download-worker] DATABASE_URL points to Supabase; use Railway Postgres for worker.');
 }
 
 // Cookie refresh: when stale (by real expiry), fetch and write. Runs on startup and every 12h.
@@ -653,7 +668,7 @@ async function runCookieRefresh() {
   try {
     await ensureFreshCookies();
   } catch (e) {
-    console.error('[worker] cookie refresh error:', e);
+    console.error('[download-worker] cookie refresh error:', e);
   }
 }
 
@@ -662,7 +677,7 @@ const COOKIE_CHECK_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
 setInterval(() => runCookieRefresh(), COOKIE_CHECK_INTERVAL_MS);
 
 // Retry connection on DNS/network errors (e.g. Railway redis.railway.internal EAI_AGAIN)
-function redisRetryStrategy(times: number): number {
+export function redisRetryStrategy(times: number): number {
   return Math.min(2000 * Math.pow(2, times), 30000);
 }
 
@@ -681,32 +696,18 @@ new Worker<BatchJob | ItemJob>(
       retryStrategy: redisRetryStrategy,
       connectTimeout: 10000
     },
-    concurrency: config.workerConcurrency
-  }
-);
-
-new Worker<ProcessingJob>(
-  QUEUE_NAME_PROCESSING,
-  async (job) => {
-    return processMedia(job as Job<ProcessingJob>);
-  },
-  {
-    connection: {
-      url: config.redisUrl,
-      maxRetriesPerRequest: null,
-      retryStrategy: redisRetryStrategy,
-      connectTimeout: 10000
-    },
-    concurrency: config.workerConcurrency
+    concurrency: config.workerDownloadConcurrency
   }
 );
 
 console.log(
   JSON.stringify({
-    msg: 'worker_started',
+    msg: 'worker_role_started',
+    role: 'download-worker',
     database_provider: 'postgres',
     db_host_category: dbHostCategory,
     queue_name: QUEUE_NAME,
+    concurrency: config.workerDownloadConcurrency,
     redis_configured: Boolean(config.redisUrl && config.redisUrl.length > 0),
     ...(config.ytDlpCookiesPath?.trim()
       ? (() => {

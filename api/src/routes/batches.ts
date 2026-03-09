@@ -58,7 +58,7 @@ function toBatchResponse(batch: {
   status: BatchStatus;
   item_count: number;
   created_at: Date;
-  items: Array<{ status: ItemStatus }>;
+  items: Array<{ status: ItemStatus; progress: number }>;
 }) {
   const total = batch.item_count;
   const items = batch.items;
@@ -66,7 +66,17 @@ function toBatchResponse(batch: {
   const failed = items.filter((i) => i.status === 'failed').length;
   const processing = items.filter((i) => i.status === 'processing').length;
   const queued = items.filter((i) => i.status === 'queued' || i.status === 'pending').length;
-  const progress = total === 0 ? 0 : (completed / total) * 100;
+  const progress =
+    total === 0
+      ? 0
+      : Math.max(
+          0,
+          Math.min(
+            100,
+            items.reduce((sum, item) => sum + (typeof item.progress === 'number' ? item.progress : 0), 0) /
+              Math.max(total, 1)
+          )
+        );
 
   let throughput_items_per_min: number | undefined;
   let eta_seconds: number | undefined;
@@ -481,7 +491,7 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
         take: limit,
         include: {
           items: {
-            select: { status: true }
+            select: { status: true, progress: true }
           }
         }
       }),
@@ -513,7 +523,7 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
       },
       include: {
         items: {
-          select: { status: true }
+          select: { status: true, progress: true }
         }
       }
     });
@@ -565,7 +575,7 @@ const batchesRoute: FastifyPluginAsync = async (app) => {
 
     const updated = await prisma.batch.findUnique({
       where: { id },
-      include: { items: { select: { status: true } } }
+      include: { items: { select: { status: true, progress: true } } }
     });
 
     await writeAuditLog({

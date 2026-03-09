@@ -44,16 +44,32 @@ Do **not** set `DATABASE_URL` or `DIRECT_URL` to a Supabase host for the API/Wor
 
 Değişkenleri ekledikten sonra batchtube servisini yeniden deploy edin.
 
-### worker service
+### download-worker service
 
 | Variable | Required | Description |
 |----------|----------|-------------|
+| `SERVICE_ENTRY` | **Yes** | `download-worker` |
 | `DATABASE_URL` | **Yes** | **Same** Railway Postgres URL as API. |
 | `DIRECT_URL`   | **Yes** | Same as `DATABASE_URL`. |
 | `REDIS_URL`    | **Yes** | **Same** Railway Redis URL as API. |
 | `S3_*` (endpoint, bucket, keys) | **Yes** | Worker uploads results to S3; use same S3 vars as batchtube (S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY, S3_SECRET_KEY, etc.). |
+| `WORKER_CONCURRENCY_DOWNLOAD` | Recommended | Download worker concurrency (defaults to `WORKER_CONCURRENCY`). |
 
-API and Worker must use the **exact same** `DATABASE_URL`, `DIRECT_URL`, and `REDIS_URL`. Queue name in code: `batchtube-default`.
+### processing-worker service
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `SERVICE_ENTRY` | **Yes** | `processing-worker` |
+| `DATABASE_URL` | **Yes** | **Same** Railway Postgres URL as API. |
+| `DIRECT_URL`   | **Yes** | Same as `DATABASE_URL`. |
+| `REDIS_URL`    | **Yes** | **Same** Railway Redis URL as API. |
+| `S3_*` (endpoint, bucket, keys) | **Yes** | Processing worker reads/writes media from S3; use same S3 vars as batchtube. |
+| `WORKER_CONCURRENCY_PROCESSING` | Recommended | Processing worker concurrency (defaults to `WORKER_CONCURRENCY`, typically lower). |
+
+API and both worker services must use the **exact same** `DATABASE_URL`, `DIRECT_URL`, and `REDIS_URL`.
+Queue names in code:
+- Default/download queue: `batchtube-default`
+- Processing queue: `batchtube-processing`
 
 ---
 
@@ -61,8 +77,9 @@ API and Worker must use the **exact same** `DATABASE_URL`, `DIRECT_URL`, and `RE
 
 1. Add **Postgres** and **Redis** to the **same project** as the API and Worker.
 2. **batchtube** → Variables: reference Postgres `DATABASE_URL` (and set `DIRECT_URL` to same), reference Redis `REDIS_URL`.
-3. **worker** → Variables: same `DATABASE_URL`, `DIRECT_URL`, `REDIS_URL`.
-4. Redeploy both after changes.
+3. **download-worker** → Variables: same `DATABASE_URL`, `DIRECT_URL`, `REDIS_URL`, plus `SERVICE_ENTRY=download-worker`.
+4. **processing-worker** → Variables: same `DATABASE_URL`, `DIRECT_URL`, `REDIS_URL`, plus `SERVICE_ENTRY=processing-worker`.
+5. Redeploy all services after changes.
 
 **If you see `getaddrinfo EAI_AGAIN redis.railway.internal`:** Redis must be in the same Railway project so internal DNS resolves. The app now retries the connection with backoff; ensure Redis is added and `REDIS_URL` is set from Railway’s Redis service variable.
 
@@ -90,7 +107,9 @@ API logs: `db_host_category` (railway_postgres | supabase_host_detected | local 
 - [ ] **batchtube**: `DIRECT_URL` = Railway Postgres
 - [ ] **batchtube**: `REDIS_URL` = Railway Redis
 - [ ] **batchtube**: Supabase auth vars set
-- [ ] **worker**: same `DATABASE_URL`, `DIRECT_URL`, `REDIS_URL` as API
-- [ ] **worker**: same S3_* env vars as batchtube (worker uploads to S3)
+- [ ] **download-worker**: same `DATABASE_URL`, `DIRECT_URL`, `REDIS_URL` as API
+- [ ] **download-worker**: same S3_* env vars as batchtube (worker uploads to S3)
+- [ ] **processing-worker**: same `DATABASE_URL`, `DIRECT_URL`, `REDIS_URL` as API
+- [ ] **processing-worker**: same S3_* env vars as batchtube
 - [ ] `prisma migrate deploy` run against Railway Postgres
 - [ ] Redeploy API and Worker

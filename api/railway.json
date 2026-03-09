@@ -5,6 +5,6 @@
     "dockerfilePath": "Dockerfile"
   },
   "deploy": {
-    "startCommand": "sh -c 'ENTRY=${SERVICE_ENTRY:-server}; if [ \"$ENTRY\" = \"worker\" ]; then ENTRY=queues/worker; fi; npm run prisma:generate; if [ ! -f \"dist/${ENTRY}.js\" ]; then npm run build; fi; if [ \"$SERVICE_ENTRY\" != \"worker\" ]; then npm run prisma:migrate; fi; node \"dist/${ENTRY}.js\"'"
+    "startCommand": "sh -c 'ENTRY=${SERVICE_ENTRY:-server}; if [ \"$ENTRY\" = \"worker\" ] || [ \"$ENTRY\" = \"download-worker\" ]; then ENTRY=queues/worker; fi; if [ \"$ENTRY\" = \"processing-worker\" ]; then ENTRY=queues/processing-worker; fi; npm run prisma:generate; if [ ! -f \"dist/${ENTRY}.js\" ]; then npm run build; fi; if [ -z \"$SERVICE_ENTRY\" ] || [ \"$SERVICE_ENTRY\" = \"server\" ]; then npm run prisma:migrate; fi; node \"dist/${ENTRY}.js\"'"
   }
 }

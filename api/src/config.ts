@@ -69,8 +69,19 @@ export const config = {
       .map((id) => id.trim())
       .filter(Boolean);
   },
-  /** Worker concurrency (default 20). Higher = more parallel item jobs per worker process. */
+  /**
+   * Legacy global worker concurrency (default 20). Used as a base for provider-level limits and
+   * as default for download/processing worker roles when dedicated env vars are not set.
+   */
   workerConcurrency: Number(process.env.WORKER_CONCURRENCY ?? 20),
+  /** Download worker concurrency (default: WORKER_CONCURRENCY). */
+  workerDownloadConcurrency: Number(
+    process.env.WORKER_CONCURRENCY_DOWNLOAD ?? process.env.WORKER_CONCURRENCY ?? 20
+  ),
+  /** Processing worker concurrency (default: WORKER_CONCURRENCY, typically lower). */
+  workerProcessingConcurrency: Number(
+    process.env.WORKER_CONCURRENCY_PROCESSING ?? process.env.WORKER_CONCURRENCY ?? 10
+  ),
   /**
    * Optional per-provider concurrency caps. Example: WORKER_CONCURRENCY_YOUTUBE=5, WORKER_CONCURRENCY_VIMEO=15.
    * Effective concurrency for a provider is min(workerConcurrency, providerCap).
