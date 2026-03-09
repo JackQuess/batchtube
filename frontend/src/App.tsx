@@ -44,6 +44,7 @@ import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
 import { TermsOfServicePage } from './pages/TermsOfServicePage';
 import { TRANSLATIONS } from './constants';
 import { UpScalePage } from './pages/UpScalePage';
+import { accountAPI } from './services/accountAPI';
 
 function normalizeAuthError(message: string): string {
   const lower = message.toLowerCase();
@@ -64,6 +65,7 @@ const App: React.FC = () => {
   const [batchCreating, setBatchCreating] = useState(false);
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [sourceSelection, setSourceSelection] = useState<{ url: string; type: 'channel' | 'playlist' | 'profile'; provider: string } | null>(null);
+  const [logicalPlan, setLogicalPlan] = useState<'free' | 'pro' | 'ultra' | null>(null);
 
   const isAuthPath = pathname === '/login' || pathname === '/signup';
   const isAppPath = pathname === '/app' || pathname === '/upscale';
@@ -86,6 +88,32 @@ const App: React.FC = () => {
     window.addEventListener(AUTH_CHANGE_EVENT, handler);
     return () => window.removeEventListener(AUTH_CHANGE_EVENT, handler);
   }, []);
+
+  // Load logical plan (free / pro / ultra) for UpScale PRO badge in global navbar.
+  useEffect(() => {
+    if (!user) {
+      setLogicalPlan(null);
+      return;
+    }
+    let active = true;
+    const loadPlan = async () => {
+      try {
+        const usage = await accountAPI.getUsage();
+        if (!active) return;
+        const planLogical: 'free' | 'pro' | 'ultra' =
+          usage.plan_logical ??
+          (usage.plan === 'pro' ? 'pro' : usage.plan === 'free' ? 'free' : 'ultra');
+        setLogicalPlan(planLogical);
+      } catch {
+        if (!active) return;
+        setLogicalPlan(null);
+      }
+    };
+    void loadPlan();
+    return () => {
+      active = false;
+    };
+  }, [user?.id]);
 
   const handleLogin = useCallback(() => {
     setUser(getStoredUser());
@@ -329,8 +357,41 @@ const App: React.FC = () => {
 
       <div className="bg-grid" />
 
+      {/* Top nav */}
       <div className="absolute top-6 left-6 z-10 flex items-center gap-2">
         <BatchTubeLogo size="sm" />
+      </div>
+
+      <div className="absolute top-6 left-1/2 -translate-x-1/2 z-10 flex items-center">
+        <div className="inline-flex items-center gap-1 rounded-full bg-black/50 border border-white/10 px-1 py-1 text-[11px]">
+          <button
+            type="button"
+            onClick={() => navigate('/app')}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+              !isUpScalePath
+                ? 'bg-white text-black'
+                : 'text-app-muted hover:text-white hover:bg-white/5'
+            }`}
+          >
+            Dashboard
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/upscale')}
+            className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
+              isUpScalePath
+                ? 'bg-white text-black'
+                : 'text-app-muted hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <span>UpScale</span>
+            {logicalPlan === 'free' && (
+              <span className="ml-2 text-[9px] uppercase tracking-[0.18em] px-1.5 py-0.5 rounded-full bg-[#981b3c] text-white">
+                PRO
+              </span>
+            )}
+          </button>
+        </div>
       </div>
 
       <div className="absolute top-6 right-6 z-10">
