@@ -41,6 +41,14 @@ const QUALITY_SELECTORS: Record<DownloadQuality, string> = {
   '720p': 'bestvideo[height<=720]+bestaudio/best'
 };
 
+/** When format is MP4, prefer H.264 (avc1) so the file plays in QuickTime Player / default macOS players. */
+const QUALITY_SELECTORS_MP4_QUICKTIME: Record<DownloadQuality, string> = {
+  best: 'bestvideo[vcodec^=avc1]+bestaudio/best/bv*+ba/b',
+  '4k': 'bestvideo[vcodec^=avc1][height<=2160]+bestaudio/best/bestvideo[height<=2160]+bestaudio/best',
+  '1080p': 'bestvideo[vcodec^=avc1][height<=1080]+bestaudio/best/bestvideo[height<=1080]+bestaudio/best',
+  '720p': 'bestvideo[vcodec^=avc1][height<=720]+bestaudio/best/bestvideo[height<=720]+bestaudio/best'
+};
+
 /** YouTube-specific: errors that suggest retrying with cookies. */
 const YOUTUBE_AUTH_ERROR_PATTERNS = [
   'Sign in to confirm your age',
@@ -209,6 +217,14 @@ const YOUTUBE_VIDEO_FORMAT_FALLBACK = [
   'bestaudio'
 ];
 
+/** For MP4 output, try H.264 first so QuickTime Player can play the file. */
+const YOUTUBE_VIDEO_FORMAT_FALLBACK_MP4 = [
+  'bestvideo[vcodec^=avc1]+bestaudio/best',
+  'bestvideo+bestaudio/best',
+  'best',
+  'bestaudio'
+];
+
 const YOUTUBE_RETRY_ATTEMPTS = 2;
 const YOUTUBE_BACKOFF_BASE_MS = 1000;
 
@@ -261,7 +277,9 @@ async function downloadYouTube(
   const formatChain =
     format === 'mp3'
       ? ['']
-      : YOUTUBE_VIDEO_FORMAT_FALLBACK;
+      : format === 'mp4'
+        ? YOUTUBE_VIDEO_FORMAT_FALLBACK_MP4
+        : YOUTUBE_VIDEO_FORMAT_FALLBACK;
 
   let lastError: Error | null = null;
   let lastStderr = '';
@@ -375,7 +393,10 @@ export function downloadWithYtDlp(
 ): Promise<{ filePath: string; mimeType: string; ext: string }> {
   const format = options.format ?? 'mp4';
   const quality = options.quality ?? 'best';
-  const selector = QUALITY_SELECTORS[quality];
+  const selector =
+    format === 'mp4'
+      ? QUALITY_SELECTORS_MP4_QUICKTIME[quality]
+      : QUALITY_SELECTORS[quality];
 
   if (provider === 'youtube') {
     return downloadYouTube(url, format, quality, outputFileName, outputFileName);
