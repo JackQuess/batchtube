@@ -173,6 +173,9 @@ function runYtDlp(
     args.push('-f', qualityOrSelector);
     if (format === 'mp4') {
       args.push('--merge-output-format', 'mp4');
+      // Force H.264+AAC so QuickTime and other players show both video and audio (VP9/AV1 in MP4 often plays audio-only).
+      args.push('--use-postprocessor', 'FFmpegCopyStream');
+      args.push('--ppa', 'CopyStream:-c:v libx264 -c:a aac -f mp4');
     } else if (format === 'mkv') {
       args.push('--merge-output-format', 'mkv');
     }
