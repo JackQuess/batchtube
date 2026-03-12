@@ -1,5 +1,6 @@
 import { Worker, type Job } from 'bullmq';
 import { randomUUID } from 'node:crypto';
+import path from 'node:path';
 import fs from 'node:fs';
 import JSZip from 'jszip';
 import { prisma } from '../services/db.js';
@@ -644,63 +645,74 @@ export function redisRetryStrategy(times: number): number {
   return Math.min(2000 * Math.pow(2, times), 30000);
 }
 
-new Worker<BatchJob | ItemJob>(
-  QUEUE_NAME,
-  async (job) => {
-    if (job.name === 'process-item') return processItem(job as Job<ItemJob>);
-    if (job.name === 'batch-finalize') return processBatchFinalize(job as Job<BatchJob>);
-    if (job.name === 'channel-archive') return processChannelArchive(job as Job<BatchJob>);
-    return processBatch(job as Job<BatchJob>);
-  },
-  {
-    connection: {
-      url: config.redisUrl,
-      maxRetriesPerRequest: null,
-      retryStrategy: redisRetryStrategy,
-      connectTimeout: 10000
-    },
-    concurrency: config.workerDownloadConcurrency
-  }
-);
+// Only start the default-queue (download) worker when this file is the entry point.
+// When processing-worker.js imports this module, we must NOT start the download Worker,
+// so that Processing Worker only consumes batchtube-processing (UpScale), not YouTube/URL jobs.
+const entryPath = process.argv[1] ?? '';
+const entryBasename = path.basename(entryPath);
+const isDownloadWorkerEntry =
+  (entryBasename === 'worker.js' || entryBasename === 'worker.ts') &&
+  !entryPath.includes('processing-worker');
 
-console.log(
-  JSON.stringify({
-    msg: 'worker_role_started',
-    role: 'download-worker',
-    database_provider: 'postgres',
-    db_host_category: dbHostCategory,
-    queue_name: QUEUE_NAME,
-    concurrency: config.workerDownloadConcurrency,
-    redis_configured: Boolean(config.redisUrl && config.redisUrl.length > 0),
-    ...(config.ytDlpCookiesPath?.trim()
-      ? (() => {
-          const p = config.ytDlpCookiesPath!;
-          let sizeBytes: number | null = null;
-          let exists = false;
-          try {
-            if (fs.existsSync(p)) {
-              exists = true;
-              sizeBytes = fs.statSync(p).size;
+if (isDownloadWorkerEntry) {
+  new Worker<BatchJob | ItemJob>(
+    QUEUE_NAME,
+    async (job) => {
+      if (job.name === 'process-item') return processItem(job as Job<ItemJob>);
+      if (job.name === 'batch-finalize') return processBatchFinalize(job as Job<BatchJob>);
+      if (job.name === 'channel-archive') return processChannelArchive(job as Job<BatchJob>);
+      return processBatch(job as Job<BatchJob>);
+    },
+    {
+      connection: {
+        url: config.redisUrl,
+        maxRetriesPerRequest: null,
+        retryStrategy: redisRetryStrategy,
+        connectTimeout: 10000
+      },
+      concurrency: config.workerDownloadConcurrency
+    }
+  );
+
+  console.log(
+    JSON.stringify({
+      msg: 'worker_role_started',
+      role: 'download-worker',
+      database_provider: 'postgres',
+      db_host_category: dbHostCategory,
+      queue_name: QUEUE_NAME,
+      concurrency: config.workerDownloadConcurrency,
+      redis_configured: Boolean(config.redisUrl && config.redisUrl.length > 0),
+      ...(config.ytDlpCookiesPath?.trim()
+        ? (() => {
+            const p = config.ytDlpCookiesPath!;
+            let sizeBytes: number | null = null;
+            let exists = false;
+            try {
+              if (fs.existsSync(p)) {
+                exists = true;
+                sizeBytes = fs.statSync(p).size;
+              }
+            } catch {
+              /* ignore */
             }
-          } catch {
-            /* ignore */
-          }
-          const c = exists ? getYtDlpCookieExpiry(p) : null;
-          return {
-            yt_dlp_cookie_configured: true,
-            yt_dlp_cookie_path: p,
-            yt_dlp_cookie_file_exists: exists,
-            ...(sizeBytes !== null && { yt_dlp_cookie_file_bytes: sizeBytes }),
-            ...(c
-              ? {
-                  yt_dlp_cookie_expires_in_days: c.expiresInDays,
-                  yt_dlp_cookie_expired: c.isExpired
-                }
-              : exists
-                ? { yt_dlp_cookie_expires_in_days: null }
-                : { yt_dlp_cookie_hint: 'File missing – set COOKIES_INIT_URL or mount volume with cookies.txt' })
-          };
-        })()
-      : { yt_dlp_cookie_configured: false })
-  })
-);
+            const c = exists ? getYtDlpCookieExpiry(p) : null;
+            return {
+              yt_dlp_cookie_configured: true,
+              yt_dlp_cookie_path: p,
+              yt_dlp_cookie_file_exists: exists,
+              ...(sizeBytes !== null && { yt_dlp_cookie_file_bytes: sizeBytes }),
+              ...(c
+                ? {
+                    yt_dlp_cookie_expires_in_days: c.expiresInDays,
+                    yt_dlp_cookie_expired: c.isExpired
+                  }
+                : exists
+                  ? { yt_dlp_cookie_expires_in_days: null }
+                  : { yt_dlp_cookie_hint: 'File missing – set COOKIES_INIT_URL or mount volume with cookies.txt' })
+            };
+          })()
+        : { yt_dlp_cookie_configured: false })
+    })
+  );
+}
