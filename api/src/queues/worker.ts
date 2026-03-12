@@ -45,6 +45,49 @@ type BatchOptions = {
 
 const ALLOWED_FORMATS: DownloadFormat[] = ['mp4', 'mp3', 'mkv'];
 
+function mapProviderErrorToUserMessage(provider: string, code: string): string {
+  const p = provider.toLowerCase();
+  if (p === 'youtube') {
+    switch (code) {
+      case 'youtube_login_required':
+        return 'YouTube requires you to be logged in to download this video.';
+      case 'youtube_age_restricted':
+        return 'This YouTube video is age-restricted and cannot be downloaded with the current account.';
+      case 'youtube_private_or_removed':
+        return 'This YouTube video is private or has been removed.';
+      case 'youtube_region_restricted':
+        return 'This YouTube video is not available from the server region.';
+      case 'youtube_bot_check':
+        return 'YouTube is asking for additional verification. Please try again later or with a different account.';
+      case 'youtube_unavailable':
+      case 'youtube_client_failed':
+        return 'YouTube reported that this video is currently unavailable.';
+      case 'youtube_extractor_error':
+      case 'youtube_download_error':
+      case 'youtube_unknown':
+      default:
+        return 'YouTube download failed for this item.';
+    }
+  }
+
+  if (p === 'instagram') {
+    if (code === 'instagram_compatibility_failed') {
+      return 'Instagram video was downloaded but could not be converted to a compatible MP4.';
+    }
+    return 'Instagram download failed for this item.';
+  }
+
+  if (p === 'tiktok') {
+    return 'TikTok download failed for this item.';
+  }
+
+  if (code === 'source_unavailable') {
+    return 'This source is no longer available.';
+  }
+
+  return 'Download failed for this item.';
+}
+
 function toDownloadOptions(
   opts: BatchOptions | null,
   provider: string
@@ -181,14 +224,33 @@ export async function processItem(job: Job<ItemJob>) {
       });
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
-      const youtubeCodeMatch = errMsg.match(/^(youtube_(?:private_video|age_restricted|login_required|unavailable|region_restricted|bot_check|private_or_removed|client_failed|extractor_error|download_error|unknown)):/);
-      const errorMessageToStore = youtubeCodeMatch ? youtubeCodeMatch[1] : errMsg;
-      console.error(
-        JSON.stringify({ msg: 'worker_item_failed', batchId, itemId, url: item.original_url, error: errMsg })
+      const youtubeCodeMatch = errMsg.match(
+        /^(youtube_(?:private_video|age_restricted|login_required|unavailable|region_restricted|bot_check|private_or_removed|client_failed|extractor_error|download_error|unknown)):/
       );
+      const internalCode = youtubeCodeMatch ? youtubeCodeMatch[1] : 'provider_unknown_failure';
+
+      const userFacingMessage = mapProviderErrorToUserMessage(provider, internalCode);
+
+      console.error(
+        JSON.stringify({
+          msg: 'worker_item_failed',
+          batchId,
+          itemId,
+          url: item.original_url,
+          error: errMsg,
+          code: internalCode
+        })
+      );
+
       await prisma.batchItem.update({
         where: { id: itemId },
-        data: { status: 'failed', error_message: errorMessageToStore, updated_at: new Date() }
+        data: {
+          status: 'failed',
+          error_message: userFacingMessage,
+          // Preserve precise machine-readable code for future analysis / UI mapping.
+          processing_error: internalCode,
+          updated_at: new Date()
+        }
       });
     }
 

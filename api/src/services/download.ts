@@ -10,6 +10,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { config } from '../config.js';
+import { recordProviderFailure } from './providerHealth.js';
+import { ensureShortFormMp4Compatibility } from './compatibility.js';
 
 const YT_DLP = 'yt-dlp';
 const MAX_STDERR_LOG = 2000;
@@ -454,10 +456,12 @@ async function downloadYouTube(
       const classification = err instanceof YtDlpError ? classifyYoutubeError(err.stderr) : null;
 
       if (classification && !classification.retriable && !classification.authError) {
-        const code =
+        const codeRaw =
           usedFallbackClient && classification.code === 'youtube_unavailable'
             ? 'youtube_client_failed'
             : classification.code;
+        recordProviderFailure('youtube', codeRaw);
+        const code = codeRaw;
         logYoutube('youtube_metadata_failed', { itemId, url, code });
         logYoutube('youtube_download_failed', { itemId, url, code, stderrSnippet: lastStderr.slice(0, 300) });
         throw new Error(`${code}: ${lastStderr.slice(0, 500)}`);
@@ -526,6 +530,7 @@ async function downloadYouTube(
   const rawCode = classifyYoutubeError(lastStderr).code;
   const code =
     usedFallbackClient && rawCode === 'youtube_unavailable' ? 'youtube_client_failed' : rawCode;
+  recordProviderFailure('youtube', code);
   logYoutube('youtube_metadata_failed', { itemId, url, code });
   logYoutube('youtube_download_failed', { itemId, url, code, stderrSnippet: lastStderr.slice(0, 300) });
   throw new Error(`${code}: ${lastStderr.slice(0, 500)}`);
@@ -551,15 +556,44 @@ export function downloadWithYtDlp(
       : QUALITY_SELECTORS[quality];
 
   if (provider === 'youtube') {
-    return downloadYouTube(url, format, quality, outputFileName, outputFileName);
+    const ytResult = await downloadYouTube(url, format, quality, outputFileName, outputFileName);
+    // YouTube short-form content (Shorts) is generally compatible; do not run
+    // extra normalization here to keep latency low.
+    return ytResult;
   }
 
-  return runYtDlp(url, format, selector, outputFileName, true).catch((firstErr) => {
+  const baseResult = await runYtDlp(url, format, selector, outputFileName, true).catch((firstErr) => {
     if (format === 'mp3') throw firstErr;
     return runYtDlp(url, format, 'bv*+ba/b', outputFileName, true).catch(() => {
       throw firstErr;
     });
   });
+
+  // Optional short-form MP4 compatibility normalization for Instagram/TikTok only.
+  try {
+    const compat = await ensureShortFormMp4Compatibility(provider ?? 'generic', baseResult);
+    if (compat !== baseResult) {
+      console.log(
+        JSON.stringify({
+          msg: 'compatibility_transcode_succeeded',
+          provider,
+          originalExt: baseResult.ext,
+          normalizedExt: compat.ext
+        })
+      );
+    }
+    return compat;
+  } catch (compatErr) {
+    const err = compatErr instanceof Error ? compatErr : new Error(String(compatErr));
+    console.error(
+      JSON.stringify({
+        msg: 'compatibility_transcode_failed',
+        provider,
+        error: err.message
+      })
+    );
+    throw err;
+  }
 }
 
 /**
