@@ -117,6 +117,21 @@ export interface YoutubeAttempt {
   strategyName: string;
 }
 
+interface YtDlpProbeFormat {
+  format_id?: string;
+  ext?: string;
+  acodec?: string;
+  vcodec?: string;
+  height?: number | null;
+  protocol?: string;
+  filesize?: number | null;
+  tbr?: number | null;
+}
+
+interface YtDlpProbePayload {
+  formats?: YtDlpProbeFormat[];
+}
+
 interface BuildYtDlpArgsInput {
   url: string;
   format: DownloadFormat;
@@ -377,6 +392,7 @@ function getYoutubeFormatSelectors(format: DownloadFormat, quality: DownloadQual
 
 function getYoutubeAttemptKey(attempt: YoutubeAttempt): string {
   return [
+    attempt.selector,
     attempt.selectorIndex,
     attempt.cookiesMode,
     attempt.hardened ? 'h' : 'f',
@@ -462,6 +478,69 @@ export function planYoutubeNextAttempts(input: {
   }
 
   return out;
+}
+
+function targetHeightForQuality(quality: DownloadQuality): number | null {
+  if (quality === '4k') return 2160;
+  if (quality === '1080p') return 1080;
+  if (quality === '720p') return 720;
+  return null;
+}
+
+function protocolPenalty(protocol?: string): number {
+  const p = (protocol ?? '').toLowerCase();
+  if (!p) return 2;
+  if (p.includes('m3u8')) return 5;
+  if (p.includes('http') || p.includes('https')) return 0;
+  if (p.includes('dash')) return 1;
+  return 3;
+}
+
+function rankVideoFormat(fmt: YtDlpProbeFormat, quality: DownloadQuality): number {
+  const height = fmt.height ?? 0;
+  const target = targetHeightForQuality(quality);
+  const avc1Bonus = (fmt.vcodec ?? '').startsWith('avc1') ? 10_000 : 0;
+  const mp4Bonus = fmt.ext === 'mp4' ? 5_000 : 0;
+  const protocolCost = protocolPenalty(fmt.protocol) * 1_000;
+  const sizeScore = Math.trunc(fmt.tbr ?? 0);
+  const heightScore = target ? -Math.abs(height - target) : height;
+  return avc1Bonus + mp4Bonus + sizeScore + heightScore - protocolCost;
+}
+
+function rankAudioFormat(fmt: YtDlpProbeFormat): number {
+  const m4aBonus = fmt.ext === 'm4a' ? 5_000 : 0;
+  const protocolCost = protocolPenalty(fmt.protocol) * 1_000;
+  const bitrateScore = Math.trunc(fmt.tbr ?? 0);
+  return m4aBonus + bitrateScore - protocolCost;
+}
+
+export function selectYoutubeFormatSelectorFromFormats(
+  formats: YtDlpProbeFormat[],
+  format: DownloadFormat,
+  quality: DownloadQuality
+): string | null {
+  if (format === 'mp3') return null;
+
+  const usable = formats.filter((fmt) => fmt.format_id);
+  const combined = usable
+    .filter((fmt) => (fmt.vcodec ?? 'none') !== 'none' && (fmt.acodec ?? 'none') !== 'none')
+    .sort((a, b) => rankVideoFormat(b, quality) - rankVideoFormat(a, quality));
+  const videoOnly = usable
+    .filter((fmt) => (fmt.vcodec ?? 'none') !== 'none' && (fmt.acodec ?? 'none') === 'none')
+    .sort((a, b) => rankVideoFormat(b, quality) - rankVideoFormat(a, quality));
+  const audioOnly = usable
+    .filter((fmt) => (fmt.acodec ?? 'none') !== 'none' && (fmt.vcodec ?? 'none') === 'none')
+    .sort((a, b) => rankAudioFormat(b) - rankAudioFormat(a));
+
+  const bestVideo = videoOnly[0];
+  const bestAudio = audioOnly[0];
+  if (bestVideo?.format_id && bestAudio?.format_id) {
+    return `${bestVideo.format_id}+${bestAudio.format_id}`;
+  }
+
+  const bestCombined = combined[0];
+  if (bestCombined?.format_id) return bestCombined.format_id;
+  return null;
 }
 
 export function buildYtDlpArgs(input: BuildYtDlpArgsInput): string[] {
@@ -639,6 +718,74 @@ function runYtDlp(
   });
 }
 
+async function probeYoutubeFormats(
+  url: string,
+  outputFileName: string,
+  attempt: YoutubeAttempt,
+  context?: DownloadContext
+): Promise<string | null> {
+  const dir = path.join(tmpdir(), `batchtube-probe-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
+  fs.mkdirSync(dir, { recursive: true });
+  const cookiesMode = attempt.cookiesMode;
+  const args = buildYtDlpArgs({
+    url,
+    format: 'mp4',
+    qualityOrSelector: 'best',
+    outputTemplate: path.join(dir, `${outputFileName}.%(ext)s`),
+    cookiesMode,
+    options: {
+      extractorArgs: YOUTUBE_CLIENT_STRATEGIES[attempt.clientStrategyIndex] ?? YOUTUBE_CLIENT_STRATEGIES[0],
+      itemId: outputFileName,
+      batchId: context?.batchId,
+      provider: 'youtube',
+      hardened: true
+    }
+  })
+    .filter((arg, index, arr) => !(arr[index - 1] === '-o' || arg === '-o'))
+    .filter((arg, index, arr) => !(arr[index - 1] === '--merge-output-format' || arg === '--merge-output-format'))
+    .filter((arg, index, arr) => !(arr[index - 1] === '-f' || arg === '-f'));
+
+  args.unshift('--dump-single-json', '--skip-download');
+
+  const stderrChunks: string[] = [];
+  const stdoutChunks: string[] = [];
+
+  const payload = await new Promise<YtDlpProbePayload>((resolve, reject) => {
+    const proc = spawn(YT_DLP, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const timeout = setTimeout(() => {
+      try {
+        proc.kill('SIGTERM');
+      } catch {}
+      reject(new Error('format_probe_timeout'));
+    }, Math.min(config.ytDlpTimeoutMs, 25_000));
+
+    proc.stdout?.on('data', (chunk) => stdoutChunks.push(chunk.toString()));
+    proc.stderr?.on('data', (chunk) => stderrChunks.push(chunk.toString()));
+    proc.on('error', (err) => {
+      clearTimeout(timeout);
+      reject(err);
+    });
+    proc.on('close', (code) => {
+      clearTimeout(timeout);
+      if (code !== 0) {
+        reject(new YtDlpError(`yt-dlp probe exited ${code}`, sanitizeStderr(stderrChunks.join('')), code ?? -1));
+        return;
+      }
+      try {
+        resolve(JSON.parse(stdoutChunks.join('')) as YtDlpProbePayload);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }).finally(() => {
+    try {
+      fs.rmSync(dir, { recursive: true, force: true });
+    } catch {}
+  });
+
+  return payload.formats ? selectYoutubeFormatSelectorFromFormats(payload.formats, 'mp4', 'best') : null;
+}
+
 async function runYoutubeDownloadWithFallbacks(
   url: string,
   format: DownloadFormat,
@@ -674,6 +821,7 @@ async function runYoutubeDownloadWithFallbacks(
   let lastStderr = '';
   let lastError: Error | null = null;
   const startedAt = Date.now();
+  let dynamicProbeQueued = false;
 
   while (queue.length > 0 && attempts < config.ytDlpYoutubeMaxAttempts) {
     const attempt = queue.shift();
@@ -752,6 +900,39 @@ async function runYoutubeDownloadWithFallbacks(
         stderr_summary: lastStderr.slice(0, 400),
         duration_ms: durationMs
       });
+
+      const loweredStderr = lastStderr.toLowerCase();
+      if (
+        !dynamicProbeQueued &&
+        format !== 'mp3' &&
+        (loweredStderr.includes('requested format is not available') || loweredStderr.includes('no video formats found'))
+      ) {
+        try {
+          const dynamicSelector = await probeYoutubeFormats(url, outputFileName, attempt, context);
+          if (dynamicSelector) {
+            dynamicProbeQueued = true;
+            queue.unshift({
+              ...attempt,
+              selector: dynamicSelector,
+              selectorIndex: attempt.selectorIndex,
+              hardened: true,
+              strategyName: 'dynamic_format_probe'
+            });
+            continue;
+          }
+        } catch (probeError) {
+          console.warn(
+            JSON.stringify({
+              msg: 'youtube_format_probe_failed',
+              provider: 'youtube',
+              itemId,
+              batchId: batchId ?? null,
+              url,
+              error: probeError instanceof Error ? probeError.message : String(probeError)
+            })
+          );
+        }
+      }
 
       if (isYoutubePermanentCode(lastClassification.code)) break;
       if (isYoutubeAuthCode(lastClassification.code) && cookieModes.length === 0) break;

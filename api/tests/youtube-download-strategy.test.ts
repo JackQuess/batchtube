@@ -156,6 +156,23 @@ describe('yt-dlp arg builder', () => {
   });
 });
 
+describe('youtube probed selector chooser', () => {
+  it('prefers direct avc1 mp4 video plus m4a audio ids', async () => {
+    const { selectYoutubeFormatSelectorFromFormats } = await loadDownloadModule();
+    const selector = selectYoutubeFormatSelectorFromFormats(
+      [
+        { format_id: '137', ext: 'mp4', vcodec: 'avc1.640028', acodec: 'none', height: 1080, protocol: 'https' },
+        { format_id: '136', ext: 'mp4', vcodec: 'avc1.4d401f', acodec: 'none', height: 720, protocol: 'https' },
+        { format_id: '140', ext: 'm4a', vcodec: 'none', acodec: 'mp4a.40.2', protocol: 'https' }
+      ],
+      'mp4',
+      '1080p'
+    );
+
+    expect(selector).toBe('137+140');
+  });
+});
+
 describe('generic provider classifier', () => {
   it('classifies unsupported URL as permanent unsupported', async () => {
     const { classifyGenericProviderError } = await loadDownloadModule();
