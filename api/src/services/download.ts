@@ -410,7 +410,10 @@ async function downloadYouTube(
       const classification = err instanceof YtDlpError ? classifyYoutubeError(err.stderr) : null;
 
       if (classification && !classification.retriable && !classification.authError) {
-        const code = classification.code;
+        const code =
+          usedFallbackClient && classification.code === 'youtube_unavailable'
+            ? 'youtube_client_failed'
+            : classification.code;
         logYoutube('youtube_metadata_failed', { itemId, url, code });
         logYoutube('youtube_download_failed', { itemId, url, code, stderrSnippet: lastStderr.slice(0, 300) });
         throw new Error(`${code}: ${lastStderr.slice(0, 500)}`);
