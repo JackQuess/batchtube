@@ -62,6 +62,32 @@ export const config = {
   },
   /** Optional: path to cookies.txt for yt-dlp (age-restricted / login-required content). */
   ytDlpCookiesPath: process.env.YT_DLP_COOKIES_FILE ?? '',
+  /** Optional: import cookies directly from browser profile on worker host (e.g. chrome, firefox). */
+  ytDlpCookiesFromBrowser: process.env.YT_DLP_COOKIES_FROM_BROWSER ?? '',
+  /** Optional: browser profile passed to --cookies-from-browser (e.g. Default). */
+  ytDlpCookiesFromBrowserProfile: process.env.YT_DLP_COOKIES_FROM_BROWSER_PROFILE ?? '',
+  /** yt-dlp command hard timeout in milliseconds (per attempt). */
+  ytDlpTimeoutMs: Number(process.env.YT_DLP_TIMEOUT_MS ?? 300000),
+  /** yt-dlp socket timeout in seconds. */
+  ytDlpSocketTimeoutSec: Number(process.env.YT_DLP_SOCKET_TIMEOUT_SEC ?? 20),
+  /** Fast-mode yt-dlp retries (first attempt path). */
+  ytDlpRetriesFast: Number(process.env.YT_DLP_RETRIES_FAST ?? 1),
+  /** Safe-mode yt-dlp retries (fallback path). */
+  ytDlpRetriesSafe: Number(process.env.YT_DLP_RETRIES_SAFE ?? 3),
+  /** Fast-mode fragment retries. */
+  ytDlpFragmentRetriesFast: Number(process.env.YT_DLP_FRAGMENT_RETRIES_FAST ?? 1),
+  /** Safe-mode fragment retries. */
+  ytDlpFragmentRetriesSafe: Number(process.env.YT_DLP_FRAGMENT_RETRIES_SAFE ?? 3),
+  /** Fast-mode extractor retries. */
+  ytDlpExtractorRetriesFast: Number(process.env.YT_DLP_EXTRACTOR_RETRIES_FAST ?? 1),
+  /** Safe-mode extractor retries. */
+  ytDlpExtractorRetriesSafe: Number(process.env.YT_DLP_EXTRACTOR_RETRIES_SAFE ?? 3),
+  /** Maximum YouTube attempts across all fallback modes. */
+  ytDlpYoutubeMaxAttempts: Number(process.env.YT_DLP_YOUTUBE_MAX_ATTEMPTS ?? 10),
+  /** Exponential backoff base for YouTube fallback attempts. */
+  ytDlpYoutubeBackoffBaseMs: Number(process.env.YT_DLP_YOUTUBE_BACKOFF_BASE_MS ?? 1000),
+  /** Minimum recommended yt-dlp version date (YYYY.MM.DD). */
+  ytDlpMinVersionDate: process.env.YT_DLP_MIN_VERSION_DATE ?? '2025.01.01',
   /** Optional: comma-separated user UUIDs that are admins (API key + Studio bypass plan restrictions). */
   get adminUserIds(): string[] {
     return (process.env.ADMIN_USER_IDS ?? '')

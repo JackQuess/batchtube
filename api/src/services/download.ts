@@ -1,7 +1,7 @@
 /**
  * DOWNLOAD ENGINE LAYER
  * Actual file download only (after user confirms). Uses yt-dlp, retries, format/cookie fallback, ffmpeg, then storage.
- * Success: returns { filePath, mimeType, ext }. Failure: throws with message that may start with ProviderErrorCode (e.g. youtube_age_restricted).
+ * Success: returns { filePath, mimeType, ext }. Failure: throws with message that may start with ProviderErrorCode.
  * See types/providerEngine.ts ProviderDownloadResult for the standard contract.
  */
 
@@ -10,11 +10,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { config } from '../config.js';
-import { recordProviderFailure } from './providerHealth.js';
+import { recordProviderFailure, recordProviderSuccess } from './providerHealth.js';
+import type { ProviderName } from './providerHealth.js';
 import { ensureShortFormMp4Compatibility } from './compatibility.js';
 
 const YT_DLP = 'yt-dlp';
 const MAX_STDERR_LOG = 2000;
+const YTDLP_VERSION_TIMEOUT_MS = 5000;
 
 /** Thrown when yt-dlp exits non-zero; carries stderr for error classification. */
 export class YtDlpError extends Error {
@@ -28,24 +30,32 @@ export class YtDlpError extends Error {
   }
 }
 
-/** Optional options for runYtDlp (YouTube: extractor args + diagnostics). */
-export interface RunYtDlpOptions {
-  /** e.g. "youtube:player_client=web,web_safari,tv_embedded" */
-  extractorArgs?: string;
-  /** For diagnostics: primary = first client strategy, fallback = retry with alternate clients */
-  attemptType?: 'primary' | 'fallback';
-  /** 0-based index of client strategy (for logging). */
-  strategyIndex?: number;
-  itemId?: string;
-  url?: string;
-}
-
 export type DownloadFormat = 'mp4' | 'mp3' | 'mkv';
 export type DownloadQuality = 'best' | '4k' | '1080p' | '720p';
+type YtDlpCookiesMode = 'none' | 'file' | 'browser';
 
 export interface DownloadOptions {
   format?: DownloadFormat;
   quality?: DownloadQuality;
+}
+
+export interface DownloadContext {
+  batchId?: string;
+}
+
+/** Optional options for runYtDlp (YouTube: extractor args + diagnostics). */
+export interface RunYtDlpOptions {
+  extractorArgs?: string;
+  extraHeaders?: Array<{ key: string; value: string }>;
+  strategyName?: string;
+  strategyIndex?: number;
+  attempt?: number;
+  itemId?: string;
+  batchId?: string;
+  provider?: string;
+  cookiesMode?: YtDlpCookiesMode;
+  hardened?: boolean;
+  timeoutMs?: number;
 }
 
 const QUALITY_SELECTORS: Record<DownloadQuality, string> = {
@@ -63,256 +73,16 @@ const QUALITY_SELECTORS_MP4_QUICKTIME: Record<DownloadQuality, string> = {
   '720p': 'bestvideo[vcodec^=avc1][height<=720]+bestaudio/best/bestvideo[height<=720]+bestaudio/best'
 };
 
-/** YouTube-specific: errors that suggest retrying with cookies. */
-const YOUTUBE_AUTH_ERROR_PATTERNS = [
-  'Sign in to confirm your age',
-  'confirm your age',
-  'This video may be inappropriate',
-  'HTTP Error 403',
-  'Login required',
-  'login to view',
-  'Video unavailable',
-  'video is unavailable'
-];
-
-/** YouTube-specific: do not retry (permanent failure). */
-const YOUTUBE_NON_RETRIABLE_PATTERNS = [
-  'Private video',
-  'private video',
-  'Video unavailable',
-  'video is unavailable',
-  'unavailable'
-];
-
-/** YouTube-specific: transient/retriable (network, extractor, temporary HTTP). */
-const YOUTUBE_RETRIABLE_PATTERNS = [
-  'HTTP Error 5',
-  'ExtractorError',
-  'extractor',
-  'network',
-  'Network',
-  'timeout',
-  'Timeout',
-  'ETIMEDOUT',
-  'ECONNRESET',
-  'ENOTFOUND',
-  'EAI_AGAIN'
-];
-
-export type YoutubeErrorCode =
-  | 'youtube_login_required'
-  | 'youtube_unavailable'
-  | 'youtube_region_restricted'
-  | 'youtube_bot_check'
-  | 'youtube_private_or_removed'
-  | 'youtube_client_failed'
-  | 'youtube_private_video'
-  | 'youtube_age_restricted'
-  | 'youtube_extractor_error'
-  | 'youtube_download_error'
-  | 'youtube_unknown';
-
-/**
- * Classify yt-dlp DOWNLOAD stderr into a single code. Used only in the Download Engine path.
- * Only classify youtube_age_restricted when the error explicitly signals age restriction;
- * generic "Sign in to confirm" (without "your age") is login_required, not age_restricted.
- * Returns clientRetriable for youtube_unavailable so caller can retry with alternate player_client.
- */
-export function classifyYoutubeError(stderr: string): {
-  code: YoutubeErrorCode;
-  retriable: boolean;
-  authError: boolean;
-  /** True when error may be resolved by trying a different player_client (e.g. in datacenter). */
-  clientRetriable?: boolean;
-} {
-  const s = (stderr || '').toLowerCase();
-  const raw = stderr || '';
-
-  if (raw.includes('Private video') || raw.includes('private video') || s.includes('private')) {
-    return { code: 'youtube_private_or_removed', retriable: false, authError: false };
-  }
-  // Explicit age restriction only — do not map generic "Sign in to confirm" to age_restricted
-  if (
-    s.includes('sign in to confirm your age') ||
-    s.includes('confirm your age') ||
-    s.includes('age-restricted') ||
-    s.includes('this video may be inappropriate') ||
-    (s.includes('inappropriate') && (s.includes('age') || s.includes('confirm')))
-  ) {
-    return { code: 'youtube_age_restricted', retriable: false, authError: true };
-  }
-  if (s.includes('login required') || s.includes('login to view') || s.includes('sign in to confirm')) {
-    return { code: 'youtube_login_required', retriable: false, authError: true };
-  }
-  if (s.includes('not available in your country') || s.includes('region') && s.includes('restrict')) {
-    return { code: 'youtube_region_restricted', retriable: false, authError: false };
-  }
-  if (
-    s.includes('verify you are human') ||
-    s.includes('bot') ||
-    s.includes('automation') ||
-    s.includes('captcha') ||
-    raw.includes('Pardon the Interruption')
-  ) {
-    return { code: 'youtube_bot_check', retriable: true, authError: false };
-  }
-  if (s.includes('video unavailable') || s.includes('unavailable')) {
-    return {
-      code: 'youtube_unavailable',
-      retriable: false,
-      authError: false,
-      clientRetriable: true
-    };
-  }
-  if (s.includes('extractorerror') || s.includes('extractor') || s.includes('player_client')) {
-    return { code: 'youtube_extractor_error', retriable: true, authError: false, clientRetriable: true };
-  }
-  if (
-    s.includes('http error 5') ||
-    s.includes('etimedout') ||
-    s.includes('econnreset') ||
-    s.includes('enotfound') ||
-    s.includes('eai_again') ||
-    s.includes('network') ||
-    s.includes('timeout')
-  ) {
-    return { code: 'youtube_download_error', retriable: true, authError: false };
-  }
-  if (raw.includes('HTTP Error 403')) {
-    return { code: 'youtube_login_required', retriable: false, authError: true };
-  }
-
-  return { code: 'youtube_unknown', retriable: true, authError: false };
-}
-
-/** YouTube player_client strategies tried in order on "Video unavailable" (datacenter hardening). First is safer for bot detection (web_safari first). */
 const YOUTUBE_CLIENT_STRATEGIES: readonly string[] = [
   'youtube:player_client=web_safari,web,tv',
   'youtube:player_client=web,web_safari,tv_embedded',
-  'youtube:player_client=android,tv_embedded,web',
-  'youtube:player_client=ios,tv_embedded,web',
-  'youtube:player_client=mweb,tv_embedded,web'
+  'youtube:player_client=android,tv_embedded,web'
 ];
-const YOUTUBE_CLIENT_STRATEGY_DELAY_MS = 1500;
 
-/** Browser-like User-Agent for YouTube to reduce bot detection (Chrome on macOS). */
 const YOUTUBE_USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 
-/** Primary (first) strategy - keep for backward-compat log names. */
-const YOUTUBE_EXTRACTOR_ARGS_PRIMARY = YOUTUBE_CLIENT_STRATEGIES[0]!;
-/** Fallback strategy - used when we only try one fallback (e.g. cookie retry). */
-const YOUTUBE_EXTRACTOR_ARGS_FALLBACK = YOUTUBE_CLIENT_STRATEGIES[1]!;
-
-function runYtDlp(
-  url: string,
-  format: DownloadFormat,
-  qualityOrSelector: string,
-  outputFileName: string,
-  useCookies: boolean,
-  options?: RunYtDlpOptions
-): Promise<{ filePath: string; mimeType: string; ext: string }> {
-  const dir = path.join(tmpdir(), `batchtube-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
-  fs.mkdirSync(dir, { recursive: true });
-  const outputTemplate = path.join(dir, `${outputFileName}.%(ext)s`);
-
-  const args: string[] = [
-    '--no-playlist',
-    '--no-warnings',
-    '-o', outputTemplate,
-    '--no-check-certificate'
-  ];
-  const cookiesPath = config.ytDlpCookiesPath?.trim();
-  if (useCookies && cookiesPath && fs.existsSync(cookiesPath)) {
-    args.push('--cookies', cookiesPath);
-  }
-  const isYoutubeInvocation = Boolean(options?.extractorArgs);
-  if (isYoutubeInvocation) {
-    args.push('--impersonate', 'chrome');
-    args.push('--add-header', `User-Agent: ${YOUTUBE_USER_AGENT}`);
-  }
-  if (options?.extractorArgs) {
-    args.push('--extractor-args', options.extractorArgs);
-  }
-  if (format === 'mp3') {
-    args.push('--extract-audio', '--audio-format', 'mp3', '--audio-quality', '0');
-  } else {
-    args.push('-f', qualityOrSelector);
-    if (format === 'mp4') {
-      args.push('--merge-output-format', 'mp4');
-    } else if (format === 'mkv') {
-      args.push('--merge-output-format', 'mkv');
-    }
-  }
-  args.push(url);
-
-  // Diagnostics for YouTube (datacenter debugging)
-  if (options?.itemId != null || options?.url) {
-    const safeArgs = args.map((a) => (a === cookiesPath ? '<cookies>' : a));
-    const sanitizedCommand =
-      YT_DLP +
-      ' ' +
-      safeArgs.map((a) => (a.startsWith('-') ? a : a.includes(' ') ? `"${a}"` : a)).join(' ');
-    let cookieSize: number | null = null;
-    if (cookiesPath && fs.existsSync(cookiesPath)) {
-      try {
-        cookieSize = fs.statSync(cookiesPath).size;
-      } catch { /* ignore */ }
-    }
-    logYoutube('youtube_ytdlp_run', {
-      itemId: options.itemId,
-      url: options.url,
-      attemptType: options.attemptType ?? 'primary',
-      strategyIndex: options.strategyIndex,
-      extractorArgs: options.extractorArgs ?? null,
-      cookiePath: cookiesPath || null,
-      cookieSizeBytes: cookieSize,
-      impersonate: isYoutubeInvocation ? 'chrome' : null,
-      userAgent: isYoutubeInvocation ? YOUTUBE_USER_AGENT : null,
-      ytdlpArgs: safeArgs,
-      ytdlpCommandSanitized: sanitizedCommand
-    });
-  }
-
-  return new Promise((resolve, reject) => {
-    const proc = spawn(YT_DLP, args, {
-      stdio: ['ignore', 'pipe', 'pipe']
-    });
-    let stderr = '';
-    proc.stderr?.on('data', (chunk) => { stderr += chunk.toString(); });
-    proc.on('error', (err) => {
-      try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
-      reject(new Error(`yt-dlp spawn failed: ${err.message}. Is yt-dlp installed?`));
-    });
-    proc.on('close', (code) => {
-      if (code !== 0) {
-        try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
-        const errSnippet = stderr.length > MAX_STDERR_LOG ? stderr.slice(-MAX_STDERR_LOG) : stderr;
-        reject(new YtDlpError(`yt-dlp exited ${code}`, errSnippet.trim() || 'no stderr', code ?? -1));
-        return;
-      }
-      const files = fs.readdirSync(dir);
-      const outFile = files.find((f) => f.startsWith(outputFileName));
-      if (!outFile) {
-        try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
-        reject(new Error('yt-dlp did not produce an output file'));
-        return;
-      }
-      const filePath = path.join(dir, outFile);
-      const ext = path.extname(outFile).slice(1).toLowerCase();
-      const mimeType = ext === 'mp4' || ext === 'm4a' ? 'video/mp4' : ext === 'mkv' ? 'video/x-matroska' : ext === 'mp3' ? 'audio/mpeg' : 'application/octet-stream';
-      resolve({ filePath, mimeType, ext });
-    });
-  });
-}
-
-const YOUTUBE_VIDEO_FORMAT_FALLBACK = [
-  'bestvideo+bestaudio/best',
-  'best',
-  'bestaudio'
-];
-
-/** For MP4 output, try H.264 first so QuickTime Player can play the file. */
+const YOUTUBE_VIDEO_FORMAT_FALLBACK = ['bestvideo+bestaudio/best', 'best', 'bestaudio'];
 const YOUTUBE_VIDEO_FORMAT_FALLBACK_MP4 = [
   'bestvideo[vcodec^=avc1]+bestaudio/best',
   'bestvideo+bestaudio/best',
@@ -320,335 +90,882 @@ const YOUTUBE_VIDEO_FORMAT_FALLBACK_MP4 = [
   'bestaudio'
 ];
 
-const YOUTUBE_RETRY_ATTEMPTS = 2;
-const YOUTUBE_BACKOFF_BASE_MS = 1000;
+export type YoutubeErrorCode =
+  | 'youtube_transient'
+  | 'youtube_antibot'
+  | 'youtube_login_required'
+  | 'youtube_private'
+  | 'youtube_geo_restricted'
+  | 'youtube_cookies_required'
+  | 'youtube_rate_limited'
+  | 'youtube_extractor_failure'
+  | 'youtube_unknown';
+
+export interface YoutubeErrorClassification {
+  code: YoutubeErrorCode;
+  retriable: boolean;
+  authError: boolean;
+  clientRetriable: boolean;
+}
+
+export interface YoutubeAttempt {
+  selector: string;
+  selectorIndex: number;
+  cookiesMode: YtDlpCookiesMode;
+  hardened: boolean;
+  clientStrategyIndex: number;
+  strategyName: string;
+}
+
+interface BuildYtDlpArgsInput {
+  url: string;
+  format: DownloadFormat;
+  qualityOrSelector: string;
+  outputTemplate: string;
+  cookiesMode: YtDlpCookiesMode;
+  options?: RunYtDlpOptions;
+}
+
+let ytDlpVersionProbe: Promise<void> | null = null;
+
+export type GenericProviderErrorCode =
+  | 'provider_rate_limited'
+  | 'provider_access_denied'
+  | 'provider_auth_required'
+  | 'provider_geo_restricted'
+  | 'provider_source_unavailable'
+  | 'provider_unsupported'
+  | 'provider_transient'
+  | 'provider_extractor_failure'
+  | 'provider_unknown_failure';
 
 function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function logYoutube(
   msg: string,
-  extra: Record<string, unknown> & { itemId?: string; url?: string }
+  extra: Record<string, unknown> & { itemId?: string; url?: string; batchId?: string | null }
 ): void {
   console.log(JSON.stringify({ msg, ...extra }));
 }
 
-/**
- * YouTube SAFE PATH — used only after the fast path fails with a retriable/client-related error.
- * Tries multiple player_client strategies, format fallbacks, cookie retry and transient retries.
- * This is intentionally more expensive; common cases should go through the fast path only.
- */
-async function downloadYouTubeSafe(
-  url: string,
-  format: DownloadFormat,
-  quality: DownloadQuality,
-  outputFileName: string,
-  itemId: string
-): Promise<{ filePath: string; mimeType: string; ext: string }> {
-  const cookiesPath = config.ytDlpCookiesPath?.trim();
-  const cookieFileExists = Boolean(cookiesPath && fs.existsSync(cookiesPath));
-  const useCookiesFirst = cookieFileExists;
-
-  if (cookieFileExists) {
-    try {
-      const stat = fs.statSync(cookiesPath);
-      logYoutube('youtube_cookie_file_used', {
-        itemId,
-        url,
-        cookiesPath,
-        sizeBytes: stat.size,
-        hint: 'Using cookies on first attempt (same as local yt-dlp --cookies).'
-      });
-    } catch {
-      logYoutube('youtube_cookie_file_used', { itemId, url, cookiesPath, hint: 'Cookie file exists.' });
-    }
-  }
-
-  logYoutube('youtube_metadata_start', { itemId, url, format, quality });
-  logYoutube('youtube_download_start', { itemId, url, format, quality });
-
-  const ytOpts = (extractorArgs: string, attemptType: 'primary' | 'fallback', strategyIndex: number) => ({
-    extractorArgs,
-    attemptType,
-    strategyIndex,
-    itemId,
-    url
-  });
-
-  const formatChain =
-    format === 'mp3'
-      ? ['']
-      : format === 'mp4'
-        ? YOUTUBE_VIDEO_FORMAT_FALLBACK_MP4
-        : YOUTUBE_VIDEO_FORMAT_FALLBACK;
-
-  let lastError: Error | null = null;
-  let lastStderr = '';
-  let usedFallbackClient = false;
-
-  for (let fmtIndex = 0; fmtIndex < formatChain.length; fmtIndex++) {
-    const formatSelector = formatChain[fmtIndex];
-    if (fmtIndex > 0) {
-      logYoutube('youtube_download_format_fallback', {
-        itemId,
-        url,
-        attemptFormat: formatSelector,
-        previousError: lastStderr.slice(0, 500)
-      });
-    }
-
-    // Try each player_client strategy in order; on "Video unavailable" try next with short delay.
-    try {
-      let result: { filePath: string; mimeType: string; ext: string } | null = null;
-      let lastStrategyIndex = -1;
-
-      const tryRun = async (strategyIndex: number) => {
-        const extractorArgs = YOUTUBE_CLIENT_STRATEGIES[strategyIndex]!;
-        const attemptType = strategyIndex === 0 ? 'primary' : 'fallback';
-        return runYtDlp(url, format, formatSelector, outputFileName, useCookiesFirst, ytOpts(extractorArgs, attemptType, strategyIndex));
-      };
-
-      for (let s = 0; s < YOUTUBE_CLIENT_STRATEGIES.length; s++) {
-        if (s > 0) {
-          usedFallbackClient = true;
-          await sleep(YOUTUBE_CLIENT_STRATEGY_DELAY_MS);
-          logYoutube('youtube_client_fallback_attempt', {
-            itemId,
-            url,
-            strategyIndex: s,
-            extractorArgs: YOUTUBE_CLIENT_STRATEGIES[s],
-            previousCode: 'youtube_unavailable'
-          });
-        }
-        try {
-          result = await tryRun(s);
-          lastStrategyIndex = s;
-          usedFallbackClient = s > 0;
-          break;
-        } catch (err) {
-          lastError = err instanceof Error ? err : new Error(String(err));
-          lastStderr = err instanceof YtDlpError ? err.stderr : lastError.message;
-          const classification = err instanceof YtDlpError ? classifyYoutubeError(err.stderr) : null;
-          if (classification?.clientRetriable && s < YOUTUBE_CLIENT_STRATEGIES.length - 1) {
-            continue;
-          }
-          throw err;
-        }
-      }
-
-      if (result) {
-        logYoutube('youtube_metadata_success', { itemId, url });
-        logYoutube('youtube_download_success', {
-          itemId,
-          url,
-          formatSelector,
-          usedCookies: useCookiesFirst,
-          usedFallbackClient,
-          strategyIndex: lastStrategyIndex
-        });
-        return result;
-      }
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
-      lastStderr = err instanceof YtDlpError ? err.stderr : lastError.message;
-      const classification = err instanceof YtDlpError ? classifyYoutubeError(err.stderr) : null;
-
-      if (classification && !classification.retriable && !classification.authError) {
-        const codeRaw =
-          usedFallbackClient && classification.code === 'youtube_unavailable'
-            ? 'youtube_client_failed'
-            : classification.code;
-        recordProviderFailure('youtube', codeRaw);
-        const code = codeRaw;
-        logYoutube('youtube_metadata_failed', { itemId, url, code });
-        logYoutube('youtube_download_failed', { itemId, url, code, stderrSnippet: lastStderr.slice(0, 300) });
-        throw new Error(`${code}: ${lastStderr.slice(0, 500)}`);
-      }
-
-      if (classification?.authError && cookieFileExists) {
-        logYoutube('youtube_download_cookie_retry', { itemId, url, cookiesPath });
-        try {
-          const result = await runYtDlp(url, format, formatSelector, outputFileName, true, ytOpts(YOUTUBE_EXTRACTOR_ARGS_PRIMARY, 'primary', 0));
-          logYoutube('youtube_metadata_success', { itemId, url });
-          logYoutube('youtube_download_success', { itemId, url, formatSelector, usedCookies: true });
-          return result;
-        } catch (cookieErr) {
-          lastError = cookieErr instanceof Error ? cookieErr : new Error(String(cookieErr));
-          lastStderr = cookieErr instanceof YtDlpError ? cookieErr.stderr : lastError.message;
-          const cookieClass = cookieErr instanceof YtDlpError ? classifyYoutubeError(cookieErr.stderr) : null;
-          if (cookieClass && !cookieClass.retriable) {
-            logYoutube('youtube_metadata_failed', { itemId, url, code: cookieClass.code });
-            logYoutube('youtube_download_failed', {
-              itemId,
-              url,
-              code: cookieClass.code,
-              stderrSnippet: lastStderr.slice(0, 300)
-            });
-            throw new Error(`${cookieClass.code}: ${lastStderr.slice(0, 500)}`);
-          }
-        }
-      }
-
-      if (classification?.retriable) {
-        for (let r = 0; r < YOUTUBE_RETRY_ATTEMPTS; r++) {
-          const delay = YOUTUBE_BACKOFF_BASE_MS * Math.pow(2, r);
-          logYoutube('youtube_download_retry', {
-            itemId,
-            url,
-            attempt: r + 1,
-            maxAttempts: YOUTUBE_RETRY_ATTEMPTS,
-            delayMs: delay
-          });
-          await sleep(delay);
-          try {
-            const result = await runYtDlp(url, format, formatSelector, outputFileName, cookieFileExists, ytOpts(YOUTUBE_EXTRACTOR_ARGS_PRIMARY, 'primary', 0));
-            logYoutube('youtube_metadata_success', { itemId, url });
-            logYoutube('youtube_download_success', { itemId, url, formatSelector, afterRetry: true });
-            return result;
-          } catch (retryErr) {
-            lastError = retryErr instanceof Error ? retryErr : new Error(String(retryErr));
-            lastStderr = retryErr instanceof YtDlpError ? retryErr.stderr : lastError.message;
-            const retryClass = retryErr instanceof YtDlpError ? classifyYoutubeError(retryErr.stderr) : null;
-            if (retryClass && !retryClass.retriable) {
-              logYoutube('youtube_metadata_failed', { itemId, url, code: retryClass.code });
-              logYoutube('youtube_download_failed', {
-                itemId,
-                url,
-                code: retryClass.code,
-                stderrSnippet: lastStderr.slice(0, 300)
-              });
-              throw new Error(`${retryClass.code}: ${lastStderr.slice(0, 500)}`);
-            }
-          }
-        }
-      }
-    }
-  }
-
-  const rawCode = classifyYoutubeError(lastStderr).code;
-  const code =
-    usedFallbackClient && rawCode === 'youtube_unavailable' ? 'youtube_client_failed' : rawCode;
-  recordProviderFailure('youtube', code);
-  logYoutube('youtube_metadata_failed', { itemId, url, code });
-  logYoutube('youtube_download_failed', { itemId, url, code, stderrSnippet: lastStderr.slice(0, 300) });
-  throw new Error(`${code}: ${lastStderr.slice(0, 500)}`);
+function sanitizeStderr(stderr: string): string {
+  const trimmed = stderr.trim();
+  return trimmed.length > MAX_STDERR_LOG ? trimmed.slice(-MAX_STDERR_LOG) : trimmed;
 }
 
-/**
- * YouTube FAST PATH — single client strategy, no format or client fallbacks.
- * Optimized for the common case: public/non-problematic videos.
- * Safe path is only invoked when this fails with a retriable/client-related error.
- */
-async function downloadYouTubeFast(
+function toHealthProvider(provider?: string): ProviderName {
+  const p = (provider ?? '').toLowerCase();
+  if (p === 'youtube' || p === 'instagram' || p === 'tiktok' || p === 'vimeo' || p === 'direct') {
+    return p;
+  }
+  return 'generic';
+}
+
+function isYoutubeRetriableCode(code: YoutubeErrorCode): boolean {
+  return (
+    code === 'youtube_transient' ||
+    code === 'youtube_antibot' ||
+    code === 'youtube_rate_limited' ||
+    code === 'youtube_extractor_failure' ||
+    code === 'youtube_unknown'
+  );
+}
+
+function isYoutubeAuthCode(code: YoutubeErrorCode): boolean {
+  return code === 'youtube_login_required' || code === 'youtube_cookies_required';
+}
+
+function isYoutubePermanentCode(code: YoutubeErrorCode): boolean {
+  return code === 'youtube_private' || code === 'youtube_geo_restricted';
+}
+
+function parseVersionDate(rawVersion: string): number | null {
+  const cleaned = rawVersion.trim();
+  const m = cleaned.match(/^(\d{4})\.(\d{2})\.(\d{2})/);
+  if (!m) return null;
+  return Number(`${m[1]}${m[2]}${m[3]}`);
+}
+
+async function ensureYtDlpVersionLogged(): Promise<void> {
+  if (ytDlpVersionProbe) return ytDlpVersionProbe;
+
+  ytDlpVersionProbe = new Promise((resolve) => {
+    const proc = spawn(YT_DLP, ['--version'], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+
+    const timeout = setTimeout(() => {
+      try {
+        proc.kill('SIGTERM');
+      } catch {
+        // ignore
+      }
+      if (!settled) {
+        settled = true;
+        console.warn(JSON.stringify({ msg: 'ytdlp_version_check_timeout', timeout_ms: YTDLP_VERSION_TIMEOUT_MS }));
+        resolve();
+      }
+    }, YTDLP_VERSION_TIMEOUT_MS);
+
+    proc.stdout?.on('data', (chunk) => {
+      stdout += chunk.toString();
+    });
+    proc.stderr?.on('data', (chunk) => {
+      stderr += chunk.toString();
+    });
+
+    proc.on('error', (err) => {
+      clearTimeout(timeout);
+      if (settled) return;
+      settled = true;
+      console.warn(JSON.stringify({ msg: 'ytdlp_version_check_failed', error: err.message }));
+      resolve();
+    });
+
+    proc.on('close', (code) => {
+      clearTimeout(timeout);
+      if (settled) return;
+      settled = true;
+      const version = stdout.trim();
+      const dateNum = parseVersionDate(version);
+      const minDateNum = parseVersionDate(config.ytDlpMinVersionDate);
+
+      console.log(
+        JSON.stringify({
+          msg: 'ytdlp_version_detected',
+          version: version || null,
+          exitCode: code ?? null,
+          stderr: stderr.trim().slice(0, 200) || null
+        })
+      );
+
+      if (dateNum != null && minDateNum != null && dateNum < minDateNum) {
+        console.warn(
+          JSON.stringify({
+            msg: 'ytdlp_version_outdated',
+            version,
+            minRecommended: config.ytDlpMinVersionDate
+          })
+        );
+      }
+      resolve();
+    });
+  });
+
+  return ytDlpVersionProbe;
+}
+
+function resolveCookieModes(): YtDlpCookiesMode[] {
+  const modes: YtDlpCookiesMode[] = [];
+  const filePath = config.ytDlpCookiesPath.trim();
+  if (filePath && fs.existsSync(filePath)) modes.push('file');
+  if (config.ytDlpCookiesFromBrowser.trim()) modes.push('browser');
+  return modes;
+}
+
+function cookiesModeIsAvailable(mode: YtDlpCookiesMode): boolean {
+  if (mode === 'none') return true;
+  if (mode === 'file') {
+    const filePath = config.ytDlpCookiesPath.trim();
+    return Boolean(filePath && fs.existsSync(filePath));
+  }
+  return Boolean(config.ytDlpCookiesFromBrowser.trim());
+}
+
+export function classifyYoutubeError(stderr: string): YoutubeErrorClassification {
+  const raw = stderr || '';
+  const s = raw.toLowerCase();
+
+  if (
+    s.includes('private video') ||
+    s.includes('this video is private') ||
+    s.includes('has been removed') ||
+    (s.includes('video unavailable') && (s.includes('private') || s.includes('removed')))
+  ) {
+    return { code: 'youtube_private', retriable: false, authError: false, clientRetriable: false };
+  }
+
+  if (
+    s.includes('not available in your country') ||
+    (s.includes('region') && s.includes('restrict')) ||
+    s.includes('geo-restricted')
+  ) {
+    return { code: 'youtube_geo_restricted', retriable: false, authError: false, clientRetriable: false };
+  }
+
+  if (
+    s.includes('sign in to confirm your age') ||
+    s.includes('confirm your age') ||
+    s.includes('age-restricted')
+  ) {
+    return { code: 'youtube_cookies_required', retriable: false, authError: true, clientRetriable: false };
+  }
+
+  if (
+    s.includes('login required') ||
+    s.includes('sign in to confirm') ||
+    s.includes('http error 403') ||
+    s.includes('members-only content')
+  ) {
+    return { code: 'youtube_login_required', retriable: false, authError: true, clientRetriable: false };
+  }
+
+  if (
+    s.includes('too many requests') ||
+    s.includes('rate limit') ||
+    s.includes('http error 429') ||
+    s.includes('temporarily blocked')
+  ) {
+    return { code: 'youtube_rate_limited', retriable: true, authError: false, clientRetriable: true };
+  }
+
+  if (
+    s.includes('the page needs to be reloaded') ||
+    s.includes('verify you are human') ||
+    s.includes('captcha') ||
+    s.includes('bot') ||
+    s.includes('automation') ||
+    raw.includes('Pardon the Interruption')
+  ) {
+    return { code: 'youtube_antibot', retriable: true, authError: false, clientRetriable: true };
+  }
+
+  if (
+    s.includes('extractorerror') ||
+    s.includes('unable to extract') ||
+    s.includes('nsig extraction failed') ||
+    s.includes('player_response') ||
+    s.includes('signature extraction failed') ||
+    s.includes('video unavailable')
+  ) {
+    return { code: 'youtube_extractor_failure', retriable: true, authError: false, clientRetriable: true };
+  }
+
+  if (
+    s.includes('http error 5') ||
+    s.includes('network') ||
+    s.includes('etimedout') ||
+    s.includes('econnreset') ||
+    s.includes('enotfound') ||
+    s.includes('eai_again') ||
+    s.includes('timeout')
+  ) {
+    return { code: 'youtube_transient', retriable: true, authError: false, clientRetriable: false };
+  }
+
+  return { code: 'youtube_unknown', retriable: true, authError: false, clientRetriable: false };
+}
+
+function getYoutubeFormatSelectors(format: DownloadFormat, quality: DownloadQuality): string[] {
+  if (format === 'mp3') return [''];
+  const primary = format === 'mp4' ? QUALITY_SELECTORS_MP4_QUICKTIME[quality] : QUALITY_SELECTORS[quality];
+  const fallback = format === 'mp4' ? YOUTUBE_VIDEO_FORMAT_FALLBACK_MP4 : YOUTUBE_VIDEO_FORMAT_FALLBACK;
+  return [...new Set([primary, ...fallback])];
+}
+
+function getYoutubeAttemptKey(attempt: YoutubeAttempt): string {
+  return [
+    attempt.selectorIndex,
+    attempt.cookiesMode,
+    attempt.hardened ? 'h' : 'f',
+    attempt.clientStrategyIndex
+  ].join(':');
+}
+
+export function planYoutubeNextAttempts(input: {
+  failedAttempt: YoutubeAttempt;
+  classification: YoutubeErrorClassification;
+  formatSelectorCount: number;
+  availableCookieModes: YtDlpCookiesMode[];
+}): YoutubeAttempt[] {
+  const { failedAttempt, classification, formatSelectorCount, availableCookieModes } = input;
+  const out: YoutubeAttempt[] = [];
+  const push = (attempt: YoutubeAttempt) => out.push(attempt);
+
+  if (isYoutubePermanentCode(classification.code)) return out;
+
+  if (isYoutubeAuthCode(classification.code)) {
+    if (failedAttempt.cookiesMode === 'none') {
+      for (const cookieMode of availableCookieModes) {
+        push({
+          ...failedAttempt,
+          cookiesMode: cookieMode,
+          hardened: true,
+          clientStrategyIndex: 0,
+          strategyName: `auth_cookie_${cookieMode}`
+        });
+      }
+    }
+    return out;
+  }
+
+  if (!classification.retriable) return out;
+
+  if (!failedAttempt.hardened) {
+    push({
+      ...failedAttempt,
+      hardened: true,
+      strategyName: `${failedAttempt.strategyName}_hardened`
+    });
+  }
+
+  if (classification.clientRetriable && failedAttempt.clientStrategyIndex === 0) {
+    push({
+      ...failedAttempt,
+      hardened: true,
+      clientStrategyIndex: 1,
+      strategyName: `${failedAttempt.strategyName}_alt_client_1`
+    });
+    if (YOUTUBE_CLIENT_STRATEGIES.length > 2) {
+      push({
+        ...failedAttempt,
+        hardened: true,
+        clientStrategyIndex: 2,
+        strategyName: `${failedAttempt.strategyName}_alt_client_2`
+      });
+    }
+  }
+
+  if (failedAttempt.cookiesMode === 'none') {
+    for (const cookieMode of availableCookieModes) {
+      push({
+        ...failedAttempt,
+        cookiesMode: cookieMode,
+        hardened: true,
+        clientStrategyIndex: 0,
+        strategyName: `${failedAttempt.strategyName}_cookie_${cookieMode}`
+      });
+    }
+  }
+
+  if (failedAttempt.selectorIndex < formatSelectorCount - 1 && isYoutubeRetriableCode(classification.code)) {
+    push({
+      ...failedAttempt,
+      selectorIndex: failedAttempt.selectorIndex + 1,
+      cookiesMode: failedAttempt.cookiesMode,
+      hardened: true,
+      clientStrategyIndex: 0,
+      strategyName: `format_fallback_${failedAttempt.selectorIndex + 1}`
+    });
+  }
+
+  return out;
+}
+
+export function buildYtDlpArgs(input: BuildYtDlpArgsInput): string[] {
+  const { url, format, qualityOrSelector, outputTemplate, cookiesMode, options } = input;
+  const args: string[] = [
+    '--no-playlist',
+    '--no-warnings',
+    '-o',
+    outputTemplate,
+    '--no-check-certificate',
+    '--socket-timeout',
+    String(config.ytDlpSocketTimeoutSec),
+    '--retries',
+    String(options?.hardened ? config.ytDlpRetriesSafe : config.ytDlpRetriesFast),
+    '--fragment-retries',
+    String(options?.hardened ? config.ytDlpFragmentRetriesSafe : config.ytDlpFragmentRetriesFast),
+    '--file-access-retries',
+    '2'
+  ];
+
+  if (options?.hardened) {
+    args.push('--extractor-retries', String(config.ytDlpExtractorRetriesSafe));
+  } else {
+    args.push('--extractor-retries', String(config.ytDlpExtractorRetriesFast));
+  }
+
+  const fileCookiesPath = config.ytDlpCookiesPath.trim();
+  if (cookiesMode === 'file' && fileCookiesPath && fs.existsSync(fileCookiesPath)) {
+    args.push('--cookies', fileCookiesPath);
+  }
+  if (cookiesMode === 'browser' && config.ytDlpCookiesFromBrowser.trim()) {
+    const browser = config.ytDlpCookiesFromBrowser.trim();
+    const profile = config.ytDlpCookiesFromBrowserProfile.trim();
+    args.push('--cookies-from-browser', profile ? `${browser}:${profile}` : browser);
+  }
+
+  if (options?.extractorArgs) {
+    args.push('--impersonate', 'chrome');
+    args.push('--add-header', `User-Agent: ${YOUTUBE_USER_AGENT}`);
+    args.push('--add-header', 'Accept-Language: en-US,en;q=0.9');
+    args.push('--extractor-args', options.extractorArgs);
+  }
+  if (options?.extraHeaders?.length) {
+    for (const header of options.extraHeaders) {
+      if (!header.key.trim()) continue;
+      args.push('--add-header', `${header.key}: ${header.value}`);
+    }
+  }
+
+  if (format === 'mp3') {
+    args.push('--extract-audio', '--audio-format', 'mp3', '--audio-quality', '0');
+  } else {
+    args.push('-f', qualityOrSelector);
+    if (format === 'mp4') args.push('--merge-output-format', 'mp4');
+    if (format === 'mkv') args.push('--merge-output-format', 'mkv');
+  }
+
+  args.push(url);
+  return args;
+}
+
+function runYtDlp(
+  url: string,
+  format: DownloadFormat,
+  qualityOrSelector: string,
+  outputFileName: string,
+  options?: RunYtDlpOptions
+): Promise<{ filePath: string; mimeType: string; ext: string }> {
+  const dir = path.join(tmpdir(), `batchtube-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
+  fs.mkdirSync(dir, { recursive: true });
+  const outputTemplate = path.join(dir, `${outputFileName}.%(ext)s`);
+  const cookiesMode = options?.cookiesMode ?? 'none';
+  const args = buildYtDlpArgs({
+    url,
+    format,
+    qualityOrSelector,
+    outputTemplate,
+    cookiesMode,
+    options
+  });
+
+  if (options?.itemId) {
+    const fileCookiesPath = config.ytDlpCookiesPath.trim();
+    const safeArgs = args.map((arg) => (fileCookiesPath && arg === fileCookiesPath ? '<cookies-file>' : arg));
+    logYoutube('youtube_ytdlp_attempt_start', {
+      provider: options.provider ?? 'youtube',
+      itemId: options.itemId,
+      batchId: options.batchId ?? null,
+      url,
+      attempt: options.attempt ?? null,
+      strategy: options.strategyName ?? null,
+      ytdlp_mode: options.hardened ? 'safe' : 'fast',
+      cookies_mode: cookiesMode,
+      strategyIndex: options.strategyIndex ?? null,
+      ytdlpArgs: safeArgs
+    });
+  }
+
+  return new Promise((resolve, reject) => {
+    const proc = spawn(YT_DLP, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stderr = '';
+    const timeoutMs = options?.timeoutMs ?? config.ytDlpTimeoutMs;
+
+    const timeout = setTimeout(() => {
+      try {
+        proc.kill('SIGTERM');
+      } catch {
+        // ignore
+      }
+      try {
+        fs.rmSync(dir, { recursive: true, force: true });
+      } catch {
+        // ignore
+      }
+      reject(new YtDlpError(`yt-dlp timed out after ${timeoutMs}ms`, 'timeout', -2));
+    }, timeoutMs);
+
+    proc.stderr?.on('data', (chunk) => {
+      stderr += chunk.toString();
+    });
+
+    proc.on('error', (err) => {
+      clearTimeout(timeout);
+      try {
+        fs.rmSync(dir, { recursive: true, force: true });
+      } catch {
+        // ignore
+      }
+      reject(new Error(`yt-dlp spawn failed: ${err.message}. Is yt-dlp installed?`));
+    });
+
+    proc.on('close', (code) => {
+      clearTimeout(timeout);
+      if (code !== 0) {
+        try {
+          fs.rmSync(dir, { recursive: true, force: true });
+        } catch {
+          // ignore
+        }
+        reject(new YtDlpError(`yt-dlp exited ${code}`, sanitizeStderr(stderr) || 'no stderr', code ?? -1));
+        return;
+      }
+
+      const files = fs.readdirSync(dir);
+      const outFile = files.find((f) => f.startsWith(outputFileName));
+      if (!outFile) {
+        try {
+          fs.rmSync(dir, { recursive: true, force: true });
+        } catch {
+          // ignore
+        }
+        reject(new Error('yt-dlp did not produce an output file'));
+        return;
+      }
+
+      const filePath = path.join(dir, outFile);
+      const ext = path.extname(outFile).slice(1).toLowerCase();
+      const mimeType =
+        ext === 'mp4' || ext === 'm4a'
+          ? 'video/mp4'
+          : ext === 'mkv'
+            ? 'video/x-matroska'
+            : ext === 'mp3'
+              ? 'audio/mpeg'
+              : 'application/octet-stream';
+
+      resolve({ filePath, mimeType, ext });
+    });
+  });
+}
+
+async function runYoutubeDownloadWithFallbacks(
   url: string,
   format: DownloadFormat,
   quality: DownloadQuality,
   outputFileName: string,
-  itemId: string
+  context?: DownloadContext
 ): Promise<{ filePath: string; mimeType: string; ext: string }> {
-  const cookiesPath = config.ytDlpCookiesPath?.trim();
-  const cookieFileExists = Boolean(cookiesPath && fs.existsSync(cookiesPath));
-  const useCookiesFirst = cookieFileExists;
+  await ensureYtDlpVersionLogged();
 
-  if (cookieFileExists) {
-    try {
-      const stat = fs.statSync(cookiesPath);
-      logYoutube('youtube_cookie_file_used', {
-        itemId,
-        url,
-        cookiesPath,
-        sizeBytes: stat.size,
-        hint: 'Using cookies on first attempt (fast path, same as local yt-dlp --cookies).'
-      });
-    } catch {
-      logYoutube('youtube_cookie_file_used', { itemId, url, cookiesPath, hint: 'Cookie file exists.' });
-    }
-  }
-
-  logYoutube('fast_path_started', { provider: 'youtube', itemId, url, format, quality });
-
-  // Fast-path selector: single strong choice per format/quality.
-  const selector =
-    format === 'mp4'
-      ? QUALITY_SELECTORS_MP4_QUICKTIME[quality]
-      : QUALITY_SELECTORS[quality];
-
-  const extractorArgs = YOUTUBE_EXTRACTOR_ARGS_PRIMARY;
-  const ytOpts: RunYtDlpOptions = {
-    extractorArgs,
-    attemptType: 'primary',
-    strategyIndex: 0,
-    itemId,
-    url
+  const itemId = outputFileName;
+  const batchId = context?.batchId;
+  const formatSelectors = getYoutubeFormatSelectors(format, quality);
+  const cookieModes = resolveCookieModes();
+  const initialAttempt: YoutubeAttempt = {
+    selector: formatSelectors[0] ?? '',
+    selectorIndex: 0,
+    cookiesMode: 'none',
+    hardened: false,
+    clientStrategyIndex: 0,
+    strategyName: 'fast_primary'
   };
 
+  const queue: YoutubeAttempt[] = [initialAttempt];
+  const seen = new Set<string>();
+  let attempts = 0;
+  let fallbackAttempts = 0;
+  let lastClassification: YoutubeErrorClassification = {
+    code: 'youtube_unknown',
+    retriable: true,
+    authError: false,
+    clientRetriable: false
+  };
+  let lastStderr = '';
+  let lastError: Error | null = null;
   const startedAt = Date.now();
-  try {
-    const result = await runYtDlp(url, format, selector, outputFileName, useCookiesFirst, ytOpts);
-    const durationMs = Date.now() - startedAt;
-    logYoutube('fast_path_succeeded', {
-      provider: 'youtube',
-      itemId,
-      url,
-      format,
-      quality,
-      strategyIndex: 0,
-      duration_ms: durationMs
-    });
-    return result;
-  } catch (err) {
-    const durationMs = Date.now() - startedAt;
-    const ytErr = err instanceof YtDlpError ? err : null;
-    const stderr = ytErr?.stderr ?? (err instanceof Error ? err.message : String(err));
-    const classification = ytErr ? classifyYoutubeError(ytErr.stderr) : null;
-    const code = classification?.code ?? 'youtube_unknown';
 
-    logYoutube('fast_path_failed', {
-      provider: 'youtube',
-      itemId,
-      url,
-      format,
-      quality,
-      code,
-      retriable: classification?.retriable ?? false,
-      authError: classification?.authError ?? false,
-      clientRetriable: classification?.clientRetriable ?? false,
-      duration_ms: durationMs,
-      stderrSnippet: stderr.slice(0, 300)
-    });
+  while (queue.length > 0 && attempts < config.ytDlpYoutubeMaxAttempts) {
+    const attempt = queue.shift();
+    if (!attempt) break;
+    if (attempt.selectorIndex >= formatSelectors.length) continue;
+    if (!cookiesModeIsAvailable(attempt.cookiesMode)) continue;
+    attempt.selector = formatSelectors[attempt.selectorIndex] ?? '';
 
-    // If it's clearly permanent and not retriable/client-related, bubble it up directly.
-    if (!classification || (!classification.retriable && !classification.authError && !classification.clientRetriable)) {
-      recordProviderFailure('youtube', code);
-      throw new Error(`${code}: ${stderr.slice(0, 500)}`);
+    const key = getYoutubeAttemptKey(attempt);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    attempts += 1;
+    if (attempt.strategyName !== 'fast_primary') fallbackAttempts += 1;
+
+    if (attempts > 1 && isYoutubeRetriableCode(lastClassification.code)) {
+      const backoff = Math.min(
+        config.ytDlpYoutubeBackoffBaseMs * Math.pow(2, Math.max(0, attempts - 2)),
+        6000
+      );
+      await sleep(backoff);
     }
 
-    // Otherwise, let the caller invoke the SAFE path.
-    throw ytErr ?? new Error(stderr);
+    const attemptStartedAt = Date.now();
+    try {
+      const result = await runYtDlp(url, format, attempt.selector, outputFileName, {
+        extractorArgs: YOUTUBE_CLIENT_STRATEGIES[attempt.clientStrategyIndex] ?? YOUTUBE_CLIENT_STRATEGIES[0],
+        strategyName: attempt.strategyName,
+        strategyIndex: attempt.clientStrategyIndex,
+        attempt: attempts,
+        itemId,
+        batchId,
+        provider: 'youtube',
+        cookiesMode: attempt.cookiesMode,
+        hardened: attempt.hardened
+      });
+
+      const durationMs = Date.now() - attemptStartedAt;
+      logYoutube('youtube_download_attempt_succeeded', {
+        provider: 'youtube',
+        itemId,
+        batchId: batchId ?? null,
+        url,
+        attempt: attempts,
+        strategy: attempt.strategyName,
+        ytdlp_mode: attempt.hardened ? 'safe' : 'fast',
+        cookies_mode: attempt.cookiesMode,
+        duration_ms: durationMs
+      });
+      logYoutube('youtube_download_pipeline_succeeded', {
+        provider: 'youtube',
+        itemId,
+        batchId: batchId ?? null,
+        url,
+        total_attempts: attempts,
+        fallback_attempts: fallbackAttempts,
+        duration_ms: Date.now() - startedAt
+      });
+      recordProviderSuccess('youtube', { afterFallback: fallbackAttempts > 0 });
+      return result;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      lastStderr = error instanceof YtDlpError ? error.stderr : lastError.message;
+      lastClassification = classifyYoutubeError(lastStderr);
+      const durationMs = Date.now() - attemptStartedAt;
+
+      logYoutube('youtube_download_attempt_failed', {
+        provider: 'youtube',
+        itemId,
+        batchId: batchId ?? null,
+        url,
+        attempt: attempts,
+        strategy: attempt.strategyName,
+        ytdlp_mode: attempt.hardened ? 'safe' : 'fast',
+        cookies_mode: attempt.cookiesMode,
+        error_category: lastClassification.code,
+        stderr_summary: lastStderr.slice(0, 400),
+        duration_ms: durationMs
+      });
+
+      if (isYoutubePermanentCode(lastClassification.code)) break;
+      if (isYoutubeAuthCode(lastClassification.code) && cookieModes.length === 0) break;
+
+      const next = planYoutubeNextAttempts({
+        failedAttempt: attempt,
+        classification: lastClassification,
+        formatSelectorCount: formatSelectors.length,
+        availableCookieModes: cookieModes
+      });
+      queue.push(...next);
+    }
   }
+
+  const code = lastClassification.code;
+  const finalMsg = `${code}: ${lastStderr.slice(0, 500)}`;
+  logYoutube('youtube_download_pipeline_failed', {
+    provider: 'youtube',
+    itemId,
+    batchId: batchId ?? null,
+    url,
+    total_attempts: attempts,
+    duration_ms: Date.now() - startedAt,
+    error_category: code,
+    stderr_summary: lastStderr.slice(0, 400),
+    final_outcome: 'permanent_failure'
+  });
+  recordProviderFailure('youtube', code, { permanent: true });
+  throw new Error(finalMsg || (lastError?.message ?? 'youtube_unknown'));
+}
+
+export function classifyGenericProviderError(stderr: string): { code: GenericProviderErrorCode; retriable: boolean } {
+  const s = (stderr || '').toLowerCase();
+
+  if (s.includes('http error 429') || s.includes('too many requests') || s.includes('rate limit')) {
+    return { code: 'provider_rate_limited', retriable: true };
+  }
+  if (s.includes('http error 401') || s.includes('http error 403') || s.includes('forbidden')) {
+    return { code: 'provider_access_denied', retriable: true };
+  }
+  if (s.includes('login required') || s.includes('sign in') || s.includes('authentication')) {
+    return { code: 'provider_auth_required', retriable: false };
+  }
+  if (s.includes('not available in your country') || (s.includes('geo') && s.includes('restrict'))) {
+    return { code: 'provider_geo_restricted', retriable: false };
+  }
+  if (
+    s.includes('video unavailable') ||
+    s.includes('not found') ||
+    s.includes('private') ||
+    s.includes('removed') ||
+    s.includes('404')
+  ) {
+    return { code: 'provider_source_unavailable', retriable: false };
+  }
+  if (s.includes('unsupported url') || s.includes('unsupported') || s.includes('no suitable extractor')) {
+    return { code: 'provider_unsupported', retriable: false };
+  }
+  if (
+    s.includes('extractorerror') ||
+    s.includes('unable to extract') ||
+    s.includes('failed to parse') ||
+    s.includes('signature')
+  ) {
+    return { code: 'provider_extractor_failure', retriable: true };
+  }
+  if (
+    s.includes('http error 5') ||
+    s.includes('timeout') ||
+    s.includes('network') ||
+    s.includes('etimedout') ||
+    s.includes('econnreset') ||
+    s.includes('eai_again') ||
+    s.includes('enotfound')
+  ) {
+    return { code: 'provider_transient', retriable: true };
+  }
+
+  return { code: 'provider_unknown_failure', retriable: true };
+}
+
+function buildRefererFallbackHeaders(url: string): Array<Array<{ key: string; value: string }>> {
+  try {
+    const u = new URL(url);
+    const origin = `${u.protocol}//${u.host}/`;
+    return [
+      [{ key: 'Referer', value: origin }],
+      [{ key: 'Referer', value: url }],
+      [
+        { key: 'Referer', value: origin },
+        { key: 'Origin', value: `${u.protocol}//${u.host}` }
+      ]
+    ];
+  } catch {
+    return [];
+  }
+}
+
+async function runGenericProviderDownloadWithFallbacks(
+  url: string,
+  format: DownloadFormat,
+  quality: DownloadQuality,
+  outputFileName: string,
+  provider?: string,
+  context?: DownloadContext
+): Promise<{ filePath: string; mimeType: string; ext: string }> {
+  const selector = format === 'mp4' ? QUALITY_SELECTORS_MP4_QUICKTIME[quality] : QUALITY_SELECTORS[quality];
+  const selectorFallback = 'bv*+ba/b';
+  const healthProvider = toHealthProvider(provider);
+  const itemId = outputFileName;
+  const batchId = context?.batchId;
+  const startedAt = Date.now();
+
+  const attempts: Array<{
+    strategyName: string;
+    selector: string;
+    hardened: boolean;
+    extraHeaders?: Array<{ key: string; value: string }>;
+  }> = [
+    { strategyName: 'fast_primary', selector, hardened: false },
+    { strategyName: 'selector_fallback', selector: selectorFallback, hardened: true }
+  ];
+
+  const refererAttempts = buildRefererFallbackHeaders(url);
+  for (let i = 0; i < refererAttempts.length; i++) {
+    attempts.push({
+      strategyName: `referer_fallback_${i + 1}`,
+      selector: selectorFallback,
+      hardened: true,
+      extraHeaders: refererAttempts[i]
+    });
+  }
+
+  let lastErr: Error | null = null;
+  let lastStderr = '';
+  let lastCode: GenericProviderErrorCode = 'provider_unknown_failure';
+  let fallbackUsed = false;
+
+  for (let i = 0; i < attempts.length; i++) {
+    const a = attempts[i]!;
+    if (i > 0) fallbackUsed = true;
+    const attemptStartedAt = Date.now();
+    try {
+      const result = await runYtDlp(url, format, a.selector, outputFileName, {
+        provider: provider ?? 'generic',
+        itemId,
+        batchId,
+        attempt: i + 1,
+        strategyName: a.strategyName,
+        strategyIndex: i,
+        hardened: a.hardened,
+        cookiesMode: config.ytDlpCookiesPath.trim() ? 'file' : 'none',
+        extraHeaders: a.extraHeaders
+      });
+      console.log(
+        JSON.stringify({
+          msg: 'provider_download_attempt_succeeded',
+          provider: provider ?? 'generic',
+          itemId,
+          batchId: batchId ?? null,
+          url,
+          attempt: i + 1,
+          strategy: a.strategyName,
+          ytdlp_mode: a.hardened ? 'safe' : 'fast',
+          duration_ms: Date.now() - attemptStartedAt
+        })
+      );
+      recordProviderSuccess(healthProvider, { afterFallback: fallbackUsed });
+      return result;
+    } catch (err) {
+      lastErr = err instanceof Error ? err : new Error(String(err));
+      lastStderr = err instanceof YtDlpError ? err.stderr : lastErr.message;
+      const cls = classifyGenericProviderError(lastStderr);
+      lastCode = cls.code;
+      console.warn(
+        JSON.stringify({
+          msg: 'provider_download_attempt_failed',
+          provider: provider ?? 'generic',
+          itemId,
+          batchId: batchId ?? null,
+          url,
+          attempt: i + 1,
+          strategy: a.strategyName,
+          error_category: cls.code,
+          stderr_summary: lastStderr.slice(0, 400),
+          duration_ms: Date.now() - attemptStartedAt
+        })
+      );
+      if (!cls.retriable) break;
+      const backoff = Math.min(750 * Math.pow(2, i), 4000);
+      await sleep(backoff);
+    }
+  }
+
+  console.error(
+    JSON.stringify({
+      msg: 'provider_download_pipeline_failed',
+      provider: provider ?? 'generic',
+      itemId,
+      batchId: batchId ?? null,
+      url,
+      error_category: lastCode,
+      stderr_summary: lastStderr.slice(0, 400),
+      duration_ms: Date.now() - startedAt
+    })
+  );
+  recordProviderFailure(healthProvider, lastCode, { permanent: true });
+  throw new Error(`${lastCode}: ${lastStderr.slice(0, 500) || lastErr?.message || 'download failed'}`);
 }
 
 /**
  * Run yt-dlp and return the path to the downloaded file and its mime type.
- * Optional: YT_DLP_COOKIES_FILE env for age-restricted / login-required content.
- * For YouTube: FAST path by default, SAFE path only when fast path fails with retriable/client-related errors.
- * For other providers: fast single attempt; minimal fallback, with optional compatibility for short-form providers.
+ * Optional: YT_DLP_COOKIES_FILE/YT_DLP_COOKIES_FROM_BROWSER for auth-required content.
+ * YouTube uses progressive fallback strategy; other providers keep the fast path.
  */
 export async function downloadWithYtDlp(
   url: string,
   options: DownloadOptions,
   outputFileName: string,
-  provider?: string
+  provider?: string,
+  context?: DownloadContext
 ): Promise<{ filePath: string; mimeType: string; ext: string }> {
   const format = options.format ?? 'mp4';
   const quality = options.quality ?? 'best';
-  const selector =
-    format === 'mp4'
-      ? QUALITY_SELECTORS_MP4_QUICKTIME[quality]
-      : QUALITY_SELECTORS[quality];
 
-  // Dedicated, fast MP3 branch: audio-only, no video format fallbacks.
+  if (provider === 'youtube') {
+    return runYoutubeDownloadWithFallbacks(url, format, quality, outputFileName, context);
+  }
+
   if (format === 'mp3') {
     console.log(
       JSON.stringify({
@@ -657,140 +974,17 @@ export async function downloadWithYtDlp(
         quality
       })
     );
-
-    // YouTube MP3: still go through YouTube fast path (so cookies, impersonation, etc. apply),
-    // but with audio-only behavior (runYtDlp uses --extract-audio for mp3 format).
-    if (provider === 'youtube') {
-      try {
-        const result = await downloadYouTubeFast(url, format, 'best', outputFileName, outputFileName);
-        return result;
-      } catch (err) {
-        // If fast path fails for MP3, fall back to SAFE path only when classification says it's appropriate.
-        const ytErr = err instanceof YtDlpError ? err : null;
-        const stderr = ytErr?.stderr ?? (err instanceof Error ? err.message : String(err));
-        const classification = ytErr ? classifyYoutubeError(ytErr.stderr) : null;
-        const code = classification?.code ?? 'youtube_unknown';
-        if (!classification || (!classification.retriable && !classification.authError && !classification.clientRetriable)) {
-          recordProviderFailure('youtube', code);
-          throw new Error(`${code}: ${stderr.slice(0, 500)}`);
-        }
-        const safeResult = await downloadYouTubeSafe(url, format, 'best', outputFileName, outputFileName);
-        return safeResult;
-      }
-    }
-
-    // Non-YouTube MP3: single fast attempt only.
-    const mp3Result = await runYtDlp(url, format, '', outputFileName, true);
-    return mp3Result;
+    return runGenericProviderDownloadWithFallbacks(url, format, quality, outputFileName, provider, context);
   }
-
-  if (provider === 'youtube') {
-    // FAST path first.
-    try {
-      const fastResult = await downloadYouTubeFast(url, format, quality, outputFileName, outputFileName);
-      // YouTube short-form content (Shorts) is generally compatible; do not run
-      // extra normalization here to keep latency low.
-      return fastResult;
-    } catch (err) {
-      const ytErr = err instanceof YtDlpError ? err : null;
-      const stderr = ytErr?.stderr ?? (err instanceof Error ? err.message : String(err));
-      const classification = ytErr ? classifyYoutubeError(ytErr.stderr) : null;
-      const code = classification?.code ?? 'youtube_unknown';
-
-      // If not retriable/client-related, surface as-is.
-      if (!classification || (!classification.retriable && !classification.authError && !classification.clientRetriable)) {
-        recordProviderFailure('youtube', code);
-        throw new Error(`${code}: ${stderr.slice(0, 500)}`);
-      }
-
-      console.log(
-        JSON.stringify({
-          msg: 'safe_path_started',
-          provider: 'youtube',
-          itemId: outputFileName,
-          url,
-          format,
-          quality,
-          code
-        })
-      );
-      const safeStartedAt = Date.now();
-      try {
-        const safeResult = await downloadYouTubeSafe(url, format, quality, outputFileName, outputFileName);
-        const safeDurationMs = Date.now() - safeStartedAt;
-        console.log(
-          JSON.stringify({
-            msg: 'safe_path_succeeded',
-            provider: 'youtube',
-            itemId: outputFileName,
-            url,
-            format,
-            quality,
-            code,
-            duration_ms: safeDurationMs
-          })
-        );
-        return safeResult;
-      } catch (safeErr) {
-        const safeDurationMs = Date.now() - safeStartedAt;
-        const finalErr = safeErr instanceof Error ? safeErr : new Error(String(safeErr));
-        console.error(
-          JSON.stringify({
-            msg: 'safe_path_failed',
-            provider: 'youtube',
-            itemId: outputFileName,
-            url,
-            format,
-            quality,
-            code,
-            duration_ms: safeDurationMs,
-            error: finalErr.message
-          })
-        );
-        throw finalErr;
-      }
-    }
-  }
-
-  // Non-YouTube MP4/MKV fast path: single selector + minimal fallback.
-  const fastStartedAt = Date.now();
-  console.log(
-    JSON.stringify({
-      msg: 'fast_path_started',
-      provider: provider ?? 'generic',
-      format,
-      quality,
-      selector_chosen: selector
-    })
+  const baseResult = await runGenericProviderDownloadWithFallbacks(
+    url,
+    format,
+    quality,
+    outputFileName,
+    provider,
+    context
   );
 
-  const baseResult = await runYtDlp(url, format, selector, outputFileName, true).catch((firstErr) => {
-    const errMsg = firstErr instanceof Error ? firstErr.message : String(firstErr);
-    console.warn(
-      JSON.stringify({
-        msg: 'fast_path_failed',
-        provider: provider ?? 'generic',
-        format,
-        quality,
-        error: errMsg
-      })
-    );
-    // Single simple fallback selector for video.
-    return runYtDlp(url, format, 'bv*+ba/b', outputFileName, true);
-  });
-
-  const fastDurationMs = Date.now() - fastStartedAt;
-  console.log(
-    JSON.stringify({
-      msg: 'fast_path_succeeded',
-      provider: provider ?? 'generic',
-      format,
-      quality,
-      duration_ms: fastDurationMs
-    })
-  );
-
-  // Optional short-form MP4 compatibility normalization for Instagram/TikTok only.
   try {
     const compat = await ensureShortFormMp4Compatibility(provider ?? 'generic', baseResult);
     if (compat !== baseResult) {

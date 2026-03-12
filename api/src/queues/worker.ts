@@ -49,21 +49,27 @@ function mapProviderErrorToUserMessage(provider: string, code: string): string {
   const p = provider.toLowerCase();
   if (p === 'youtube') {
     switch (code) {
+      case 'youtube_cookies_required':
       case 'youtube_login_required':
         return 'YouTube requires you to be logged in to download this video.';
-      case 'youtube_age_restricted':
-        return 'This YouTube video is age-restricted and cannot be downloaded with the current account.';
+      case 'youtube_private':
       case 'youtube_private_or_removed':
         return 'This YouTube video is private or has been removed.';
+      case 'youtube_geo_restricted':
       case 'youtube_region_restricted':
         return 'This YouTube video is not available from the server region.';
+      case 'youtube_antibot':
       case 'youtube_bot_check':
         return 'YouTube is asking for additional verification. Please try again later or with a different account.';
+      case 'youtube_rate_limited':
+        return 'YouTube is temporarily rate-limiting requests for this item.';
+      case 'youtube_extractor_failure':
+      case 'youtube_extractor_error':
       case 'youtube_unavailable':
       case 'youtube_client_failed':
-        return 'YouTube reported that this video is currently unavailable.';
-      case 'youtube_extractor_error':
+      case 'youtube_transient':
       case 'youtube_download_error':
+        return 'YouTube download failed due to a temporary provider issue.';
       case 'youtube_unknown':
       default:
         return 'YouTube download failed for this item.';
@@ -83,6 +89,28 @@ function mapProviderErrorToUserMessage(provider: string, code: string): string {
 
   if (code === 'source_unavailable') {
     return 'This source is no longer available.';
+  }
+
+  if (code.startsWith('provider_')) {
+    switch (code) {
+      case 'provider_rate_limited':
+        return 'Provider is temporarily rate limiting requests. Please try again.';
+      case 'provider_access_denied':
+      case 'provider_auth_required':
+        return 'Provider rejected access for this media URL.';
+      case 'provider_geo_restricted':
+        return 'This media is not available from the server region.';
+      case 'provider_source_unavailable':
+        return 'This media is unavailable or has been removed.';
+      case 'provider_unsupported':
+        return 'This source URL is currently unsupported.';
+      case 'provider_transient':
+      case 'provider_extractor_failure':
+        return 'Provider download failed due to a temporary extraction/network issue.';
+      case 'provider_unknown_failure':
+      default:
+        return 'Provider download failed for this item.';
+    }
   }
 
   return 'Download failed for this item.';
@@ -188,7 +216,7 @@ export async function processItem(job: Job<ItemJob>) {
 
     try {
       const downloadOpts = toDownloadOptions(batchOptions, provider);
-      const result = await downloadWithYtDlp(item.original_url, downloadOpts, item.id, provider);
+      const result = await downloadWithYtDlp(item.original_url, downloadOpts, item.id, provider, { batchId });
       const { buffer: content } = readDownloadAndCleanup(result);
 
       const ext = result.ext;
@@ -224,10 +252,10 @@ export async function processItem(job: Job<ItemJob>) {
       });
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
-      const youtubeCodeMatch = errMsg.match(
-        /^(youtube_(?:private_video|age_restricted|login_required|unavailable|region_restricted|bot_check|private_or_removed|client_failed|extractor_error|download_error|unknown)):/
+      const providerCodeMatch = errMsg.match(
+        /^((?:youtube_(?:transient|antibot|login_required|private|geo_restricted|cookies_required|rate_limited|extractor_failure|unknown|private_video|age_restricted|unavailable|region_restricted|bot_check|private_or_removed|client_failed|extractor_error|download_error))|(?:provider_(?:rate_limited|access_denied|auth_required|geo_restricted|source_unavailable|unsupported|transient|extractor_failure|unknown_failure))):/
       );
-      const internalCode = youtubeCodeMatch ? youtubeCodeMatch[1] : 'provider_unknown_failure';
+      const internalCode = providerCodeMatch ? providerCodeMatch[1] : 'provider_unknown_failure';
 
       const userFacingMessage = mapProviderErrorToUserMessage(provider, internalCode);
 
@@ -466,7 +494,7 @@ export async function processBatch(job: Job<BatchJob>) {
       });
 
       const downloadOpts = toDownloadOptions(batchOptions, provider);
-      const result = await downloadWithYtDlp(item.original_url, downloadOpts, item.id, provider);
+      const result = await downloadWithYtDlp(item.original_url, downloadOpts, item.id, provider, { batchId });
       const { buffer: content } = readDownloadAndCleanup(result);
 
       const ext = result.ext;
@@ -524,8 +552,8 @@ export async function processBatch(job: Job<BatchJob>) {
       failed += 1;
       const errMsg = error instanceof Error ? error.message : String(error);
       const errName = error instanceof Error ? error.name : 'Error';
-      const youtubeCodeMatch = errMsg.match(/^(youtube_(?:private_video|age_restricted|login_required|unavailable|region_restricted|bot_check|private_or_removed|client_failed|extractor_error|download_error|unknown)):/);
-      const errorMessageToStore = youtubeCodeMatch ? youtubeCodeMatch[1] : errMsg;
+      const providerCodeMatch = errMsg.match(/^((?:youtube_(?:transient|antibot|login_required|private|geo_restricted|cookies_required|rate_limited|extractor_failure|unknown|private_video|age_restricted|unavailable|region_restricted|bot_check|private_or_removed|client_failed|extractor_error|download_error))|(?:provider_(?:rate_limited|access_denied|auth_required|geo_restricted|source_unavailable|unsupported|transient|extractor_failure|unknown_failure))):/);
+      const errorMessageToStore = providerCodeMatch ? providerCodeMatch[1] : errMsg;
       console.error(
         JSON.stringify({
           msg: 'worker_item_failed',
@@ -534,7 +562,7 @@ export async function processBatch(job: Job<BatchJob>) {
           url: item.original_url,
           error: errMsg,
           errorName: errName,
-          ...(youtubeCodeMatch ? { youtubeErrorCode: youtubeCodeMatch[1] } : {})
+          ...(providerCodeMatch ? { providerErrorCode: providerCodeMatch[1] } : {})
         })
       );
       await prisma.batchItem.update({

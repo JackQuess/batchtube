@@ -13,31 +13,42 @@ export type ProviderName = 'youtube' | 'instagram' | 'tiktok' | 'vimeo' | 'direc
 export interface ProviderHealthSnapshot {
   provider: ProviderName;
   totalFailures: number;
+  totalSuccesses: number;
+  successAfterFallback: number;
+  permanentFailures: number;
   byCode: Record<string, number>;
 }
 
 type HealthState = {
   totalFailures: number;
+  totalSuccesses: number;
+  successAfterFallback: number;
+  permanentFailures: number;
   byCode: Record<string, number>;
 };
 
 const health: Record<ProviderName, HealthState> = {
-  youtube: { totalFailures: 0, byCode: {} },
-  instagram: { totalFailures: 0, byCode: {} },
-  tiktok: { totalFailures: 0, byCode: {} },
-  vimeo: { totalFailures: 0, byCode: {} },
-  direct: { totalFailures: 0, byCode: {} },
-  generic: { totalFailures: 0, byCode: {} }
+  youtube: { totalFailures: 0, totalSuccesses: 0, successAfterFallback: 0, permanentFailures: 0, byCode: {} },
+  instagram: { totalFailures: 0, totalSuccesses: 0, successAfterFallback: 0, permanentFailures: 0, byCode: {} },
+  tiktok: { totalFailures: 0, totalSuccesses: 0, successAfterFallback: 0, permanentFailures: 0, byCode: {} },
+  vimeo: { totalFailures: 0, totalSuccesses: 0, successAfterFallback: 0, permanentFailures: 0, byCode: {} },
+  direct: { totalFailures: 0, totalSuccesses: 0, successAfterFallback: 0, permanentFailures: 0, byCode: {} },
+  generic: { totalFailures: 0, totalSuccesses: 0, successAfterFallback: 0, permanentFailures: 0, byCode: {} }
 };
 
 /**
  * Record a provider failure with a machine-readable code.
  * Emits a structured log that can be aggregated in log search.
  */
-export function recordProviderFailure(provider: ProviderName, code: string): void {
+export function recordProviderFailure(
+  provider: ProviderName,
+  code: string,
+  options: { permanent?: boolean } = {}
+): void {
   const state = health[provider] ?? health.generic;
   state.totalFailures += 1;
   state.byCode[code] = (state.byCode[code] ?? 0) + 1;
+  if (options.permanent) state.permanentFailures += 1;
 
   // Structured log for observability (Railway / log tools).
   // Example: youtube_bot_check, youtube_client_failed, instagram_compatibility_failed.
@@ -45,9 +56,30 @@ export function recordProviderFailure(provider: ProviderName, code: string): voi
     JSON.stringify({
       msg: 'provider_health_event',
       provider,
+      outcome: 'failure',
       code,
       totalFailures: state.totalFailures,
+      permanentFailures: state.permanentFailures,
       codeCount: state.byCode[code]
+    })
+  );
+}
+
+export function recordProviderSuccess(
+  provider: ProviderName,
+  options: { afterFallback?: boolean } = {}
+): void {
+  const state = health[provider] ?? health.generic;
+  state.totalSuccesses += 1;
+  if (options.afterFallback) state.successAfterFallback += 1;
+
+  console.log(
+    JSON.stringify({
+      msg: 'provider_health_event',
+      provider,
+      outcome: 'success',
+      totalSuccesses: state.totalSuccesses,
+      successAfterFallback: state.successAfterFallback
     })
   );
 }
@@ -60,7 +92,9 @@ export function getProviderHealthSnapshot(provider: ProviderName): ProviderHealt
   return {
     provider,
     totalFailures: state.totalFailures,
+    totalSuccesses: state.totalSuccesses,
+    successAfterFallback: state.successAfterFallback,
+    permanentFailures: state.permanentFailures,
     byCode: { ...state.byCode }
   };
 }
-
