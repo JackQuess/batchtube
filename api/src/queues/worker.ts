@@ -181,7 +181,7 @@ export async function processItem(job: Job<ItemJob>) {
       });
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
-      const youtubeCodeMatch = errMsg.match(/^(youtube_(?:private_video|age_restricted|login_required|unavailable|extractor_error|download_error)):/);
+      const youtubeCodeMatch = errMsg.match(/^(youtube_(?:private_video|age_restricted|login_required|unavailable|region_restricted|bot_check|private_or_removed|client_failed|extractor_error|download_error|unknown)):/);
       const errorMessageToStore = youtubeCodeMatch ? youtubeCodeMatch[1] : errMsg;
       console.error(
         JSON.stringify({ msg: 'worker_item_failed', batchId, itemId, url: item.original_url, error: errMsg })
@@ -462,7 +462,7 @@ export async function processBatch(job: Job<BatchJob>) {
       failed += 1;
       const errMsg = error instanceof Error ? error.message : String(error);
       const errName = error instanceof Error ? error.name : 'Error';
-      const youtubeCodeMatch = errMsg.match(/^(youtube_(?:private_video|age_restricted|login_required|unavailable|extractor_error|download_error)):/);
+      const youtubeCodeMatch = errMsg.match(/^(youtube_(?:private_video|age_restricted|login_required|unavailable|region_restricted|bot_check|private_or_removed|client_failed|extractor_error|download_error|unknown)):/);
       const errorMessageToStore = youtubeCodeMatch ? youtubeCodeMatch[1] : errMsg;
       console.error(
         JSON.stringify({

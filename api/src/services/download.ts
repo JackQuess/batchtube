@@ -26,6 +26,15 @@ export class YtDlpError extends Error {
   }
 }
 
+/** Optional options for runYtDlp (YouTube: extractor args + diagnostics). */
+export interface RunYtDlpOptions {
+  /** e.g. "youtube:player_client=web,web_safari,tv_embedded" */
+  extractorArgs?: string;
+  attemptType?: 'primary' | 'fallback';
+  itemId?: string;
+  url?: string;
+}
+
 export type DownloadFormat = 'mp4' | 'mp3' | 'mkv';
 export type DownloadQuality = 'best' | '4k' | '1080p' | '720p';
 
@@ -86,28 +95,36 @@ const YOUTUBE_RETRIABLE_PATTERNS = [
 ];
 
 export type YoutubeErrorCode =
-  | 'youtube_private_video'
-  | 'youtube_age_restricted'
   | 'youtube_login_required'
   | 'youtube_unavailable'
+  | 'youtube_region_restricted'
+  | 'youtube_bot_check'
+  | 'youtube_private_or_removed'
+  | 'youtube_client_failed'
+  | 'youtube_private_video'
+  | 'youtube_age_restricted'
   | 'youtube_extractor_error'
-  | 'youtube_download_error';
+  | 'youtube_download_error'
+  | 'youtube_unknown';
 
 /**
  * Classify yt-dlp DOWNLOAD stderr into a single code. Used only in the Download Engine path.
  * Only classify youtube_age_restricted when the error explicitly signals age restriction;
  * generic "Sign in to confirm" (without "your age") is login_required, not age_restricted.
+ * Returns clientRetriable for youtube_unavailable so caller can retry with alternate player_client.
  */
 export function classifyYoutubeError(stderr: string): {
   code: YoutubeErrorCode;
   retriable: boolean;
   authError: boolean;
+  /** True when error may be resolved by trying a different player_client (e.g. in datacenter). */
+  clientRetriable?: boolean;
 } {
   const s = (stderr || '').toLowerCase();
   const raw = stderr || '';
 
   if (raw.includes('Private video') || raw.includes('private video') || s.includes('private')) {
-    return { code: 'youtube_private_video', retriable: false, authError: false };
+    return { code: 'youtube_private_or_removed', retriable: false, authError: false };
   }
   // Explicit age restriction only — do not map generic "Sign in to confirm" to age_restricted
   if (
@@ -122,11 +139,28 @@ export function classifyYoutubeError(stderr: string): {
   if (s.includes('login required') || s.includes('login to view') || s.includes('sign in to confirm')) {
     return { code: 'youtube_login_required', retriable: false, authError: true };
   }
-  if (s.includes('video unavailable') || s.includes('unavailable')) {
-    return { code: 'youtube_unavailable', retriable: false, authError: false };
+  if (s.includes('not available in your country') || s.includes('region') && s.includes('restrict')) {
+    return { code: 'youtube_region_restricted', retriable: false, authError: false };
   }
-  if (s.includes('extractorerror') || s.includes('extractor')) {
-    return { code: 'youtube_extractor_error', retriable: true, authError: false };
+  if (
+    s.includes('verify you are human') ||
+    s.includes('bot') ||
+    s.includes('automation') ||
+    s.includes('captcha') ||
+    raw.includes('Pardon the Interruption')
+  ) {
+    return { code: 'youtube_bot_check', retriable: true, authError: false };
+  }
+  if (s.includes('video unavailable') || s.includes('unavailable')) {
+    return {
+      code: 'youtube_unavailable',
+      retriable: false,
+      authError: false,
+      clientRetriable: true
+    };
+  }
+  if (s.includes('extractorerror') || s.includes('extractor') || s.includes('player_client')) {
+    return { code: 'youtube_extractor_error', retriable: true, authError: false, clientRetriable: true };
   }
   if (
     s.includes('http error 5') ||
@@ -143,15 +177,21 @@ export function classifyYoutubeError(stderr: string): {
     return { code: 'youtube_login_required', retriable: false, authError: true };
   }
 
-  return { code: 'youtube_download_error', retriable: true, authError: false };
+  return { code: 'youtube_unknown', retriable: true, authError: false };
 }
+
+/** Primary YouTube player_client order (web-first, good for many environments). */
+const YOUTUBE_EXTRACTOR_ARGS_PRIMARY = 'youtube:player_client=web,web_safari,tv_embedded';
+/** Fallback for datacenter IPs where web client may get "Video unavailable". */
+const YOUTUBE_EXTRACTOR_ARGS_FALLBACK = 'youtube:player_client=android,tv_embedded,web';
 
 function runYtDlp(
   url: string,
   format: DownloadFormat,
   qualityOrSelector: string,
   outputFileName: string,
-  useCookies: boolean
+  useCookies: boolean,
+  options?: RunYtDlpOptions
 ): Promise<{ filePath: string; mimeType: string; ext: string }> {
   const dir = path.join(tmpdir(), `batchtube-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
   fs.mkdirSync(dir, { recursive: true });
@@ -167,20 +207,40 @@ function runYtDlp(
   if (useCookies && cookiesPath && fs.existsSync(cookiesPath)) {
     args.push('--cookies', cookiesPath);
   }
+  if (options?.extractorArgs) {
+    args.push('--extractor-args', options.extractorArgs);
+  }
   if (format === 'mp3') {
     args.push('--extract-audio', '--audio-format', 'mp3', '--audio-quality', '0');
   } else {
     args.push('-f', qualityOrSelector);
     if (format === 'mp4') {
       args.push('--merge-output-format', 'mp4');
-      // Force H.264+AAC so QuickTime and other players show both video and audio (VP9/AV1 in MP4 often plays audio-only).
-      args.push('--use-postprocessor', 'FFmpegCopyStream');
-      args.push('--ppa', 'CopyStream:-c:v libx264 -c:a aac -f mp4');
     } else if (format === 'mkv') {
       args.push('--merge-output-format', 'mkv');
     }
   }
   args.push(url);
+
+  // Diagnostics for YouTube (datacenter debugging)
+  if (options?.itemId != null || options?.url) {
+    const safeArgs = args.map((a) => (a === cookiesPath ? '<cookies>' : a));
+    let cookieSize: number | null = null;
+    if (cookiesPath && fs.existsSync(cookiesPath)) {
+      try {
+        cookieSize = fs.statSync(cookiesPath).size;
+      } catch { /* ignore */ }
+    }
+    logYoutube('youtube_ytdlp_run', {
+      itemId: options.itemId,
+      url: options.url,
+      attemptType: options.attemptType ?? 'primary',
+      extractorArgs: options.extractorArgs ?? null,
+      cookiePath: cookiesPath || null,
+      cookieSizeBytes: cookieSize,
+      ytdlpArgs: safeArgs
+    });
+  }
 
   return new Promise((resolve, reject) => {
     const proc = spawn(YT_DLP, args, {
@@ -277,6 +337,13 @@ async function downloadYouTube(
   logYoutube('youtube_metadata_start', { itemId, url, format, quality });
   logYoutube('youtube_download_start', { itemId, url, format, quality });
 
+  const ytOpts = (extractorArgs: string, attemptType: 'primary' | 'fallback') => ({
+    extractorArgs,
+    attemptType,
+    itemId,
+    url
+  });
+
   const formatChain =
     format === 'mp3'
       ? ['']
@@ -286,6 +353,7 @@ async function downloadYouTube(
 
   let lastError: Error | null = null;
   let lastStderr = '';
+  let usedFallbackClient = false;
 
   for (let fmtIndex = 0; fmtIndex < formatChain.length; fmtIndex++) {
     const formatSelector = formatChain[fmtIndex];
@@ -298,12 +366,44 @@ async function downloadYouTube(
       });
     }
 
-    // Step 1: try with or without cookies (cookies on first attempt when configured, like local)
+    // Step 1: try with primary client, then on youtube_unavailable/clientRetriable try fallback client once
     try {
-      const result = await runYtDlp(url, format, formatSelector, outputFileName, useCookiesFirst);
-      logYoutube('youtube_metadata_success', { itemId, url });
-      logYoutube('youtube_download_success', { itemId, url, formatSelector, usedCookies: useCookiesFirst });
-      return result;
+      let result: { filePath: string; mimeType: string; ext: string } | null = null;
+      let triedFallback = false;
+
+      const tryRun = async (extractorArgs: string, attemptType: 'primary' | 'fallback') =>
+        runYtDlp(url, format, formatSelector, outputFileName, useCookiesFirst, ytOpts(extractorArgs, attemptType));
+
+      result = await tryRun(YOUTUBE_EXTRACTOR_ARGS_PRIMARY, 'primary').catch(async (err) => {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        lastStderr = err instanceof YtDlpError ? err.stderr : lastError.message;
+        const classification = err instanceof YtDlpError ? classifyYoutubeError(err.stderr) : null;
+
+        if (classification?.clientRetriable && !triedFallback) {
+          triedFallback = true;
+          usedFallbackClient = true;
+          logYoutube('youtube_client_fallback_attempt', {
+            itemId,
+            url,
+            previousCode: classification.code,
+            extractorArgsFallback: YOUTUBE_EXTRACTOR_ARGS_FALLBACK
+          });
+          return tryRun(YOUTUBE_EXTRACTOR_ARGS_FALLBACK, 'fallback');
+        }
+        throw err;
+      });
+
+      if (result) {
+        logYoutube('youtube_metadata_success', { itemId, url });
+        logYoutube('youtube_download_success', {
+          itemId,
+          url,
+          formatSelector,
+          usedCookies: useCookiesFirst,
+          usedFallbackClient: triedFallback
+        });
+        return result;
+      }
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
       lastStderr = err instanceof YtDlpError ? err.stderr : lastError.message;
@@ -319,7 +419,7 @@ async function downloadYouTube(
       if (classification?.authError && cookieFileExists) {
         logYoutube('youtube_download_cookie_retry', { itemId, url, cookiesPath });
         try {
-          const result = await runYtDlp(url, format, formatSelector, outputFileName, true);
+          const result = await runYtDlp(url, format, formatSelector, outputFileName, true, ytOpts(YOUTUBE_EXTRACTOR_ARGS_PRIMARY, 'primary'));
           logYoutube('youtube_metadata_success', { itemId, url });
           logYoutube('youtube_download_success', { itemId, url, formatSelector, usedCookies: true });
           return result;
@@ -352,7 +452,7 @@ async function downloadYouTube(
           });
           await sleep(delay);
           try {
-            const result = await runYtDlp(url, format, formatSelector, outputFileName, cookieFileExists);
+            const result = await runYtDlp(url, format, formatSelector, outputFileName, cookieFileExists, ytOpts(YOUTUBE_EXTRACTOR_ARGS_PRIMARY, 'primary'));
             logYoutube('youtube_metadata_success', { itemId, url });
             logYoutube('youtube_download_success', { itemId, url, formatSelector, afterRetry: true });
             return result;
@@ -376,7 +476,9 @@ async function downloadYouTube(
     }
   }
 
-  const code = classifyYoutubeError(lastStderr).code;
+  const rawCode = classifyYoutubeError(lastStderr).code;
+  const code =
+    usedFallbackClient && rawCode === 'youtube_unavailable' ? 'youtube_client_failed' : rawCode;
   logYoutube('youtube_metadata_failed', { itemId, url, code });
   logYoutube('youtube_download_failed', { itemId, url, code, stderrSnippet: lastStderr.slice(0, 300) });
   throw new Error(`${code}: ${lastStderr.slice(0, 500)}`);

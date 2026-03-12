@@ -16,13 +16,18 @@ export type GlobalErrorCode =
 
 /** YouTube-specific (download engine only). */
 export type YoutubeErrorCode =
-  | 'youtube_age_restricted'
   | 'youtube_login_required'
-  | 'youtube_private_video'
   | 'youtube_unavailable'
+  | 'youtube_region_restricted'
+  | 'youtube_bot_check'
+  | 'youtube_private_or_removed'
+  | 'youtube_client_failed'
+  | 'youtube_private_video'
+  | 'youtube_age_restricted'
   | 'youtube_extractor_error'
   | 'youtube_format_unavailable'
-  | 'youtube_download_error';
+  | 'youtube_download_error'
+  | 'youtube_unknown';
 
 /** Union for any provider error code. */
 export type ProviderErrorCode = GlobalErrorCode | YoutubeErrorCode;
