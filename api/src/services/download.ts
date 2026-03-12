@@ -183,14 +183,19 @@ export function classifyYoutubeError(stderr: string): {
   return { code: 'youtube_unknown', retriable: true, authError: false };
 }
 
-/** YouTube player_client strategies tried in order on "Video unavailable" (datacenter hardening). */
+/** YouTube player_client strategies tried in order on "Video unavailable" (datacenter hardening). First is safer for bot detection (web_safari first). */
 const YOUTUBE_CLIENT_STRATEGIES: readonly string[] = [
+  'youtube:player_client=web_safari,web,tv',
   'youtube:player_client=web,web_safari,tv_embedded',
   'youtube:player_client=android,tv_embedded,web',
   'youtube:player_client=ios,tv_embedded,web',
   'youtube:player_client=mweb,tv_embedded,web'
 ];
 const YOUTUBE_CLIENT_STRATEGY_DELAY_MS = 1500;
+
+/** Browser-like User-Agent for YouTube to reduce bot detection (Chrome on macOS). */
+const YOUTUBE_USER_AGENT =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 
 /** Primary (first) strategy - keep for backward-compat log names. */
 const YOUTUBE_EXTRACTOR_ARGS_PRIMARY = YOUTUBE_CLIENT_STRATEGIES[0]!;
@@ -219,6 +224,11 @@ function runYtDlp(
   if (useCookies && cookiesPath && fs.existsSync(cookiesPath)) {
     args.push('--cookies', cookiesPath);
   }
+  const isYoutubeInvocation = Boolean(options?.extractorArgs);
+  if (isYoutubeInvocation) {
+    args.push('--impersonate', 'chrome');
+    args.push('--add-header', `User-Agent: ${YOUTUBE_USER_AGENT}`);
+  }
   if (options?.extractorArgs) {
     args.push('--extractor-args', options.extractorArgs);
   }
@@ -237,6 +247,10 @@ function runYtDlp(
   // Diagnostics for YouTube (datacenter debugging)
   if (options?.itemId != null || options?.url) {
     const safeArgs = args.map((a) => (a === cookiesPath ? '<cookies>' : a));
+    const sanitizedCommand =
+      YT_DLP +
+      ' ' +
+      safeArgs.map((a) => (a.startsWith('-') ? a : a.includes(' ') ? `"${a}"` : a)).join(' ');
     let cookieSize: number | null = null;
     if (cookiesPath && fs.existsSync(cookiesPath)) {
       try {
@@ -251,7 +265,10 @@ function runYtDlp(
       extractorArgs: options.extractorArgs ?? null,
       cookiePath: cookiesPath || null,
       cookieSizeBytes: cookieSize,
-      ytdlpArgs: safeArgs
+      impersonate: isYoutubeInvocation ? 'chrome' : null,
+      userAgent: isYoutubeInvocation ? YOUTUBE_USER_AGENT : null,
+      ytdlpArgs: safeArgs,
+      ytdlpCommandSanitized: sanitizedCommand
     });
   }
 
