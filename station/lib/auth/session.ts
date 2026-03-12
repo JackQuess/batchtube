@@ -2,7 +2,12 @@ import { redirect } from 'next/navigation';
 import type { AppRole, Profile } from '@/types/domain';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
+function hasSupabaseEnv() {
+  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+}
+
 export async function getCurrentUser() {
+  if (!hasSupabaseEnv()) return null;
   const supabase = createSupabaseServerClient();
   const {
     data: { user }
@@ -11,6 +16,7 @@ export async function getCurrentUser() {
 }
 
 export async function getCurrentProfile(): Promise<Profile | null> {
+  if (!hasSupabaseEnv()) return null;
   const user = await getCurrentUser();
   if (!user) return null;
   const supabase = createSupabaseServerClient();

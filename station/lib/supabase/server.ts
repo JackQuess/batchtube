@@ -2,20 +2,31 @@ import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
 
 export function createSupabaseServerClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Supabase env missing: NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY');
+  }
+
   const cookieStore = cookies();
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       cookies: {
         get(name: string) {
           return cookieStore.get(name)?.value;
         },
         set(name: string, value: string, options: Record<string, unknown>) {
-          cookieStore.set(name, value, options as any);
+          // In Server Components, cookie writes can throw. Ignore and continue.
+          try {
+            cookieStore.set(name, value, options as any);
+          } catch {}
         },
         remove(name: string, options: Record<string, unknown>) {
-          cookieStore.set(name, '', options as any);
+          try {
+            cookieStore.set(name, '', options as any);
+          } catch {}
         }
       }
     }
