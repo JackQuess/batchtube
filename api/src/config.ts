@@ -78,6 +78,10 @@ export const config = {
   ytDlpFragmentRetriesFast: Number(process.env.YT_DLP_FRAGMENT_RETRIES_FAST ?? 1),
   /** Safe-mode fragment retries. */
   ytDlpFragmentRetriesSafe: Number(process.env.YT_DLP_FRAGMENT_RETRIES_SAFE ?? 3),
+  /** Fast-mode concurrent fragment downloads for video formats. */
+  ytDlpConcurrentFragmentsFast: Number(process.env.YT_DLP_CONCURRENT_FRAGMENTS_FAST ?? 8),
+  /** Safe-mode concurrent fragment downloads for video formats. */
+  ytDlpConcurrentFragmentsSafe: Number(process.env.YT_DLP_CONCURRENT_FRAGMENTS_SAFE ?? 4),
   /** Fast-mode extractor retries. */
   ytDlpExtractorRetriesFast: Number(process.env.YT_DLP_EXTRACTOR_RETRIES_FAST ?? 1),
   /** Safe-mode extractor retries. */
@@ -88,6 +92,11 @@ export const config = {
   ytDlpYoutubeBackoffBaseMs: Number(process.env.YT_DLP_YOUTUBE_BACKOFF_BASE_MS ?? 1000),
   /** Minimum recommended yt-dlp version date (YYYY.MM.DD). */
   ytDlpMinVersionDate: process.env.YT_DLP_MIN_VERSION_DATE ?? '2025.01.01',
+  /** JSON map for provider smoke URLs. Example: {"youtube":"https://...","vimeo":"https://..."} */
+  providerSmokeUrlsJson: process.env.PROVIDER_SMOKE_URLS_JSON ?? '',
+  providerSmokeTimeoutMs: Number(process.env.PROVIDER_SMOKE_TIMEOUT_MS ?? 25000),
+  providerSmokeMinIntervalMs: Number(process.env.PROVIDER_SMOKE_MIN_INTERVAL_MS ?? 600000),
+  providerSmokeRequiredSuccessRate: Number(process.env.PROVIDER_SMOKE_REQUIRED_SUCCESS_RATE ?? 0.85),
   /** Optional: comma-separated user UUIDs that are admins (API key + Studio bypass plan restrictions). */
   get adminUserIds(): string[] {
     return (process.env.ADMIN_USER_IDS ?? '')

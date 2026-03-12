@@ -108,6 +108,7 @@ describe('yt-dlp arg builder', () => {
     process.env.YT_DLP_COOKIES_FROM_BROWSER_PROFILE = 'Default';
     process.env.YT_DLP_RETRIES_SAFE = '4';
     process.env.YT_DLP_FRAGMENT_RETRIES_SAFE = '5';
+    process.env.YT_DLP_CONCURRENT_FRAGMENTS_SAFE = '7';
     process.env.YT_DLP_EXTRACTOR_RETRIES_SAFE = '6';
 
     const { buildYtDlpArgs } = await loadDownloadModule();
@@ -130,6 +131,8 @@ describe('yt-dlp arg builder', () => {
     expect(args).toContain('4');
     expect(args).toContain('--fragment-retries');
     expect(args).toContain('5');
+    expect(args).toContain('-N');
+    expect(args).toContain('7');
     expect(args).toContain('--extractor-retries');
     expect(args).toContain('6');
   });

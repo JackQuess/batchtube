@@ -74,8 +74,8 @@ const QUALITY_SELECTORS_MP4_QUICKTIME: Record<DownloadQuality, string> = {
 };
 
 const YOUTUBE_CLIENT_STRATEGIES: readonly string[] = [
-  'youtube:player_client=web_safari,web,tv',
-  'youtube:player_client=web,web_safari,tv_embedded',
+  'youtube:player_client=web',
+  'youtube:player_client=web_safari',
   'youtube:player_client=android,tv_embedded,web'
 ];
 
@@ -486,6 +486,13 @@ export function buildYtDlpArgs(input: BuildYtDlpArgsInput): string[] {
     args.push('--extractor-retries', String(config.ytDlpExtractorRetriesSafe));
   } else {
     args.push('--extractor-retries', String(config.ytDlpExtractorRetriesFast));
+  }
+
+  if (format !== 'mp3') {
+    args.push(
+      '-N',
+      String(options?.hardened ? config.ytDlpConcurrentFragmentsSafe : config.ytDlpConcurrentFragmentsFast)
+    );
   }
 
   const fileCookiesPath = config.ytDlpCookiesPath.trim();
