@@ -499,7 +499,6 @@ export function buildYtDlpArgs(input: BuildYtDlpArgsInput): string[] {
   }
 
   if (options?.extractorArgs) {
-    args.push('--impersonate', 'chrome');
     args.push('--add-header', `User-Agent: ${YOUTUBE_USER_AGENT}`);
     args.push('--add-header', 'Accept-Language: en-US,en;q=0.9');
     args.push('--extractor-args', options.extractorArgs);
