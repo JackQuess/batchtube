@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 222 47% 6%;
+  --foreground: 210 20% 95%;
+  --card: 222 43% 10%;
+  --card-foreground: 210 20% 95%;
+  --primary: 195 90% 57%;
+  --primary-foreground: 222 47% 8%;
+  --border: 217 22% 20%;
+  --muted: 217 20% 14%;
+  --muted-foreground: 215 17% 65%;
+}
+
+body {
+  @apply bg-background text-foreground antialiased;
+  background-image: radial-gradient(circle at 10% 0%, rgba(0, 174, 255, 0.15), transparent 26%), radial-gradient(circle at 90% 0%, rgba(0, 138, 255, 0.12), transparent 24%);
+}
