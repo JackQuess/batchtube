@@ -30,7 +30,10 @@ export class YtDlpError extends Error {
 export interface RunYtDlpOptions {
   /** e.g. "youtube:player_client=web,web_safari,tv_embedded" */
   extractorArgs?: string;
+  /** For diagnostics: primary = first client strategy, fallback = retry with alternate clients */
   attemptType?: 'primary' | 'fallback';
+  /** 0-based index of client strategy (for logging). */
+  strategyIndex?: number;
   itemId?: string;
   url?: string;
 }
@@ -180,10 +183,19 @@ export function classifyYoutubeError(stderr: string): {
   return { code: 'youtube_unknown', retriable: true, authError: false };
 }
 
-/** Primary YouTube player_client order (web-first, good for many environments). */
-const YOUTUBE_EXTRACTOR_ARGS_PRIMARY = 'youtube:player_client=web,web_safari,tv_embedded';
-/** Fallback for datacenter IPs where web client may get "Video unavailable". */
-const YOUTUBE_EXTRACTOR_ARGS_FALLBACK = 'youtube:player_client=android,tv_embedded,web';
+/** YouTube player_client strategies tried in order on "Video unavailable" (datacenter hardening). */
+const YOUTUBE_CLIENT_STRATEGIES: readonly string[] = [
+  'youtube:player_client=web,web_safari,tv_embedded',
+  'youtube:player_client=android,tv_embedded,web',
+  'youtube:player_client=ios,tv_embedded,web',
+  'youtube:player_client=mweb,tv_embedded,web'
+];
+const YOUTUBE_CLIENT_STRATEGY_DELAY_MS = 1500;
+
+/** Primary (first) strategy - keep for backward-compat log names. */
+const YOUTUBE_EXTRACTOR_ARGS_PRIMARY = YOUTUBE_CLIENT_STRATEGIES[0]!;
+/** Fallback strategy - used when we only try one fallback (e.g. cookie retry). */
+const YOUTUBE_EXTRACTOR_ARGS_FALLBACK = YOUTUBE_CLIENT_STRATEGIES[1]!;
 
 function runYtDlp(
   url: string,
@@ -235,6 +247,7 @@ function runYtDlp(
       itemId: options.itemId,
       url: options.url,
       attemptType: options.attemptType ?? 'primary',
+      strategyIndex: options.strategyIndex,
       extractorArgs: options.extractorArgs ?? null,
       cookiePath: cookiesPath || null,
       cookieSizeBytes: cookieSize,
@@ -337,9 +350,10 @@ async function downloadYouTube(
   logYoutube('youtube_metadata_start', { itemId, url, format, quality });
   logYoutube('youtube_download_start', { itemId, url, format, quality });
 
-  const ytOpts = (extractorArgs: string, attemptType: 'primary' | 'fallback') => ({
+  const ytOpts = (extractorArgs: string, attemptType: 'primary' | 'fallback', strategyIndex: number) => ({
     extractorArgs,
     attemptType,
+    strategyIndex,
     itemId,
     url
   });
@@ -366,32 +380,44 @@ async function downloadYouTube(
       });
     }
 
-    // Step 1: try with primary client, then on youtube_unavailable/clientRetriable try fallback client once
+    // Try each player_client strategy in order; on "Video unavailable" try next with short delay.
     try {
       let result: { filePath: string; mimeType: string; ext: string } | null = null;
-      let triedFallback = false;
+      let lastStrategyIndex = -1;
 
-      const tryRun = async (extractorArgs: string, attemptType: 'primary' | 'fallback') =>
-        runYtDlp(url, format, formatSelector, outputFileName, useCookiesFirst, ytOpts(extractorArgs, attemptType));
+      const tryRun = async (strategyIndex: number) => {
+        const extractorArgs = YOUTUBE_CLIENT_STRATEGIES[strategyIndex]!;
+        const attemptType = strategyIndex === 0 ? 'primary' : 'fallback';
+        return runYtDlp(url, format, formatSelector, outputFileName, useCookiesFirst, ytOpts(extractorArgs, attemptType, strategyIndex));
+      };
 
-      result = await tryRun(YOUTUBE_EXTRACTOR_ARGS_PRIMARY, 'primary').catch(async (err) => {
-        lastError = err instanceof Error ? err : new Error(String(err));
-        lastStderr = err instanceof YtDlpError ? err.stderr : lastError.message;
-        const classification = err instanceof YtDlpError ? classifyYoutubeError(err.stderr) : null;
-
-        if (classification?.clientRetriable && !triedFallback) {
-          triedFallback = true;
+      for (let s = 0; s < YOUTUBE_CLIENT_STRATEGIES.length; s++) {
+        if (s > 0) {
           usedFallbackClient = true;
+          await sleep(YOUTUBE_CLIENT_STRATEGY_DELAY_MS);
           logYoutube('youtube_client_fallback_attempt', {
             itemId,
             url,
-            previousCode: classification.code,
-            extractorArgsFallback: YOUTUBE_EXTRACTOR_ARGS_FALLBACK
+            strategyIndex: s,
+            extractorArgs: YOUTUBE_CLIENT_STRATEGIES[s],
+            previousCode: 'youtube_unavailable'
           });
-          return tryRun(YOUTUBE_EXTRACTOR_ARGS_FALLBACK, 'fallback');
         }
-        throw err;
-      });
+        try {
+          result = await tryRun(s);
+          lastStrategyIndex = s;
+          usedFallbackClient = s > 0;
+          break;
+        } catch (err) {
+          lastError = err instanceof Error ? err : new Error(String(err));
+          lastStderr = err instanceof YtDlpError ? err.stderr : lastError.message;
+          const classification = err instanceof YtDlpError ? classifyYoutubeError(err.stderr) : null;
+          if (classification?.clientRetriable && s < YOUTUBE_CLIENT_STRATEGIES.length - 1) {
+            continue;
+          }
+          throw err;
+        }
+      }
 
       if (result) {
         logYoutube('youtube_metadata_success', { itemId, url });
@@ -400,7 +426,8 @@ async function downloadYouTube(
           url,
           formatSelector,
           usedCookies: useCookiesFirst,
-          usedFallbackClient: triedFallback
+          usedFallbackClient,
+          strategyIndex: lastStrategyIndex
         });
         return result;
       }
@@ -422,7 +449,7 @@ async function downloadYouTube(
       if (classification?.authError && cookieFileExists) {
         logYoutube('youtube_download_cookie_retry', { itemId, url, cookiesPath });
         try {
-          const result = await runYtDlp(url, format, formatSelector, outputFileName, true, ytOpts(YOUTUBE_EXTRACTOR_ARGS_PRIMARY, 'primary'));
+          const result = await runYtDlp(url, format, formatSelector, outputFileName, true, ytOpts(YOUTUBE_EXTRACTOR_ARGS_PRIMARY, 'primary', 0));
           logYoutube('youtube_metadata_success', { itemId, url });
           logYoutube('youtube_download_success', { itemId, url, formatSelector, usedCookies: true });
           return result;
@@ -455,7 +482,7 @@ async function downloadYouTube(
           });
           await sleep(delay);
           try {
-            const result = await runYtDlp(url, format, formatSelector, outputFileName, cookieFileExists, ytOpts(YOUTUBE_EXTRACTOR_ARGS_PRIMARY, 'primary'));
+            const result = await runYtDlp(url, format, formatSelector, outputFileName, cookieFileExists, ytOpts(YOUTUBE_EXTRACTOR_ARGS_PRIMARY, 'primary', 0));
             logYoutube('youtube_metadata_success', { itemId, url });
             logYoutube('youtube_download_success', { itemId, url, formatSelector, afterRetry: true });
             return result;
