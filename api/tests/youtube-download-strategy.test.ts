@@ -27,6 +27,15 @@ describe('youtube error classifier', () => {
     expect(result.code).toBe('youtube_private');
     expect(result.retriable).toBe(false);
   });
+
+  it('classifies requested format unavailable as extractor fallback', async () => {
+    const { classifyYoutubeError } = await loadDownloadModule();
+    const result = classifyYoutubeError('ERROR: [youtube] abc123: Requested format is not available');
+
+    expect(result.code).toBe('youtube_extractor_failure');
+    expect(result.retriable).toBe(true);
+    expect(result.clientRetriable).toBe(false);
+  });
 });
 
 describe('youtube fallback planner', () => {

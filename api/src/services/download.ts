@@ -67,10 +67,10 @@ const QUALITY_SELECTORS: Record<DownloadQuality, string> = {
 
 /** When format is MP4, prefer H.264 (avc1) so the file plays in QuickTime Player / default macOS players. */
 const QUALITY_SELECTORS_MP4_QUICKTIME: Record<DownloadQuality, string> = {
-  best: 'bestvideo[vcodec^=avc1]+bestaudio/best/bv*+ba/b',
-  '4k': 'bestvideo[vcodec^=avc1][height<=2160]+bestaudio/best/bestvideo[height<=2160]+bestaudio/best',
-  '1080p': 'bestvideo[vcodec^=avc1][height<=1080]+bestaudio/best/bestvideo[height<=1080]+bestaudio/best',
-  '720p': 'bestvideo[vcodec^=avc1][height<=720]+bestaudio/best/bestvideo[height<=720]+bestaudio/best'
+  best: 'bv*[vcodec^=avc1][ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*[vcodec^=avc1]+ba/b',
+  '4k': 'bv*[vcodec^=avc1][height<=2160][ext=mp4]+ba[ext=m4a]/b[height<=2160][ext=mp4]/bv*[height<=2160]+ba/b[height<=2160]',
+  '1080p': 'bv*[vcodec^=avc1][height<=1080][ext=mp4]+ba[ext=m4a]/b[height<=1080][ext=mp4]/bv*[height<=1080]+ba/b[height<=1080]',
+  '720p': 'bv*[vcodec^=avc1][height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720][ext=mp4]/bv*[height<=720]+ba/b[height<=720]'
 };
 
 const YOUTUBE_CLIENT_STRATEGIES: readonly string[] = [
@@ -84,10 +84,10 @@ const YOUTUBE_USER_AGENT =
 
 const YOUTUBE_VIDEO_FORMAT_FALLBACK = ['bestvideo+bestaudio/best', 'best', 'bestaudio'];
 const YOUTUBE_VIDEO_FORMAT_FALLBACK_MP4 = [
+  'bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]',
   'bestvideo[vcodec^=avc1]+bestaudio/best',
   'bestvideo+bestaudio/best',
-  'best',
-  'bestaudio'
+  'best'
 ];
 
 export type YoutubeErrorCode =
@@ -331,6 +331,15 @@ export function classifyYoutubeError(stderr: string): YoutubeErrorClassification
     raw.includes('Pardon the Interruption')
   ) {
     return { code: 'youtube_antibot', retriable: true, authError: false, clientRetriable: true };
+  }
+
+  if (
+    s.includes('requested format is not available') ||
+    s.includes('requested format not available') ||
+    s.includes('requested format is not') ||
+    s.includes('no video formats found')
+  ) {
+    return { code: 'youtube_extractor_failure', retriable: true, authError: false, clientRetriable: false };
   }
 
   if (
