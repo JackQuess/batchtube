@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 export function SectionCard({ href, title, description, icon: Icon }: { href: string; title: string; description: string; icon: LucideIcon }) {
   return (
     <Link href={href}>
-      <Card className="h-full transition hover:border-primary/60 hover:bg-card/70">
+      <Card className="h-full transition hover:border-primary/55 hover:bg-white/[0.04]">
         <CardHeader>
           <div className="mb-3 flex items-center justify-between">
             <Icon className="h-4 w-4 text-primary" />

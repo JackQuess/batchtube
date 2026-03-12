@@ -15,20 +15,23 @@ export async function TopNav() {
   const profile = await getCurrentProfile();
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border/70 bg-background/90 backdrop-blur">
+    <header className="sticky top-0 z-40 border-b border-white/10 bg-black/65 backdrop-blur-xl">
       <div className="container flex h-16 items-center justify-between gap-4">
-        <Link href="/" className="inline-flex items-center gap-2 font-semibold text-white">
-          <Command className="h-4 w-4 text-primary" /> BatchTube Station
+        <Link href="/" className="inline-flex items-center gap-2 font-semibold text-white tracking-tight">
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-primary/15 ring-1 ring-primary/35">
+            <Command className="h-3.5 w-3.5 text-primary" />
+          </span>
+          BatchTube Station
         </Link>
         <nav className="hidden items-center gap-1 md:flex">
           {links.map((l) => (
-            <Link key={l.href} href={l.href} className="rounded-md px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-white">
+            <Link key={l.href} href={l.href} className="rounded-md px-3 py-2 text-sm text-muted-foreground transition hover:bg-white/5 hover:text-white">
               {l.label}
             </Link>
           ))}
         </nav>
         <div className="flex items-center gap-2">
-          <Link href="/search" className="hidden rounded-md border border-border px-3 py-2 text-xs text-muted-foreground md:inline-flex">Search</Link>
+          <Link href="/search" className="hidden rounded-md border border-white/15 bg-white/5 px-3 py-2 text-xs text-muted-foreground md:inline-flex">Search</Link>
           {profile ? (
             <>
               {(profile.role === 'admin' || profile.role === 'moderator') ? (

@@ -30,7 +30,10 @@ export default async function HomePage() {
 
   return (
     <div className="space-y-10">
-      <section className="rounded-2xl border border-border bg-card/60 p-8">
+      <section className="rounded-2xl border border-white/10 bg-card/70 p-8">
+        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/35 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+          Reliability hub
+        </div>
         <PageHeader
           title="BatchTube Station"
           description="A public reliability and product intelligence hub for docs, roadmap, provider health, incidents, issues, templates, and community context."
@@ -47,7 +50,7 @@ export default async function HomePage() {
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-xl font-semibold">Provider Snapshot</h2>
+        <h2 className="text-xl font-semibold tracking-tight">Provider Snapshot</h2>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
           {data.providers.map((item) => <ProviderStatusCard key={item.provider_key} item={item} />)}
         </div>
