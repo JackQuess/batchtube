@@ -335,12 +335,11 @@ function logYoutube(
 }
 
 /**
- * YouTube-only pipeline: when cookies are configured, use them from the first attempt
- * (same as local: yt-dlp --cookies cookies.txt). Otherwise try without, then cookie retry on auth errors;
- * format fallback bestvideo+bestaudio/best → best → bestaudio;
- * up to 2 retries with exponential backoff for transient errors.
+ * YouTube SAFE PATH — used only after the fast path fails with a retriable/client-related error.
+ * Tries multiple player_client strategies, format fallbacks, cookie retry and transient retries.
+ * This is intentionally more expensive; common cases should go through the fast path only.
  */
-async function downloadYouTube(
+async function downloadYouTubeSafe(
   url: string,
   format: DownloadFormat,
   quality: DownloadQuality,
@@ -537,12 +536,106 @@ async function downloadYouTube(
 }
 
 /**
+ * YouTube FAST PATH — single client strategy, no format or client fallbacks.
+ * Optimized for the common case: public/non-problematic videos.
+ * Safe path is only invoked when this fails with a retriable/client-related error.
+ */
+async function downloadYouTubeFast(
+  url: string,
+  format: DownloadFormat,
+  quality: DownloadQuality,
+  outputFileName: string,
+  itemId: string
+): Promise<{ filePath: string; mimeType: string; ext: string }> {
+  const cookiesPath = config.ytDlpCookiesPath?.trim();
+  const cookieFileExists = Boolean(cookiesPath && fs.existsSync(cookiesPath));
+  const useCookiesFirst = cookieFileExists;
+
+  if (cookieFileExists) {
+    try {
+      const stat = fs.statSync(cookiesPath);
+      logYoutube('youtube_cookie_file_used', {
+        itemId,
+        url,
+        cookiesPath,
+        sizeBytes: stat.size,
+        hint: 'Using cookies on first attempt (fast path, same as local yt-dlp --cookies).'
+      });
+    } catch {
+      logYoutube('youtube_cookie_file_used', { itemId, url, cookiesPath, hint: 'Cookie file exists.' });
+    }
+  }
+
+  logYoutube('fast_path_started', { provider: 'youtube', itemId, url, format, quality });
+
+  // Fast-path selector: single strong choice per format/quality.
+  const selector =
+    format === 'mp4'
+      ? QUALITY_SELECTORS_MP4_QUICKTIME[quality]
+      : QUALITY_SELECTORS[quality];
+
+  const extractorArgs = YOUTUBE_EXTRACTOR_ARGS_PRIMARY;
+  const ytOpts: RunYtDlpOptions = {
+    extractorArgs,
+    attemptType: 'primary',
+    strategyIndex: 0,
+    itemId,
+    url
+  };
+
+  const startedAt = Date.now();
+  try {
+    const result = await runYtDlp(url, format, selector, outputFileName, useCookiesFirst, ytOpts);
+    const durationMs = Date.now() - startedAt;
+    logYoutube('fast_path_succeeded', {
+      provider: 'youtube',
+      itemId,
+      url,
+      format,
+      quality,
+      strategyIndex: 0,
+      duration_ms: durationMs
+    });
+    return result;
+  } catch (err) {
+    const durationMs = Date.now() - startedAt;
+    const ytErr = err instanceof YtDlpError ? err : null;
+    const stderr = ytErr?.stderr ?? (err instanceof Error ? err.message : String(err));
+    const classification = ytErr ? classifyYoutubeError(ytErr.stderr) : null;
+    const code = classification?.code ?? 'youtube_unknown';
+
+    logYoutube('fast_path_failed', {
+      provider: 'youtube',
+      itemId,
+      url,
+      format,
+      quality,
+      code,
+      retriable: classification?.retriable ?? false,
+      authError: classification?.authError ?? false,
+      clientRetriable: classification?.clientRetriable ?? false,
+      duration_ms: durationMs,
+      stderrSnippet: stderr.slice(0, 300)
+    });
+
+    // If it's clearly permanent and not retriable/client-related, bubble it up directly.
+    if (!classification || (!classification.retriable && !classification.authError && !classification.clientRetriable)) {
+      recordProviderFailure('youtube', code);
+      throw new Error(`${code}: ${stderr.slice(0, 500)}`);
+    }
+
+    // Otherwise, let the caller invoke the SAFE path.
+    throw ytErr ?? new Error(stderr);
+  }
+}
+
+/**
  * Run yt-dlp and return the path to the downloaded file and its mime type.
  * Optional: YT_DLP_COOKIES_FILE env for age-restricted / login-required content.
- * For YouTube: uses no-cookie first, cookie retry on auth errors, format fallback, and transient retries.
- * For other providers: unchanged (single run with cookies if configured, one format fallback for video).
+ * For YouTube: FAST path by default, SAFE path only when fast path fails with retriable/client-related errors.
+ * For other providers: fast single attempt; minimal fallback, with optional compatibility for short-form providers.
  */
-export function downloadWithYtDlp(
+export async function downloadWithYtDlp(
   url: string,
   options: DownloadOptions,
   outputFileName: string,
@@ -555,19 +648,147 @@ export function downloadWithYtDlp(
       ? QUALITY_SELECTORS_MP4_QUICKTIME[quality]
       : QUALITY_SELECTORS[quality];
 
-  if (provider === 'youtube') {
-    const ytResult = await downloadYouTube(url, format, quality, outputFileName, outputFileName);
-    // YouTube short-form content (Shorts) is generally compatible; do not run
-    // extra normalization here to keep latency low.
-    return ytResult;
+  // Dedicated, fast MP3 branch: audio-only, no video format fallbacks.
+  if (format === 'mp3') {
+    console.log(
+      JSON.stringify({
+        msg: 'mp3_branch_used',
+        provider: provider ?? 'generic',
+        quality
+      })
+    );
+
+    // YouTube MP3: still go through YouTube fast path (so cookies, impersonation, etc. apply),
+    // but with audio-only behavior (runYtDlp uses --extract-audio for mp3 format).
+    if (provider === 'youtube') {
+      try {
+        const result = await downloadYouTubeFast(url, format, 'best', outputFileName, outputFileName);
+        return result;
+      } catch (err) {
+        // If fast path fails for MP3, fall back to SAFE path only when classification says it's appropriate.
+        const ytErr = err instanceof YtDlpError ? err : null;
+        const stderr = ytErr?.stderr ?? (err instanceof Error ? err.message : String(err));
+        const classification = ytErr ? classifyYoutubeError(ytErr.stderr) : null;
+        const code = classification?.code ?? 'youtube_unknown';
+        if (!classification || (!classification.retriable && !classification.authError && !classification.clientRetriable)) {
+          recordProviderFailure('youtube', code);
+          throw new Error(`${code}: ${stderr.slice(0, 500)}`);
+        }
+        const safeResult = await downloadYouTubeSafe(url, format, 'best', outputFileName, outputFileName);
+        return safeResult;
+      }
+    }
+
+    // Non-YouTube MP3: single fast attempt only.
+    const mp3Result = await runYtDlp(url, format, '', outputFileName, true);
+    return mp3Result;
   }
 
+  if (provider === 'youtube') {
+    // FAST path first.
+    try {
+      const fastResult = await downloadYouTubeFast(url, format, quality, outputFileName, outputFileName);
+      // YouTube short-form content (Shorts) is generally compatible; do not run
+      // extra normalization here to keep latency low.
+      return fastResult;
+    } catch (err) {
+      const ytErr = err instanceof YtDlpError ? err : null;
+      const stderr = ytErr?.stderr ?? (err instanceof Error ? err.message : String(err));
+      const classification = ytErr ? classifyYoutubeError(ytErr.stderr) : null;
+      const code = classification?.code ?? 'youtube_unknown';
+
+      // If not retriable/client-related, surface as-is.
+      if (!classification || (!classification.retriable && !classification.authError && !classification.clientRetriable)) {
+        recordProviderFailure('youtube', code);
+        throw new Error(`${code}: ${stderr.slice(0, 500)}`);
+      }
+
+      console.log(
+        JSON.stringify({
+          msg: 'safe_path_started',
+          provider: 'youtube',
+          itemId: outputFileName,
+          url,
+          format,
+          quality,
+          code
+        })
+      );
+      const safeStartedAt = Date.now();
+      try {
+        const safeResult = await downloadYouTubeSafe(url, format, quality, outputFileName, outputFileName);
+        const safeDurationMs = Date.now() - safeStartedAt;
+        console.log(
+          JSON.stringify({
+            msg: 'safe_path_succeeded',
+            provider: 'youtube',
+            itemId: outputFileName,
+            url,
+            format,
+            quality,
+            code,
+            duration_ms: safeDurationMs
+          })
+        );
+        return safeResult;
+      } catch (safeErr) {
+        const safeDurationMs = Date.now() - safeStartedAt;
+        const finalErr = safeErr instanceof Error ? safeErr : new Error(String(safeErr));
+        console.error(
+          JSON.stringify({
+            msg: 'safe_path_failed',
+            provider: 'youtube',
+            itemId: outputFileName,
+            url,
+            format,
+            quality,
+            code,
+            duration_ms: safeDurationMs,
+            error: finalErr.message
+          })
+        );
+        throw finalErr;
+      }
+    }
+  }
+
+  // Non-YouTube MP4/MKV fast path: single selector + minimal fallback.
+  const fastStartedAt = Date.now();
+  console.log(
+    JSON.stringify({
+      msg: 'fast_path_started',
+      provider: provider ?? 'generic',
+      format,
+      quality,
+      selector_chosen: selector
+    })
+  );
+
   const baseResult = await runYtDlp(url, format, selector, outputFileName, true).catch((firstErr) => {
-    if (format === 'mp3') throw firstErr;
-    return runYtDlp(url, format, 'bv*+ba/b', outputFileName, true).catch(() => {
-      throw firstErr;
-    });
+    const errMsg = firstErr instanceof Error ? firstErr.message : String(firstErr);
+    console.warn(
+      JSON.stringify({
+        msg: 'fast_path_failed',
+        provider: provider ?? 'generic',
+        format,
+        quality,
+        error: errMsg
+      })
+    );
+    // Single simple fallback selector for video.
+    return runYtDlp(url, format, 'bv*+ba/b', outputFileName, true);
   });
+
+  const fastDurationMs = Date.now() - fastStartedAt;
+  console.log(
+    JSON.stringify({
+      msg: 'fast_path_succeeded',
+      provider: provider ?? 'generic',
+      format,
+      quality,
+      duration_ms: fastDurationMs
+    })
+  );
 
   // Optional short-form MP4 compatibility normalization for Instagram/TikTok only.
   try {
