@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Play, Command, Zap, ArrowRight, Video, List, Code2, Cpu, Sparkles, Terminal, ChevronRight, Youtube, Instagram, Twitter } from 'lucide-react';
 import { BatchTubeLogo } from '../components/BatchTubeLogo';
-import { API_BASE_URL } from '../config/api';
+import { API_BASE_URL, STATION_URL } from '../config/api';
 
 export interface LandingPageProps {
   onNavigateToLogin?: () => void;
@@ -121,6 +121,7 @@ export function LandingPage({ onNavigateToLogin, onNavigateToSignUp, onNavigateT
               ) : (
                 <a href="#pricing" className="hover:text-white transition-colors">Pricing</a>
               )}
+              <a href={STATION_URL} className="hover:text-white transition-colors">Station</a>
             </div>
             <div className="h-4 w-px bg-white/10 hidden md:block" />
             <button

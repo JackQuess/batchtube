@@ -2,6 +2,7 @@ import React from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { navigate } from '../lib/simpleRouter';
 import { BatchTubeLogo } from './BatchTubeLogo';
+import { STATION_URL } from '../config/api';
 
 interface PublicLayoutProps {
   children: React.ReactNode;
@@ -26,6 +27,9 @@ export function PublicLayout({ children, title }: PublicLayoutProps) {
             <BatchTubeLogo size="md" />
           </button>
           <div className="flex items-center gap-4">
+            <a href={STATION_URL} className="text-sm font-medium text-app-muted hover:text-white transition-colors">
+              Station
+            </a>
             <button
               type="button"
               onClick={() => navigate('/')}
