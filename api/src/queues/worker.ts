@@ -204,13 +204,23 @@ export async function processItem(job: Job<ItemJob>) {
 
 export async function processMedia(job: Job<ProcessingJob>) {
   const { batchId, itemId, userId } = job.data;
+  console.log(JSON.stringify({ msg: 'processing_job_started', batchId, itemId }));
 
   const item = await prisma.batchItem.findFirst({
     where: { id: itemId, batch_id: batchId }
   });
-  if (!item) return;
-  if (item.status === 'completed' || item.status === 'failed' || item.status === 'cancelled') return;
-  if (item.processing_mode === 'none') return;
+  if (!item) {
+    console.warn(JSON.stringify({ msg: 'processing_job_skip', reason: 'item_not_found', batchId, itemId }));
+    return;
+  }
+  if (item.status === 'completed' || item.status === 'failed' || item.status === 'cancelled') {
+    console.warn(JSON.stringify({ msg: 'processing_job_skip', reason: 'item_already_terminal', batchId, itemId, status: item.status }));
+    return;
+  }
+  if (item.processing_mode === 'none') {
+    console.warn(JSON.stringify({ msg: 'processing_job_skip', reason: 'processing_mode_none', batchId, itemId }));
+    return;
+  }
 
   const plan = await getPlan(userId);
   const entitlements = getEntitlements(plan);

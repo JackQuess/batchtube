@@ -281,6 +281,9 @@ export const upscaleRoute: FastifyPluginAsync = async (app) => {
     });
 
     if (items.length === 0) {
+      request.log.info(
+        { batchId: id, msg: 'upscale_start_no_items', hint: 'No pending/queued items; batch may already be started or items in wrong status.' }
+      );
       return reply.send({ id: batch.id, status: batch.status, item_count: batch.item_count });
     }
 
@@ -305,6 +308,9 @@ export const upscaleRoute: FastifyPluginAsync = async (app) => {
       await enqueueProcessingJob(id, item.id, request.auth.user.id, planForEnqueue);
     }
 
+    request.log.info(
+      { batchId: id, itemCount: items.length, msg: 'upscale_start_enqueued', queue: 'batchtube-processing' }
+    );
     return reply.send({ id: batch.id, status: 'processing', item_count: batch.item_count });
   });
 
