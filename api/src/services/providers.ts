@@ -25,6 +25,10 @@ const DOMAIN_RULES: Array<{ name: string; regex: RegExp }> = [
   { name: 'loom', regex: /loom\.com/i }
 ];
 
+export const SUPPORTED_PROVIDER_IDS: readonly string[] = [
+  ...new Set([...DOMAIN_RULES.map((r) => r.name), 'generic'])
+];
+
 const BLOCKED_DOMAINS = new Set([
   'localhost',
   '127.0.0.1',

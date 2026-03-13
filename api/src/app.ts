@@ -13,6 +13,7 @@ import apiKeysRoute from './routes/api-keys.js';
 import billingRoute from './routes/billing.js';
 import lemonsqueezyWebhookRoute from './routes/lemonsqueezy-webhook.js';
 import upscaleRoute from './routes/upscale.js';
+import providerHealthRoute from './routes/provider-health.js';
 import { config } from './config.js';
 import { sendError } from './utils/errors.js';
 
@@ -68,6 +69,7 @@ export function createApp() {
   app.register(billingRoute);
   app.register(lemonsqueezyWebhookRoute);
   app.register(upscaleRoute);
+  app.register(providerHealthRoute);
 
   app.setNotFoundHandler((request, reply) => {
     return sendError(request, reply, 404, 'not_found', 'Resource not found.');

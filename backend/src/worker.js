@@ -82,10 +82,23 @@ async function downloadItem(item, tempDir, onProgress) {
   const provider = getProviderForUrl(url);
   const safeTitle = sanitizeFilename(title || `item_${index + 1}`);
   const providerFormat = format === 'mp3' ? 'audio' : 'video';
+
+  const timings = {
+    source_resolve_started_at: Date.now(),
+    source_resolve_duration_ms: 0,
+    metadata_duration_ms: 0,
+    download_start_latency_ms: 0,
+    download_duration_ms: 0,
+    total_item_latency_ms: 0
+  };
+
   let meta = null;
   let metadataError = null;
 
   try {
+    const itemStart = Date.now();
+    timings.source_resolve_started_at = itemStart;
+
     onProgress(index, {
       status: 'downloading',
       provider: provider.id,
@@ -93,34 +106,69 @@ async function downloadItem(item, tempDir, onProgress) {
       meta: null
     });
 
-    try {
-      meta = await provider.getMetadata(url);
-      onProgress(index, {
-        provider: provider.id,
-        meta
-      });
-    } catch (metaErr) {
-      metadataError = toStandardError(metaErr, 'METADATA_FAILED');
-      onProgress(index, {
-        provider: provider.id,
-        meta: null
-      });
-    }
-
-    const downloadResult = await provider.download(url, {
-      outDir: tempDir,
-      format: providerFormat,
-      quality,
-      baseName: safeTitle,
-      onProgress: (percent) => {
+    // Start metadata fetch in the background.
+    // Never block the download on metadata – if it is slow or fails, download continues.
+    const metadataStart = Date.now();
+    const metadataPromise = (async () => {
+      try {
+        const m = await provider.getMetadata(url);
+        timings.metadata_duration_ms = Date.now() - metadataStart;
+        meta = m;
         onProgress(index, {
-          status: 'downloading',
           provider: provider.id,
-          meta,
-          percent: Math.round(percent || 0)
+          meta
+        });
+      } catch (metaErr) {
+        timings.metadata_duration_ms = Date.now() - metadataStart;
+        metadataError = toStandardError(metaErr, 'METADATA_FAILED');
+        // Do not downgrade perceived speed just because metadata failed.
+        onProgress(index, {
+          provider: provider.id,
+          meta: null
         });
       }
-    });
+    })();
+
+    const downloadStart = Date.now();
+    timings.download_start_latency_ms = downloadStart - itemStart;
+
+    const downloadResultPromise = (async () => {
+      const innerStart = Date.now();
+      const result = await provider.download(url, {
+        outDir: tempDir,
+        format: providerFormat,
+        quality,
+        baseName: safeTitle,
+        onProgress: (percent) => {
+          onProgress(index, {
+            status: 'downloading',
+            provider: provider.id,
+            meta,
+            percent: Math.round(percent || 0)
+          });
+        }
+      });
+      timings.download_duration_ms = Date.now() - innerStart;
+      return result;
+    })();
+
+    // Wait for download to finish; metadata is allowed to still be in flight.
+    const downloadResult = await downloadResultPromise;
+
+    // Ensure metadataPromise settles eventually, but do not await it before returning result.
+    metadataPromise.catch(() => {});
+
+    timings.total_item_latency_ms = Date.now() - itemStart;
+
+    console.log(
+      JSON.stringify({
+        msg: 'download_item_completed',
+        provider: provider.id,
+        format: providerFormat,
+        quality,
+        timings
+      })
+    );
 
     return {
       id: index,
@@ -133,8 +181,18 @@ async function downloadItem(item, tempDir, onProgress) {
       metadataError
     };
   } catch (error) {
+    timings.total_item_latency_ms = Date.now() - (timings.source_resolve_started_at || Date.now());
     const stdError = toStandardError(error, 'DOWNLOAD_FAILED');
-    console.error(`[Worker] Item ${index} failed:`, stdError.message);
+    console.error(
+      JSON.stringify({
+        msg: 'download_item_failed',
+        provider: provider.id,
+        format: providerFormat,
+        quality,
+        error: stdError,
+        timings
+      })
+    );
     return {
       id: index,
       status: 'failed',
@@ -155,7 +213,19 @@ const worker = new Worker(
     const { items, format, quality } = job.data;
     const jobId = job.id;
 
-    console.log(`[Worker] Processing job ${jobId} with ${items.length} items`);
+    const now = Date.now();
+    const queueWaitDurationMs = job.timestamp ? now - job.timestamp : 0;
+
+    console.log(
+      JSON.stringify({
+        msg: 'batch_job_started',
+        jobId,
+        itemsCount: items.length,
+        format,
+        quality,
+        queue_wait_duration_ms: queueWaitDurationMs
+      })
+    );
 
     // Create temp directory
     const tempDir = path.join(os.tmpdir(), 'batchtube', jobId);
@@ -278,15 +348,40 @@ const worker = new Worker(
     console.log(`[Worker] Creating ZIP parts for ${downloadedFiles.length} files...`);
 
     // Create ZIP parts
+    const mergeStart = Date.now();
     const parts = await createZipParts(jobId, downloadedFiles);
+
+    const mergeDurationMs = Date.now() - mergeStart;
+
+    console.log(
+      JSON.stringify({
+        msg: 'batch_zip_created',
+        jobId,
+        filesCount: downloadedFiles.length,
+        partsCount: parts.length,
+        merge_duration_ms: mergeDurationMs
+      })
+    );
 
     console.log(`[Worker] Created ${parts.length} ZIP part(s), uploading to API...`);
 
     // Upload each ZIP part to API
+    const storageStart = Date.now();
     for (const part of parts) {
       console.log(`[Worker] Uploading ZIP part ${part.part}...`);
       await uploadZipPart(jobId, part);
     }
+
+    const storageDurationMs = Date.now() - storageStart;
+
+    console.log(
+      JSON.stringify({
+        msg: 'batch_zip_uploaded',
+        jobId,
+        partsCount: parts.length,
+        storage_duration_ms: storageDurationMs
+      })
+    );
 
     console.log(`[Worker] All ZIP parts uploaded successfully`);
 
@@ -301,6 +396,8 @@ const worker = new Worker(
     }
 
     // Return job result (no zipPath needed, API has it)
+    const totalJobLatencyMs = Date.now() - (job.timestamp || Date.now());
+
     return {
       jobId,
       result: {
@@ -326,15 +423,23 @@ const worker = new Worker(
           error: r.error?.message || r.error || undefined,
           errorCode: r.error?.code || undefined,
           hint: r.error?.hint || undefined
-        }))
+        })),
+        telemetry: {
+          queue_wait_duration_ms: queueWaitDurationMs,
+          merge_duration_ms: mergeDurationMs,
+          storage_duration_ms: storageDurationMs,
+          total_job_latency_ms: totalJobLatencyMs
+        }
       }
     };
   },
   {
     connection: redisConnection,
-    concurrency: 1, // Process one batch job at a time
+    // Allow multiple batch jobs at once so small jobs stay snappy
+    concurrency: 3,
     limiter: {
-      max: 1,
+      // Up to 3 jobs per second to keep Redis and disk healthy
+      max: 3,
       duration: 1000
     }
   }

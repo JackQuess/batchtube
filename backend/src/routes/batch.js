@@ -85,10 +85,12 @@ router.post('/batch', async (req, res) => {
       });
     }
 
+    const itemsCount = items.length;
+
     const limitError = checkBatchLimits({
       userId: requestUser?.id || null,
       plan,
-      itemsCount: items.length,
+      itemsCount,
       usage
     });
     if (limitError) {
@@ -97,6 +99,20 @@ router.post('/batch', async (req, res) => {
         code: limitError.code,
         details: limitError
       });
+    }
+
+    // Compute simple size-based priority:
+    // - Smaller batches get higher priority to keep perceived latency low.
+    // - BullMQ treats lower numbers as higher priority.
+    let priority = 5;
+    if (itemsCount === 1) {
+      priority = 1;
+    } else if (itemsCount <= 5) {
+      priority = 2;
+    } else if (itemsCount <= 20) {
+      priority = 3;
+    } else if (itemsCount <= 50) {
+      priority = 4;
     }
 
     // Add job to queue
@@ -112,16 +128,27 @@ router.post('/batch', async (req, res) => {
       format,
       quality,
       userId: requestUser?.id || null,
-      plan
+      plan,
+      itemsCount
     }, {
-      jobId: `batch-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      jobId: `batch-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      priority
     });
 
     if (requestUser?.id) {
       await incrementUsage(requestUser.id, items.length);
     }
 
-    console.log(`[Batch] Created job ${job.id} with ${items.length} items`);
+    console.log(
+      JSON.stringify({
+        msg: 'batch_job_enqueued',
+        jobId: job.id,
+        itemsCount,
+        format,
+        quality,
+        priority
+      })
+    );
 
     res.json({ 
       jobId: job.id 

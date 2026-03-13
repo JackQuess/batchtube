@@ -54,22 +54,120 @@ function findYtDlpBinary() {
 
 const YTDLP_BINARY = findYtDlpBinary();
 
-/**
- * Download with yt-dlp
- * @param {Object} params
- * @param {string} params.url - YouTube URL
- * @param {string} params.format - "mp3" | "mp4"
- * @param {string} params.quality - "1080p" | "4k"
- * @param {string} params.outputPath - Full output file path
- * @param {Function} params.onProgress - Callback(percent, textLine)
- * @returns {Promise<void>}
- */
-function downloadWithYtDlp({ url, format, quality = '1080p', outputPath, onProgress }) {
-  // Ensure output directory exists
-  const outputDir = path.dirname(outputPath);
-  fs.mkdirSync(outputDir, { recursive: true });
+function isYoutubeUrl(url) {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    return host.includes('youtube.com') || host === 'youtu.be' || host.endsWith('.youtu.be');
+  } catch (_) {
+    return false;
+  }
+}
 
-  // Build command args
+function classifyYoutubeError(message) {
+  const text = String(message || '').toLowerCase();
+
+  if (!text) {
+    return { code: 'youtube_unknown_failure', recoverable: false };
+  }
+
+  if (text.includes('private') && text.includes('video')) {
+    return { code: 'youtube_private_or_removed', recoverable: false };
+  }
+
+  if (text.includes('video unavailable') || text.includes('unavailable')) {
+    return { code: 'youtube_unavailable', recoverable: false };
+  }
+
+  if (text.includes('sign in to confirm your age') || text.includes('confirm your age')) {
+    return { code: 'youtube_age_restricted', recoverable: true, needsCookies: true };
+  }
+
+  if (text.includes('login required') || text.includes('sign in to')) {
+    return { code: 'youtube_login_required', recoverable: true, needsCookies: true };
+  }
+
+  if (
+    text.includes("confirm you're not a bot") ||
+    text.includes('confirm you are not a bot') ||
+    text.includes('bot check') ||
+    text.includes('captcha')
+  ) {
+    return { code: 'youtube_bot_check', recoverable: true, needsCookies: false };
+  }
+
+  if (text.includes('not available in your country') || text.includes('region')) {
+    return { code: 'youtube_region_restricted', recoverable: false };
+  }
+
+  if (
+    text.includes('timed out') ||
+    text.includes('network') ||
+    text.includes('connection reset') ||
+    text.includes('temporary failure') ||
+    text.includes('http error 5')
+  ) {
+    return { code: 'transient_network_failure', recoverable: true };
+  }
+
+  return { code: 'youtube_unknown_failure', recoverable: false };
+}
+
+function buildYoutubeArgsFast({ url, format, quality, outputPath }) {
+  const base = [
+    '--no-playlist',
+    '--no-warnings',
+    '--no-check-certificate',
+    '-o',
+    outputPath
+  ];
+
+  // Use cookies on the fast path if configured (no extra RTT; just file read)
+  const cookiesFile = process.env.YT_DLP_COOKIES_FILE;
+  if (cookiesFile && fs.existsSync(cookiesFile)) {
+    base.push('--cookies', cookiesFile);
+  }
+
+  if (format === 'mp3') {
+    return [
+      ...base,
+      '--extract-audio',
+      '--audio-format',
+      'mp3',
+      '--audio-quality',
+      '0'
+    ];
+  }
+
+  let heightLimit = '1080';
+  if (quality === '4k') {
+    heightLimit = '2160';
+  }
+
+  const selector =
+    quality === '4k'
+      ? `bv*[ext=mp4][height<=${heightLimit}]+ba[ext=m4a]`
+      : `bv*[ext=mp4][height<=${heightLimit}]+ba[ext=m4a]/bestvideo[height<=${heightLimit}]+bestaudio/best[height<=${heightLimit}]`;
+
+  const args = [
+    ...base,
+    '-f',
+    selector,
+    '--merge-output-format',
+    'mp4'
+  ];
+
+  // More aggressive fragment concurrency for high-res video
+  if (quality === '4k') {
+    args.push('--concurrent-fragments', '16');
+  } else {
+    args.push('--concurrent-fragments', '8');
+  }
+
+  return args;
+}
+
+function buildGenericArgs({ url, format, quality, outputPath }) {
   let args = [];
 
   if (format === 'mp3') {
@@ -101,182 +199,237 @@ function downloadWithYtDlp({ url, format, quality = '1080p', outputPath, onProgr
     throw new Error(`Unsupported format: ${format}`);
   }
 
+  return args;
+}
+
+/**
+ * Download with yt-dlp
+ * @param {Object} params
+ * @param {string} params.url - YouTube URL
+ * @param {string} params.format - "mp3" | "mp4"
+ * @param {string} params.quality - "1080p" | "4k"
+ * @param {string} params.outputPath - Full output file path
+ * @param {Function} params.onProgress - Callback(percent, textLine)
+ * @returns {Promise<void>}
+ */
+function downloadWithYtDlp({ url, format, quality = '1080p', outputPath, onProgress }) {
+  // Ensure output directory exists
+  const outputDir = path.dirname(outputPath);
+  fs.mkdirSync(outputDir, { recursive: true });
+
+  const youtube = isYoutubeUrl(url);
+  const fastArgs = youtube
+    ? buildYoutubeArgsFast({ url, format, quality, outputPath })
+    : buildGenericArgs({ url, format, quality, outputPath });
+
   // Log binary path for debugging (only in dev)
   if (process.env.NODE_ENV !== 'production') {
     console.log(`[YTService] Using yt-dlp binary: ${YTDLP_BINARY}`);
   }
 
-  return new Promise((resolve, reject) => {
-    const child = spawn(YTDLP_BINARY, args, {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      shell: false
-    });
+  function runOnce(args, { fastPath, attempt, totalAttempts }) {
+    const startedAt = Date.now();
 
-    let stdout = '';
-    let stderr = '';
+    return new Promise((resolve, reject) => {
+      const child = spawn(YTDLP_BINARY, args, {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        shell: false
+      });
 
-    // Progress parsing regexes
-    const progressPatterns = [
-      /\[download\]\s+(\d+\.?\d*)%/i,
-      /(\d+\.?\d*)%\s+of/i,
-      /(\d+\.?\d*)%/
-    ];
+      let stdout = '';
+      let stderr = '';
 
-    child.stdout.on('data', (data) => {
-      const text = data.toString();
-      stdout += text;
+      // Progress parsing regexes
+      const progressPatterns = [
+        /\[download\]\s+(\d+\.?\d*)%/i,
+        /(\d+\.?\d*)%\s+of/i,
+        /(\d+\.?\d*)%/
+      ];
 
-      // Parse progress
-      if (onProgress) {
-        for (const pattern of progressPatterns) {
-          const match = text.match(pattern);
-          if (match) {
-            const percent = parseFloat(match[1]);
-            if (!isNaN(percent) && percent >= 0 && percent <= 100) {
-              onProgress(percent, text);
-              break;
+      child.stdout.on('data', (data) => {
+        const text = data.toString();
+        stdout += text;
+
+        // Parse progress
+        if (onProgress) {
+          for (const pattern of progressPatterns) {
+            const match = text.match(pattern);
+            if (match) {
+              const percent = parseFloat(match[1]);
+              if (!isNaN(percent) && percent >= 0 && percent <= 100) {
+                onProgress(percent, text);
+                break;
+              }
             }
           }
         }
-      }
-    });
+      });
 
-    child.stderr.on('data', (data) => {
-      const text = data.toString();
-      stderr += text;
+      child.stderr.on('data', (data) => {
+        const text = data.toString();
+        stderr += text;
 
-      // Parse progress from stderr too
-      if (onProgress) {
-        for (const pattern of progressPatterns) {
-          const match = text.match(pattern);
-          if (match) {
-            const percent = parseFloat(match[1]);
-            if (!isNaN(percent) && percent >= 0 && percent <= 100) {
-              onProgress(percent, text);
-              break;
+        // Parse progress from stderr too
+        if (onProgress) {
+          for (const pattern of progressPatterns) {
+            const match = text.match(pattern);
+            if (match) {
+              const percent = parseFloat(match[1]);
+              if (!isNaN(percent) && percent >= 0 && percent <= 100) {
+                onProgress(percent, text);
+                break;
+              }
             }
           }
         }
-      }
-    });
+      });
 
-    child.on('close', async (code) => {
-      if (code !== 0) {
-        const errorMsg = stderr.trim() || stdout.trim();
-        console.error(`[YTService] yt-dlp failed (exit code ${code}): ${errorMsg.substring(0, 500)}`);
-        reject(new Error(`Download failed: ${errorMsg.substring(0, 200)}`));
-        return;
-      }
+      child.on('close', (code) => {
+        const durationMs = Date.now() - startedAt;
 
-      // Wait a bit for file system sync
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // Find the actual downloaded file (yt-dlp may rename it)
-      const outputDir = path.dirname(outputPath);
-      const expectedExt = path.extname(outputPath).toLowerCase();
-      const format = expectedExt === '.mp3' ? 'mp3' : 'mp4';
-
-      // Try to find the file with retries
-      let foundFile = null;
-      for (let attempt = 0; attempt < 5; attempt++) {
-        if (attempt > 0) {
-          await new Promise(resolve => setTimeout(resolve, 500));
+        if (code !== 0) {
+          const errorMsg = (stderr.trim() || stdout.trim()).substring(0, 500);
+          console.error(
+            JSON.stringify({
+              msg: 'yt_dlp_failed',
+              provider: youtube ? 'youtube' : 'generic',
+              format,
+              quality,
+              fast_path_used: !!fastPath,
+              exit_code: code,
+              attempt,
+              total_attempts: totalAttempts,
+              duration_ms: durationMs,
+              stderr_snippet: errorMsg
+            })
+          );
+          reject(new Error(errorMsg || `yt-dlp failed with exit code ${code}`));
+          return;
         }
 
-        try {
-          if (!fs.existsSync(outputDir)) {
-            continue;
-          }
+        console.log(
+          JSON.stringify({
+            msg: 'yt_dlp_succeeded',
+            provider: youtube ? 'youtube' : 'generic',
+            format,
+            quality,
+            fast_path_used: !!fastPath,
+            attempt,
+            total_attempts: totalAttempts,
+            duration_ms: durationMs
+          })
+        );
 
-          const files = fs.readdirSync(outputDir);
-          
-          // Filter media files by format
-          const mediaExtensions = format === 'mp3' 
-            ? ['.mp3', '.m4a', '.opus', '.webm', '.ogg']
-            : ['.mp4', '.mkv', '.webm', '.m4v', '.mov'];
+        resolve();
+      });
 
-          const mediaFiles = files.filter(f => {
-            const ext = path.extname(f).toLowerCase();
-            return mediaExtensions.includes(ext);
-          });
+      child.on('error', (err) => {
+        reject(
+          err.code === 'ENOENT'
+            ? new Error('yt-dlp binary not found or not executable')
+            : new Error(`Failed to spawn yt-dlp: ${err.message}`)
+        );
+      });
 
-          if (mediaFiles.length === 0) {
-            continue;
-          }
-
-          // Get file stats and sort by modification time (newest first)
-          const filesWithStats = mediaFiles.map(f => {
-            const filePath = path.join(outputDir, f);
-            try {
-              const stats = fs.statSync(filePath);
-              return { 
-                path: filePath, 
-                name: f, 
-                size: stats.size, 
-                mtime: stats.mtime 
-              };
-            } catch (e) {
-              return null;
-            }
-          }).filter(f => f !== null && f.size > 0);
-
-          if (filesWithStats.length === 0) {
-            continue;
-          }
-
-          // Sort by modification time (newest first) and size (largest first)
-          filesWithStats.sort((a, b) => {
-            if (b.mtime.getTime() !== a.mtime.getTime()) {
-              return b.mtime.getTime() - a.mtime.getTime();
-            }
-            return b.size - a.size;
-          });
-
-          // Prefer exact match, then newest/largest
-          foundFile = filesWithStats.find(f => f.path === outputPath) || filesWithStats[0];
-
-          if (foundFile && foundFile.size >= 100 * 1024) { // At least 100KB
-            break;
-          }
-        } catch (err) {
-          console.error(`[YTService] Error scanning directory (attempt ${attempt + 1}):`, err.message);
+      // Timeout after 10 minutes
+      const timeout = setTimeout(() => {
+        if (!child.killed) {
+          child.kill('SIGTERM');
         }
-      }
-
-      if (!foundFile || foundFile.size < 100 * 1024) {
-        console.error(`[YTService] Output file not found after download in ${outputDir}`);
-        console.error(`[YTService] Expected: ${outputPath}`);
-        if (fs.existsSync(outputDir)) {
-          const files = fs.readdirSync(outputDir);
-          console.error(`[YTService] Directory contents: ${files.join(', ')}`);
-        }
-        reject(new Error('Output file not found after download'));
-        return;
-      }
-
-      console.log(`[YTService] Download successful: ${foundFile.path} (${foundFile.size} bytes)`);
-      resolve();
-    });
-
-    child.on('error', (err) => {
-      if (err.code === 'ENOENT') {
-        reject(new Error('yt-dlp binary not found or not executable'));
-      } else {
-        reject(new Error(`Failed to spawn yt-dlp: ${err.message}`));
-      }
-    });
-
-    // Timeout after 10 minutes
-    const timeout = setTimeout(() => {
-      if (!child.killed) {
-        child.kill('SIGTERM');
         reject(new Error('Download timeout after 10 minutes'));
-      }
-    }, 10 * 60 * 1000);
+      }, 10 * 60 * 1000);
 
-    child.on('close', () => {
-      clearTimeout(timeout);
+      child.on('close', () => {
+        clearTimeout(timeout);
+      });
     });
+  }
+
+  // FAST PATH: minimal retries, aggressive selectors
+  return runOnce(fastArgs, { fastPath: true, attempt: 1, totalAttempts: 1 }).catch(async (fastError) => {
+    if (!youtube) {
+      throw fastError;
+    }
+
+    const classification = classifyYoutubeError(fastError.message || '');
+
+    // Non-recoverable errors: fail immediately, do not spend time on fallbacks
+    if (!classification.recoverable) {
+      throw fastError;
+    }
+
+    const safeAttempts = [];
+
+    // SAFE PATH: transient network failures → retry once with the same selector
+    if (classification.code === 'transient_network_failure') {
+      safeAttempts.push({
+        label: 'transient_retry',
+        args: fastArgs
+      });
+    }
+
+    // SAFE PATH: auth/age/login issues → retry once with cookies if available
+    if (classification.needsCookies) {
+      const cookiesFile = process.env.YT_DLP_COOKIES_FILE;
+      if (cookiesFile && fs.existsSync(cookiesFile)) {
+        const withCookies = [...fastArgs];
+        if (!withCookies.includes('--cookies')) {
+          withCookies.push('--cookies', cookiesFile);
+        }
+        safeAttempts.push({
+          label: 'cookie_retry',
+          args: withCookies
+        });
+      }
+    }
+
+    // SAFE PATH: for 4K/video, fall back to a slightly less aggressive selector (cap at 1080p)
+    if (format === 'mp4') {
+      const simpleSelectorArgs = buildYoutubeArgsFast({
+        url,
+        format,
+        quality: quality === '4k' ? '1080p' : quality,
+        outputPath
+      });
+      safeAttempts.push({
+        label: 'selector_fallback',
+        args: simpleSelectorArgs
+      });
+    }
+
+    if (!safeAttempts.length) {
+      throw fastError;
+    }
+
+    console.log(
+      JSON.stringify({
+        msg: 'yt_dlp_safe_path_start',
+        provider: 'youtube',
+        format,
+        quality,
+        error_classification: classification.code,
+        attempts: safeAttempts.map((a) => a.label)
+      })
+    );
+
+    let lastError = fastError;
+
+    for (let i = 0; i < safeAttempts.length; i++) {
+      const attemptInfo = safeAttempts[i];
+      const attemptIndex = i + 1;
+      try {
+        await runOnce(attemptInfo.args, {
+          fastPath: false,
+          attempt: attemptIndex,
+          totalAttempts: safeAttempts.length
+        });
+        return;
+      } catch (err) {
+        lastError = err;
+      }
+    }
+
+    throw lastError;
   });
 }
 
