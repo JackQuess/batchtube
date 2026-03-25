@@ -50,10 +50,14 @@ function findThumbnail(info) {
 
 function getInfo(url) {
   return new Promise((resolve, reject) => {
-    const child = spawn(YTDLP_BINARY, ['-J', '--no-playlist', url], {
+    const child = spawn(
+      YTDLP_BINARY,
+      ['--no-warnings', '--no-playlist', '--socket-timeout', '15', '-J', url],
+      {
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: false
-    });
+      }
+    );
 
     let stdout = '';
     let stderr = '';

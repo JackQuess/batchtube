@@ -3,9 +3,9 @@ const fs = require('fs');
 const fsExtra = require('fs-extra');
 const http = require('http');
 const https = require('https');
-const { spawn } = require('child_process');
 const { sanitizeFilename } = require('../utils/helpers');
 const { ProviderError } = require('./shared');
+const { downloadWithYtDlp } = require('../utils/ytService');
 
 const DIRECT_EXTENSIONS = ['.mp4', '.mp3', '.webm', '.m4a', '.mov'];
 
@@ -28,6 +28,16 @@ function isM3u8Url(url) {
     return pathAndQuery.includes('.m3u8');
   } catch (_) {
     return String(url || '').toLowerCase().includes('.m3u8');
+  }
+}
+
+function isMpdUrl(url) {
+  try {
+    const parsed = new URL(url);
+    const pathAndQuery = `${parsed.pathname || ''}${parsed.search || ''}`.toLowerCase();
+    return pathAndQuery.includes('.mpd');
+  } catch (_) {
+    return String(url || '').toLowerCase().includes('.mpd');
   }
 }
 
@@ -65,7 +75,7 @@ function streamToFile(url, filePath) {
         return;
       }
 
-      const output = fs.createWriteStream(filePath);
+      const output = fs.createWriteStream(filePath, { highWaterMark: 1024 * 1024 });
       response.pipe(output);
 
       output.on('finish', () => output.close(resolve));
@@ -74,61 +84,6 @@ function streamToFile(url, filePath) {
     });
 
     request.on('error', reject);
-  });
-}
-
-function downloadM3u8ToMp4(url, filePath) {
-  return new Promise((resolve, reject) => {
-    const args = [
-      '-y',
-      '-i', url,
-      '-c', 'copy',
-      '-bsf:a', 'aac_adtstoasc',
-      filePath
-    ];
-
-    const child = spawn('ffmpeg', args, {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      shell: false
-    });
-
-    let stderr = '';
-    let stdout = '';
-
-    child.stdout.on('data', (data) => {
-      stdout += data.toString();
-    });
-
-    child.stderr.on('data', (data) => {
-      stderr += data.toString();
-    });
-
-    child.on('error', (err) => {
-      reject(new ProviderError('DOWNLOAD_FAILED', `Failed to start ffmpeg: ${err.message}`));
-    });
-
-    const timeout = setTimeout(() => {
-      if (!child.killed) {
-        child.kill('SIGTERM');
-      }
-      reject(new ProviderError('DOWNLOAD_FAILED', 'M3U8 download timed out'));
-    }, 15 * 60 * 1000);
-
-    child.on('close', (code) => {
-      clearTimeout(timeout);
-      if (code !== 0) {
-        const details = (stderr || stdout || '').trim();
-        reject(new ProviderError('DOWNLOAD_FAILED', details || `ffmpeg exited with code ${code}`));
-        return;
-      }
-
-      if (!fs.existsSync(filePath)) {
-        reject(new ProviderError('DOWNLOAD_FAILED', 'M3U8 output file not found after ffmpeg run'));
-        return;
-      }
-
-      resolve();
-    });
   });
 }
 
@@ -152,24 +107,36 @@ const genericProvider = {
 
   async download(url, opts) {
     const ext = getExtensionFromUrl(url);
-    const isM3u8 = ext === '.m3u8' || isM3u8Url(url);
+    const isFragmented = ext === '.m3u8' || ext === '.mpd' || isM3u8Url(url) || isMpdUrl(url);
 
-    if (!isM3u8 && !DIRECT_EXTENSIONS.includes(ext)) {
+    if (!isFragmented && !DIRECT_EXTENSIONS.includes(ext)) {
       throw new ProviderError(
         'UNSUPPORTED_URL',
         'Unsupported direct media URL',
-        'Supported: mp4, mp3, webm, m4a, mov, m3u8.'
+        'Supported: mp4, mp3, webm, m4a, mov, m3u8, mpd.'
       );
     }
 
     const safeName = sanitizeFilename(opts.baseName || `media_${Date.now()}`);
-    const outputExt = isM3u8 ? '.mp4' : ext;
+    const outputExt = isFragmented
+      ? opts.format === 'audio'
+        ? '.mp3'
+        : '.mp4'
+      : ext;
     const fileName = `${safeName}${outputExt}`;
     const filePath = path.join(opts.outDir, fileName);
 
     fsExtra.ensureDirSync(opts.outDir);
-    if (isM3u8) {
-      await downloadM3u8ToMp4(url, filePath);
+    if (isFragmented) {
+      const ytdlpFormat = opts.format === 'audio' ? 'mp3' : 'mp4';
+      const quality = opts.quality || '1080p';
+      await downloadWithYtDlp({
+        url,
+        format: ytdlpFormat,
+        quality,
+        outputPath: filePath,
+        onProgress: opts.onProgress
+      });
     } else {
       await streamToFile(url, filePath);
     }

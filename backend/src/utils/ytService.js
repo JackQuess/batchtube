@@ -64,6 +64,57 @@ function isYoutubeUrl(url) {
   }
 }
 
+/** HLS (.m3u8) / DASH (.mpd) — use yt-dlp fragment concurrency instead of ffmpeg. */
+function isFragmentedStreamingUrl(url) {
+  const u = String(url || '').toLowerCase();
+  return u.includes('.m3u8') || u.includes('.mpd');
+}
+
+function pushCookiesIfConfigured(argList) {
+  const cookiesFile = process.env.YT_DLP_COOKIES_FILE;
+  if (cookiesFile && fs.existsSync(cookiesFile)) {
+    argList.push('--cookies', cookiesFile);
+  }
+}
+
+/**
+ * Fast path for raw HLS/DASH URLs (generic provider, direct m3u8/mpd links).
+ */
+function buildFragmentedStreamArgs({ url, format, quality, outputPath }) {
+  const fragments = quality === '4k' ? '16' : '12';
+  const base = [
+    '--no-playlist',
+    '--no-warnings',
+    '--no-check-certificate',
+    '--concurrent-fragments',
+    fragments,
+    '-o',
+    outputPath
+  ];
+  pushCookiesIfConfigured(base);
+
+  if (format === 'mp3') {
+    return [
+      ...base,
+      '--extract-audio',
+      '--audio-format',
+      'mp3',
+      '--audio-quality',
+      '0',
+      url
+    ];
+  }
+
+  return [
+    ...base,
+    '-f',
+    'bv*+ba/bestvideo+bestaudio/best',
+    '--merge-output-format',
+    'mp4',
+    url
+  ];
+}
+
 function classifyYoutubeError(message) {
   const text = String(message || '').toLowerCase();
 
@@ -122,11 +173,7 @@ function buildYoutubeArgsFast({ url, format, quality, outputPath }) {
     outputPath
   ];
 
-  // Use cookies on the fast path if configured (no extra RTT; just file read)
-  const cookiesFile = process.env.YT_DLP_COOKIES_FILE;
-  if (cookiesFile && fs.existsSync(cookiesFile)) {
-    base.push('--cookies', cookiesFile);
-  }
+  pushCookiesIfConfigured(base);
 
   if (format === 'mp3') {
     return [
@@ -167,39 +214,52 @@ function buildYoutubeArgsFast({ url, format, quality, outputPath }) {
   return args;
 }
 
+/**
+ * Lightspeed defaults for all non-YouTube yt-dlp extractors (Instagram, TikTok, Vimeo, …).
+ * Skips embed-metadata / embed-thumbnail on the fast path; adds fragment concurrency.
+ */
 function buildGenericArgs({ url, format, quality, outputPath }) {
-  let args = [];
+  const concurrent = quality === '4k' ? '16' : '8';
+  const base = [
+    '--no-playlist',
+    '--no-warnings',
+    '--no-check-certificate',
+    '--concurrent-fragments',
+    concurrent,
+    '-o',
+    outputPath
+  ];
+  pushCookiesIfConfigured(base);
 
   if (format === 'mp3') {
-    args = [
-      '-x',
-      '--audio-format', 'mp3',
-      '--audio-quality', '320K',
-      '--embed-metadata',
-      '--no-warnings',
-      '-o', outputPath,
+    return [
+      ...base,
+      '--extract-audio',
+      '--audio-format',
+      'mp3',
+      '--audio-quality',
+      '0',
       url
     ];
-  } else if (format === 'mp4') {
-    let heightLimit = '1080';
-    if (quality === '4k') {
-      heightLimit = '2160';
-    }
+  }
 
-    args = [
-      '-f', `bv*[ext=mp4][height<=${heightLimit}]+ba[ext=m4a]/mp4`,
-      '--merge-output-format', 'mp4',
-      '--embed-metadata',
-      '--embed-thumbnail',
-      '--no-warnings',
-      '-o', outputPath,
-      url
-    ];
-  } else {
+  if (format !== 'mp4') {
     throw new Error(`Unsupported format: ${format}`);
   }
 
-  return args;
+  let heightLimit = '1080';
+  if (quality === '4k') {
+    heightLimit = '2160';
+  }
+
+  return [
+    ...base,
+    '-f',
+    `bv*[height<=${heightLimit}]+ba/bestvideo[height<=${heightLimit}]+bestaudio/best[height<=${heightLimit}]`,
+    '--merge-output-format',
+    'mp4',
+    url
+  ];
 }
 
 /**
@@ -218,9 +278,46 @@ function downloadWithYtDlp({ url, format, quality = '1080p', outputPath, onProgr
   fs.mkdirSync(outputDir, { recursive: true });
 
   const youtube = isYoutubeUrl(url);
+  const fragmented = !youtube && isFragmentedStreamingUrl(url);
+  const providerKind = youtube ? 'youtube' : fragmented ? 'fragmented_stream' : 'generic';
+
   const fastArgs = youtube
     ? buildYoutubeArgsFast({ url, format, quality, outputPath })
-    : buildGenericArgs({ url, format, quality, outputPath });
+    : fragmented
+      ? buildFragmentedStreamArgs({ url, format, quality, outputPath })
+      : buildGenericArgs({ url, format, quality, outputPath });
+
+  if (process.env.YT_DLP_COOKIE_DEBUG === '1') {
+    try {
+      const cwd = process.cwd();
+      const cookiesEnv = process.env.YT_DLP_COOKIES_FILE || null;
+      const cookiesExists = cookiesEnv ? fs.existsSync(cookiesEnv) : false;
+      let cookiesStat = null;
+      if (cookiesExists) {
+        try {
+          const stat = fs.lstatSync(cookiesEnv);
+          cookiesStat = {
+            isFile: stat.isFile(),
+            isDirectory: stat.isDirectory(),
+            size: stat.size
+          };
+        } catch (e) {
+          cookiesStat = { error: e.message };
+        }
+      }
+      console.log(
+        JSON.stringify({
+          msg: 'yt_dlp_cookie_debug',
+          cwd,
+          yt_dlp_cookies_env: cookiesEnv,
+          cookies_exists: cookiesExists,
+          cookies_stat: cookiesStat
+        })
+      );
+    } catch (_) {
+      // best-effort debug only
+    }
+  }
 
   // Log binary path for debugging (only in dev)
   if (process.env.NODE_ENV !== 'production') {
@@ -292,7 +389,7 @@ function downloadWithYtDlp({ url, format, quality = '1080p', outputPath, onProgr
           console.error(
             JSON.stringify({
               msg: 'yt_dlp_failed',
-              provider: youtube ? 'youtube' : 'generic',
+              provider: providerKind,
               format,
               quality,
               fast_path_used: !!fastPath,
@@ -310,7 +407,7 @@ function downloadWithYtDlp({ url, format, quality = '1080p', outputPath, onProgr
         console.log(
           JSON.stringify({
             msg: 'yt_dlp_succeeded',
-            provider: youtube ? 'youtube' : 'generic',
+            provider: providerKind,
             format,
             quality,
             fast_path_used: !!fastPath,
