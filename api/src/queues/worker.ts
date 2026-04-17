@@ -43,7 +43,7 @@ type BatchOptions = {
   processing?: 'none' | 'upscale_4k';
 };
 
-const ALLOWED_FORMATS: DownloadFormat[] = ['mp4', 'mp3', 'mkv'];
+const ALLOWED_FORMATS: DownloadFormat[] = ['mp4', 'mp3', 'mkv', 'jpg'];
 
 function mapProviderErrorToUserMessage(provider: string, code: string): string {
   const p = provider.toLowerCase();

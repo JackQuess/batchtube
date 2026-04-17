@@ -33,7 +33,7 @@ function shouldRunDetection(trimmed: string): boolean {
 
 export interface UseSmartBarSourceDetectionOptions {
   onCommand?: (action: string, payload?: string) => void;
-  onStartBatch?: (opts: { urls: string[]; format?: 'mp3' | 'mp4' | 'mkv'; quality?: 'best' | '720p' | '1080p' | '4k' }) => void;
+  onStartBatch?: (opts: { urls: string[]; format?: 'mp3' | 'mp4' | 'mkv' | 'jpg'; quality?: 'best' | '720p' | '1080p' | '4k' }) => void;
   onStartArchive?: (opts: { sourceUrl: string; mode: 'latest_25' | 'latest_n' | 'all' | 'select'; latestN?: number }) => void;
   onOpenSourcePicker?: (url: string, provider: string, kind: 'channel' | 'playlist' | 'profile') => void;
   onOpenSourceSelection?: (url: string, type: 'channel' | 'playlist' | 'profile', provider: string, latestN?: number) => void;

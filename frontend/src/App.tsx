@@ -159,7 +159,7 @@ const App: React.FC = () => {
     setActiveModal(type);
   }, []);
 
-  const handleStartBatch = useCallback(async (opts: { urls: string[]; format?: 'mp3' | 'mp4' | 'mkv'; quality?: 'best' | '720p' | '1080p' | '4k' }) => {
+  const handleStartBatch = useCallback(async (opts: { urls: string[]; format?: 'mp3' | 'mp4' | 'mkv' | 'jpg'; quality?: 'best' | '720p' | '1080p' | '4k' }) => {
     setBatchError(null);
     if (opts.urls.length === 0) return;
     setBatchCreating(true);

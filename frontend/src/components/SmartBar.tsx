@@ -14,7 +14,7 @@ interface SmartBarProps {
   onCommand: (cmd: string, type: ModalType) => void;
   onStartProcessing: () => void;
   onOpenSourcePicker?: (url: string, provider: string, kind: 'channel' | 'playlist' | 'profile') => void;
-  onStartBatch?: (opts: { urls: string[]; format?: 'mp3' | 'mp4' | 'mkv'; quality?: 'best' | '720p' | '1080p' | '4k' }) => void;
+  onStartBatch?: (opts: { urls: string[]; format?: 'mp3' | 'mp4' | 'mkv' | 'jpg'; quality?: 'best' | '720p' | '1080p' | '4k' }) => void;
   onStartArchive?: (opts: { sourceUrl: string; mode: 'latest_25' | 'latest_n' | 'all' | 'select'; latestN?: number }) => void;
 }
 
@@ -208,7 +208,7 @@ export function SmartBar({ onCommand, onStartProcessing, onOpenSourcePicker, onS
     onStartProcessing();
   };
 
-  const handleSingleDownload = (opts: { format: 'mp4' | 'mp3' | 'mkv'; quality: 'best' | '720p' | '1080p' | '4k' }) => {
+  const handleSingleDownload = (opts: { format: 'mp4' | 'mp3' | 'mkv' | 'jpg'; quality: 'best' | '720p' | '1080p' | '4k' }) => {
     if (detection?.type === 'single_video' && detection.url && onStartBatch) {
       onStartBatch({ urls: [detection.url], format: opts.format, quality: opts.quality });
       clear();

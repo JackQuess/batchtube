@@ -30,7 +30,7 @@ export class YtDlpError extends Error {
   }
 }
 
-export type DownloadFormat = 'mp4' | 'mp3' | 'mkv';
+export type DownloadFormat = 'mp4' | 'mp3' | 'mkv' | 'jpg';
 export type DownloadQuality = 'best' | '4k' | '1080p' | '720p';
 type YtDlpCookiesMode = 'none' | 'file' | 'browser';
 
@@ -626,6 +626,9 @@ export function buildYtDlpArgs(input: BuildYtDlpArgsInput): string[] {
 
   if (format === 'mp3') {
     args.push('--extract-audio', '--audio-format', 'mp3', '--audio-quality', '0');
+  } else if (format === 'jpg') {
+    // Best-effort still image download (mainly for Instagram /p/... posts with img_index).
+    args.push('-f', qualityOrSelector || 'best');
   } else {
     args.push('-f', qualityOrSelector);
     if (format === 'mp4') args.push('--merge-output-format', 'mp4');
@@ -743,7 +746,13 @@ function runYtDlp(
             ? 'video/x-matroska'
             : ext === 'mp3'
               ? 'audio/mpeg'
-              : 'application/octet-stream';
+              : ext === 'jpg' || ext === 'jpeg'
+                ? 'image/jpeg'
+                : ext === 'png'
+                  ? 'image/png'
+                  : ext === 'webp'
+                    ? 'image/webp'
+                    : 'application/octet-stream';
 
       resolve({ filePath, mimeType, ext });
     });
@@ -1123,8 +1132,13 @@ async function runGenericProviderDownloadWithFallbacks(
   provider?: string,
   context?: DownloadContext
 ): Promise<{ filePath: string; mimeType: string; ext: string }> {
-  const selector = format === 'mp4' ? QUALITY_SELECTORS_MP4_QUICKTIME[quality] : QUALITY_SELECTORS[quality];
-  const selectorFallback = 'bv*+ba/b';
+  const selector =
+    format === 'mp4'
+      ? QUALITY_SELECTORS_MP4_QUICKTIME[quality]
+      : format === 'jpg'
+        ? 'best'
+        : QUALITY_SELECTORS[quality];
+  const selectorFallback = format === 'jpg' ? 'best' : 'bv*+ba/b';
   const healthProvider = toHealthProvider(provider);
   const itemId = outputFileName;
   const batchId = context?.batchId;

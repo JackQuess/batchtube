@@ -1,24 +1,35 @@
-import React, { useState, useMemo } from 'react';
-import { Video, Headphones, Film, Download, List } from 'lucide-react';
+import React, { useEffect, useState, useMemo } from 'react';
+import { Video, Headphones, Film, Download, List, Image as ImageIcon } from 'lucide-react';
 import type { DetectionResult } from '../../lib/sourceDetection';
 import { getProviderIcon, getProviderBadgeSolidClass } from '../../lib/providerDisplay';
 import { getVideoThumbnailUrl } from '../../lib/videoThumbnail';
 
-export type SingleVideoFormat = 'mp4' | 'mp3' | 'mkv';
+export type SingleVideoFormat = 'mp4' | 'mp3' | 'mkv' | 'jpg';
 export type SingleVideoQuality = 'best' | '720p' | '1080p' | '4k';
 
-/** Instagram carousel still URLs use `img_index`; we do not yet branch the UI to image-only formats. */
-function getInstagramCarouselImageHint(url: string | undefined): string | null {
-  if (!url) return null;
+function isInstagramLikelyPhotoUrl(url: string | undefined): boolean {
+  if (!url) return false;
   try {
     const u = new URL(url);
     const host = u.hostname.replace(/^www\./i, '');
-    if (!host.endsWith('instagram.com')) return null;
-    if (!/\/p\//i.test(u.pathname)) return null;
-    if (!u.searchParams.has('img_index')) return null;
-    return 'Carousel still (`img_index`). The app does not auto-switch to a photo workflow yet; formats stay MP4/MKV/MP3 (no JPG picker).';
+    if (!host.endsWith('instagram.com')) return false;
+    if (/\/reel\//i.test(u.pathname)) return false;
+    return /\/p\//i.test(u.pathname);
   } catch {
-    return null;
+    return false;
+  }
+}
+
+function getInstagramPhotoHint(url: string | undefined): string | null {
+  if (!url || !isInstagramLikelyPhotoUrl(url)) return null;
+  try {
+    const u = new URL(url);
+    if (u.searchParams.has('img_index')) {
+      return 'Carousel post detected (`img_index`). JPG is selected by default for still-image downloads.';
+    }
+    return 'Instagram post detected. If this is a still image, use JPG format.';
+  } catch {
+    return 'Instagram post detected. If this is a still image, use JPG format.';
   }
 }
 
@@ -35,7 +46,8 @@ export interface SingleVideoPreviewProps {
 const FORMAT_OPTIONS: { id: SingleVideoFormat; label: string; icon: React.ReactNode }[] = [
   { id: 'mp4', label: 'MP4', icon: <Video className="w-3.5 h-3.5" /> },
   { id: 'mp3', label: 'MP3', icon: <Headphones className="w-3.5 h-3.5" /> },
-  { id: 'mkv', label: 'MKV', icon: <Film className="w-3.5 h-3.5" /> }
+  { id: 'mkv', label: 'MKV', icon: <Film className="w-3.5 h-3.5" /> },
+  { id: 'jpg', label: 'JPG', icon: <ImageIcon className="w-3.5 h-3.5" /> }
 ];
 
 const QUALITY_OPTIONS: { id: SingleVideoQuality; label: string }[] = [
@@ -54,7 +66,11 @@ export function SingleVideoPreview({
   thumbnail,
   duration
 }: SingleVideoPreviewProps) {
-  const [format, setFormat] = useState<SingleVideoFormat>('mp4');
+  const likelyInstagramPhoto = useMemo(
+    () => (detection.provider === 'instagram' ? isInstagramLikelyPhotoUrl(detection.url) : false),
+    [detection.provider, detection.url]
+  );
+  const [format, setFormat] = useState<SingleVideoFormat>(likelyInstagramPhoto ? 'jpg' : 'mp4');
   const [quality, setQuality] = useState<SingleVideoQuality>('best');
   const provider = detection.provider ?? 'generic';
   const Icon = getProviderIcon(provider) ?? Video;
@@ -71,11 +87,21 @@ export function SingleVideoPreview({
     }
   })() : '';
   const isAudio = format === 'mp3';
-  const opts = { format, quality: isAudio ? 'best' as const : quality };
-  const instagramCarouselHint = useMemo(
-    () => (provider === 'instagram' ? getInstagramCarouselImageHint(detection.url) : null),
+  const isImage = format === 'jpg';
+  const opts = { format, quality: (isAudio || isImage) ? 'best' as const : quality };
+  const instagramPhotoHint = useMemo(
+    () => (provider === 'instagram' ? getInstagramPhotoHint(detection.url) : null),
     [provider, detection.url]
   );
+  const visibleFormats = useMemo(() => {
+    if (provider === 'instagram' && likelyInstagramPhoto) {
+      return FORMAT_OPTIONS.filter((opt) => opt.id !== 'mp3');
+    }
+    return FORMAT_OPTIONS.filter((opt) => opt.id !== 'jpg');
+  }, [provider, likelyInstagramPhoto]);
+  useEffect(() => {
+    setFormat(likelyInstagramPhoto ? 'jpg' : 'mp4');
+  }, [likelyInstagramPhoto, detection.url]);
 
   return (
     <div className="border-t border-white/10 overflow-hidden">
@@ -107,7 +133,7 @@ export function SingleVideoPreview({
             <div className="flex flex-wrap items-center gap-2 mt-1">
               <span className="text-[10px] text-app-muted uppercase font-semibold">Format</span>
               <div className="flex gap-1">
-                {FORMAT_OPTIONS.map((opt) => (
+                {visibleFormats.map((opt) => (
                   <button
                     key={opt.id}
                     type="button"
@@ -129,6 +155,8 @@ export function SingleVideoPreview({
               <span className="text-[10px] text-app-muted uppercase font-semibold">Quality</span>
               {isAudio ? (
                 <span className="text-[10px] text-gray-400">Best audio</span>
+              ) : isImage ? (
+                <span className="text-[10px] text-gray-400">Not used for images</span>
               ) : (
                 <div className="flex gap-1 flex-wrap">
                   {QUALITY_OPTIONS.map((opt) => (
@@ -148,8 +176,8 @@ export function SingleVideoPreview({
                 </div>
               )}
             </div>
-            {instagramCarouselHint ? (
-              <p className="text-[10px] text-app-muted leading-snug">{instagramCarouselHint}</p>
+            {instagramPhotoHint ? (
+              <p className="text-[10px] text-app-muted leading-snug">{instagramPhotoHint}</p>
             ) : null}
           </div>
         </div>

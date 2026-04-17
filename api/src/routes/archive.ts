@@ -20,7 +20,7 @@ const archiveBodySchema = z.object({
   latest_n: z.number().int().min(1).max(500).optional(),
   options: z
     .object({
-      format: z.enum(['mp4', 'mp3', 'mkv']).optional(),
+      format: z.enum(['mp4', 'mp3', 'mkv', 'jpg']).optional(),
       quality: z.enum(['best', '4k', '1080p', '720p']).optional(),
       archive_as_zip: z.boolean().optional(),
       processing: z.enum(['none', 'upscale_4k']).optional()

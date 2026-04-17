@@ -1,4 +1,4 @@
-export type TrackedFormat = 'mp3' | 'mp4' | 'mkv';
+export type TrackedFormat = 'mp3' | 'mp4' | 'mkv' | 'jpg';
 export type TrackedQuality = 'best' | '720p' | '1080p' | '4k';
 
 export interface TrackedJob {

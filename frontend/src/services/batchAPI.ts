@@ -5,7 +5,7 @@ export interface BatchJobRequest {
     url: string;
     title?: string;
   }>;
-  format: 'mp3' | 'mp4' | 'mkv';
+  format: 'mp3' | 'mp4' | 'mkv' | 'jpg';
   quality?: 'best' | '720p' | '1080p' | '4k';
   processing?: 'none' | 'upscale_4k';
 }
@@ -88,7 +88,7 @@ export const batchAPI = {
     source_url: string;
     mode: 'latest_25' | 'latest_n' | 'all' | 'select';
     latest_n?: number;
-    format?: 'mp3' | 'mp4' | 'mkv';
+    format?: 'mp3' | 'mp4' | 'mkv' | 'jpg';
     quality?: 'best' | '720p' | '1080p' | '4k';
     processing?: 'none' | 'upscale_4k';
   }): Promise<BatchJobResponse & { channel?: { title: string; thumbnail: string | null } }> => {

@@ -30,7 +30,7 @@ const createBatchSchema = z.object({
   callback_url: z.string().url().optional(),
   options: z
     .object({
-      format: z.enum(['mp4', 'mp3', 'mkv']).optional(),
+      format: z.enum(['mp4', 'mp3', 'mkv', 'jpg']).optional(),
       quality: z.enum(['best', '4k', '1080p', '720p']).optional(),
       archive_as_zip: z.boolean().optional(),
       processing: z.enum(['none', 'upscale_4k']).optional()
