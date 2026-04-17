@@ -56,6 +56,10 @@ export interface RunYtDlpOptions {
   cookiesMode?: YtDlpCookiesMode;
   hardened?: boolean;
   timeoutMs?: number;
+  /** Optional seconds between HTTP requests (yt-dlp --sleep-requests); helps aggressive providers like Instagram. */
+  sleepRequestsSec?: number;
+  /** Override -N concurrent fragments (default from config by hardened mode). */
+  concurrentFragmentsOverride?: number;
 }
 
 const QUALITY_SELECTORS: Record<DownloadQuality, string> = {
@@ -584,10 +588,10 @@ export function buildYtDlpArgs(input: BuildYtDlpArgsInput): string[] {
   }
 
   if (format !== 'mp3') {
-    args.push(
-      '-N',
-      String(options?.hardened ? config.ytDlpConcurrentFragmentsSafe : config.ytDlpConcurrentFragmentsFast)
-    );
+    const fragmentConcurrency =
+      options?.concurrentFragmentsOverride ??
+      (options?.hardened ? config.ytDlpConcurrentFragmentsSafe : config.ytDlpConcurrentFragmentsFast);
+    args.push('-N', String(fragmentConcurrency));
   }
 
   const fileCookiesPath = config.ytDlpCookiesPath.trim();
@@ -618,6 +622,10 @@ export function buildYtDlpArgs(input: BuildYtDlpArgsInput): string[] {
     args.push('-f', qualityOrSelector);
     if (format === 'mp4') args.push('--merge-output-format', 'mp4');
     if (format === 'mkv') args.push('--merge-output-format', 'mkv');
+  }
+
+  if (options?.sleepRequestsSec != null && options.sleepRequestsSec > 0) {
+    args.push('--sleep-requests', String(options.sleepRequestsSec));
   }
 
   args.push(url);
@@ -986,6 +994,12 @@ export function classifyGenericProviderError(stderr: string): { code: GenericPro
   if (s.includes('http error 429') || s.includes('too many requests') || s.includes('rate limit')) {
     return { code: 'provider_rate_limited', retriable: true };
   }
+  if (
+    s.includes('[instagram') &&
+    (s.includes('unable to download') || s.includes('blocking') || s.includes('challenge'))
+  ) {
+    return { code: 'provider_rate_limited', retriable: true };
+  }
   if (s.includes('http error 401') || s.includes('http error 403') || s.includes('forbidden')) {
     return { code: 'provider_access_denied', retriable: true };
   }
@@ -1030,6 +1044,17 @@ export function classifyGenericProviderError(stderr: string): { code: GenericPro
   return { code: 'provider_unknown_failure', retriable: true };
 }
 
+/** Instagram throttles heavily; slow single-stream pulls and space HTTP calls. */
+function ytDlpInstagramThrottleOptions(hardened: boolean): Pick<
+  RunYtDlpOptions,
+  'sleepRequestsSec' | 'concurrentFragmentsOverride'
+> {
+  return {
+    sleepRequestsSec: hardened ? 3 : 2,
+    concurrentFragmentsOverride: 1
+  };
+}
+
 function buildRefererFallbackHeaders(url: string): Array<Array<{ key: string; value: string }>> {
   try {
     const u = new URL(url);
@@ -1063,6 +1088,7 @@ async function runGenericProviderDownloadWithFallbacks(
   const startedAt = Date.now();
   const cookieModes = resolveGenericCookieModes();
   const primaryCookiesMode = cookieModes[0] ?? 'none';
+  const isInstagram = (provider ?? '').toLowerCase() === 'instagram';
 
   const attempts: Array<{
     strategyName: string;
@@ -1115,7 +1141,8 @@ async function runGenericProviderDownloadWithFallbacks(
         strategyIndex: i,
         hardened: a.hardened,
         cookiesMode: a.cookiesMode,
-        extraHeaders: a.extraHeaders
+        extraHeaders: a.extraHeaders,
+        ...(isInstagram ? ytDlpInstagramThrottleOptions(a.hardened) : {})
       });
       console.log(
         JSON.stringify({
@@ -1153,10 +1180,14 @@ async function runGenericProviderDownloadWithFallbacks(
         })
       );
       if (!cls.retriable) break;
-      const backoff =
-        cls.code === 'provider_rate_limited'
-          ? Math.min(4000 * Math.pow(2, i), 45000)
-          : Math.min(750 * Math.pow(2, i), 4000);
+      let backoff: number;
+      if (cls.code === 'provider_rate_limited') {
+        backoff = isInstagram
+          ? Math.min(20000 * Math.pow(2, Math.min(i, 5)), 180000)
+          : Math.min(4000 * Math.pow(2, i), 45000);
+      } else {
+        backoff = Math.min(750 * Math.pow(2, i), 4000);
+      }
       await sleep(backoff);
     }
   }
