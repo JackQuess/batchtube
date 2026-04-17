@@ -301,6 +301,14 @@ function resolveGenericCookieModes(): YtDlpCookiesMode[] {
   return [...modes];
 }
 
+function resolveInstagramCookieModes(): YtDlpCookiesMode[] {
+  const modes = new Set<YtDlpCookiesMode>();
+  // Instagram often works better without stale cookies on the first attempt.
+  modes.add('none');
+  for (const mode of resolveCookieModes()) modes.add(mode);
+  return [...modes];
+}
+
 function cookiesModeIsAvailable(mode: YtDlpCookiesMode): boolean {
   if (mode === 'none') return true;
   if (mode === 'file') {
@@ -1055,6 +1063,41 @@ function ytDlpInstagramThrottleOptions(hardened: boolean): Pick<
   };
 }
 
+function buildInstagramHeaderFallbacks(url: string): Array<Array<{ key: string; value: string }>> {
+  const mobileUa =
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
+  const desktopUa =
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
+
+  const defaults: Array<Array<{ key: string; value: string }>> = [
+    [
+      { key: 'Referer', value: 'https://www.instagram.com/' },
+      { key: 'Origin', value: 'https://www.instagram.com' },
+      { key: 'User-Agent', value: desktopUa },
+      { key: 'X-IG-App-ID', value: '936619743392459' }
+    ],
+    [
+      { key: 'Referer', value: 'https://www.instagram.com/' },
+      { key: 'Origin', value: 'https://www.instagram.com' },
+      { key: 'User-Agent', value: mobileUa }
+    ]
+  ];
+
+  try {
+    const u = new URL(url);
+    const origin = `${u.protocol}//${u.host}`;
+    defaults.push([
+      { key: 'Referer', value: `${origin}/` },
+      { key: 'Origin', value: origin },
+      { key: 'User-Agent', value: desktopUa }
+    ]);
+  } catch {
+    // Keep default fallback headers only.
+  }
+
+  return defaults;
+}
+
 function buildRefererFallbackHeaders(url: string): Array<Array<{ key: string; value: string }>> {
   try {
     const u = new URL(url);
@@ -1086,9 +1129,9 @@ async function runGenericProviderDownloadWithFallbacks(
   const itemId = outputFileName;
   const batchId = context?.batchId;
   const startedAt = Date.now();
-  const cookieModes = resolveGenericCookieModes();
-  const primaryCookiesMode = cookieModes[0] ?? 'none';
   const isInstagram = (provider ?? '').toLowerCase() === 'instagram';
+  const cookieModes = isInstagram ? resolveInstagramCookieModes() : resolveGenericCookieModes();
+  const primaryCookiesMode = cookieModes[0] ?? 'none';
 
   const attempts: Array<{
     strategyName: string;
@@ -1119,6 +1162,19 @@ async function runGenericProviderDownloadWithFallbacks(
       hardened: true,
       cookiesMode: mode
     });
+  }
+
+  if (isInstagram) {
+    const instagramHeaderAttempts = buildInstagramHeaderFallbacks(url);
+    for (let i = 0; i < instagramHeaderAttempts.length; i++) {
+      attempts.push({
+        strategyName: `instagram_header_fallback_${i + 1}`,
+        selector: selectorFallback,
+        hardened: true,
+        cookiesMode: primaryCookiesMode,
+        extraHeaders: instagramHeaderAttempts[i]
+      });
+    }
   }
 
   let lastErr: Error | null = null;
@@ -1181,7 +1237,7 @@ async function runGenericProviderDownloadWithFallbacks(
       );
       if (!cls.retriable) break;
       let backoff: number;
-      if (cls.code === 'provider_rate_limited') {
+      if (cls.code === 'provider_rate_limited' || (isInstagram && cls.code === 'provider_extractor_failure')) {
         backoff = isInstagram
           ? Math.min(20000 * Math.pow(2, Math.min(i, 5)), 180000)
           : Math.min(4000 * Math.pow(2, i), 45000);

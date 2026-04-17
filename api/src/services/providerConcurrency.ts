@@ -7,9 +7,17 @@
 
 import { config } from '../config.js';
 
+const DEFAULT_PROVIDER_CAPS: Record<string, number> = {
+  instagram: 1
+};
+
 export function getConcurrencyForProvider(provider: string): number {
   const global = config.workerConcurrency;
-  const cap = config.workerConcurrencyByProvider[provider.toLowerCase()];
+  const key = provider.toLowerCase();
+  const envCap = config.workerConcurrencyByProvider[key];
+  if (envCap != null) return Math.min(global, envCap);
+  const defaultCap = DEFAULT_PROVIDER_CAPS[key];
+  const cap = defaultCap != null ? defaultCap : undefined;
   if (cap != null) return Math.min(global, cap);
   return global;
 }
