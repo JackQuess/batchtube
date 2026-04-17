@@ -7,6 +7,21 @@ import { getVideoThumbnailUrl } from '../../lib/videoThumbnail';
 export type SingleVideoFormat = 'mp4' | 'mp3' | 'mkv';
 export type SingleVideoQuality = 'best' | '720p' | '1080p' | '4k';
 
+/** Instagram carousel still URLs use `img_index`; we do not yet branch the UI to image-only formats. */
+function getInstagramCarouselImageHint(url: string | undefined): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./i, '');
+    if (!host.endsWith('instagram.com')) return null;
+    if (!/\/p\//i.test(u.pathname)) return null;
+    if (!u.searchParams.has('img_index')) return null;
+    return 'Carousel still (`img_index`). The app does not auto-switch to a photo workflow yet; formats stay MP4/MKV/MP3 (no JPG picker).';
+  } catch {
+    return null;
+  }
+}
+
 export interface SingleVideoPreviewProps {
   detection: DetectionResult & { type: 'single_video' };
   onDownload: (opts: { format: SingleVideoFormat; quality: SingleVideoQuality }) => void;
@@ -57,6 +72,10 @@ export function SingleVideoPreview({
   })() : '';
   const isAudio = format === 'mp3';
   const opts = { format, quality: isAudio ? 'best' as const : quality };
+  const instagramCarouselHint = useMemo(
+    () => (provider === 'instagram' ? getInstagramCarouselImageHint(detection.url) : null),
+    [provider, detection.url]
+  );
 
   return (
     <div className="border-t border-white/10 overflow-hidden">
@@ -129,6 +148,9 @@ export function SingleVideoPreview({
                 </div>
               )}
             </div>
+            {instagramCarouselHint ? (
+              <p className="text-[10px] text-app-muted leading-snug">{instagramCarouselHint}</p>
+            ) : null}
           </div>
         </div>
 
