@@ -1,3 +1,7 @@
+/**
+ * @deprecated BatchTube production downloads use the `api/` worker download engine
+ * (`api/src/services/download.ts`). Prefer that path for new work.
+ */
 import { spawn } from "child_process";
 import path from "path";
 import fs from "fs";

@@ -1,6 +1,9 @@
 /**
  * yt-dlp wrapper service
  * Handles video/audio downloads
+ *
+ * @deprecated Product downloads run in the `api/` worker (`api/src/services/download.ts` + `download/`).
+ * Keep this module only for legacy scripts or local tooling until callers are migrated.
  */
 const { spawn } = require('child_process');
 const { execSync } = require('child_process');
@@ -71,17 +74,20 @@ function isFragmentedStreamingUrl(url) {
 }
 
 function pushCookiesIfConfigured(argList) {
-  const cookiesFile = process.env.YT_DLP_COOKIES_FILE;
-  if (cookiesFile && fs.existsSync(cookiesFile)) {
-    argList.push('--cookies', cookiesFile);
-  }
+  // Force absolute cookie path in container for consistent behavior.
+  argList.push('--cookies', '/app/cookies/cookies.txt');
+}
+
+function pushUltraFastDownloaderArgs(argList) {
+  argList.push('--downloader', 'aria2c');
+  argList.push('--downloader-args', 'aria2c:-x16 -k1M');
 }
 
 /**
  * Fast path for raw HLS/DASH URLs (generic provider, direct m3u8/mpd links).
  */
 function buildFragmentedStreamArgs({ url, format, quality, outputPath }) {
-  const fragments = quality === '4k' ? '16' : '12';
+  const fragments = quality === '4k' ? '16' : '8';
   const base = [
     '--no-playlist',
     '--no-warnings',
@@ -92,6 +98,9 @@ function buildFragmentedStreamArgs({ url, format, quality, outputPath }) {
     outputPath
   ];
   pushCookiesIfConfigured(base);
+  pushUltraFastDownloaderArgs(base);
+  pushUltraFastDownloaderArgs(base);
+  pushUltraFastDownloaderArgs(base);
 
   if (format === 'mp3') {
     return [
@@ -108,7 +117,7 @@ function buildFragmentedStreamArgs({ url, format, quality, outputPath }) {
   return [
     ...base,
     '-f',
-    'bv*+ba/bestvideo+bestaudio/best',
+    'bv*+ba',
     '--merge-output-format',
     'mp4',
     url
@@ -182,7 +191,8 @@ function buildYoutubeArgsFast({ url, format, quality, outputPath }) {
       '--audio-format',
       'mp3',
       '--audio-quality',
-      '0'
+      '0',
+      url
     ];
   }
 
@@ -194,14 +204,15 @@ function buildYoutubeArgsFast({ url, format, quality, outputPath }) {
   const selector =
     quality === '4k'
       ? `bv*[ext=mp4][height<=${heightLimit}]+ba[ext=m4a]`
-      : `bv*[ext=mp4][height<=${heightLimit}]+ba[ext=m4a]/bestvideo[height<=${heightLimit}]+bestaudio/best[height<=${heightLimit}]`;
+      : `bv*[ext=mp4][height<=${heightLimit}]+ba[ext=m4a]`;
 
   const args = [
     ...base,
     '-f',
     selector,
     '--merge-output-format',
-    'mp4'
+    'mp4',
+    url
   ];
 
   // More aggressive fragment concurrency for high-res video
@@ -255,7 +266,7 @@ function buildGenericArgs({ url, format, quality, outputPath }) {
   return [
     ...base,
     '-f',
-    `bv*[height<=${heightLimit}]+ba/bestvideo[height<=${heightLimit}]+bestaudio/best[height<=${heightLimit}]`,
+    `bv*[height<=${heightLimit}]+ba`,
     '--merge-output-format',
     'mp4',
     url

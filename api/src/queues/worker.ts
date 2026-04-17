@@ -80,10 +80,25 @@ function mapProviderErrorToUserMessage(provider: string, code: string): string {
     if (code === 'instagram_compatibility_failed') {
       return 'Instagram video was downloaded but could not be converted to a compatible MP4.';
     }
+    if (code === 'provider_auth_required') {
+      return 'Instagram requires a logged-in session (cookies) to access this post.';
+    }
+    if (code === 'provider_access_denied' || code === 'provider_rate_limited') {
+      return 'Instagram temporarily blocked this download. Try again later or refresh cookies if configured.';
+    }
+    if (code === 'provider_source_unavailable') {
+      return 'This Instagram post is unavailable, private, or was removed.';
+    }
     return 'Instagram download failed for this item.';
   }
 
   if (p === 'tiktok') {
+    if (code === 'provider_auth_required') {
+      return 'TikTok requires a logged-in session (cookies) to access this media.';
+    }
+    if (code === 'provider_access_denied' || code === 'provider_rate_limited') {
+      return 'TikTok temporarily blocked this download. Try again later or refresh cookies if configured.';
+    }
     return 'TikTok download failed for this item.';
   }
 
@@ -96,8 +111,9 @@ function mapProviderErrorToUserMessage(provider: string, code: string): string {
       case 'provider_rate_limited':
         return 'Provider is temporarily rate limiting requests. Please try again.';
       case 'provider_access_denied':
+        return 'The provider blocked this request (often temporary). Try again later or update cookies if you use them.';
       case 'provider_auth_required':
-        return 'Provider rejected access for this media URL.';
+        return 'This media requires signing in (cookies) or is restricted to logged-in viewers.';
       case 'provider_geo_restricted':
         return 'This media is not available from the server region.';
       case 'provider_source_unavailable':

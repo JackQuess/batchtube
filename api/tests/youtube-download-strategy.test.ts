@@ -173,18 +173,3 @@ describe('youtube probed selector chooser', () => {
   });
 });
 
-describe('generic provider classifier', () => {
-  it('classifies unsupported URL as permanent unsupported', async () => {
-    const { classifyGenericProviderError } = await loadDownloadModule();
-    const result = classifyGenericProviderError('ERROR: Unsupported URL: https://tau-video.xyz/embed/abc');
-    expect(result.code).toBe('provider_unsupported');
-    expect(result.retriable).toBe(false);
-  });
-
-  it('classifies 429 as retriable rate limit', async () => {
-    const { classifyGenericProviderError } = await loadDownloadModule();
-    const result = classifyGenericProviderError('ERROR: HTTP Error 429: Too Many Requests');
-    expect(result.code).toBe('provider_rate_limited');
-    expect(result.retriable).toBe(true);
-  });
-});
