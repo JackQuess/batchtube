@@ -281,6 +281,22 @@ function resolveCookieModes(): YtDlpCookiesMode[] {
   return modes;
 }
 
+function resolveGenericCookieModes(): YtDlpCookiesMode[] {
+  const modes = new Set<YtDlpCookiesMode>();
+  const filePath = config.ytDlpCookiesPath.trim();
+  const preferred: YtDlpCookiesMode = filePath && fs.existsSync(filePath)
+    ? 'file'
+    : config.ytDlpCookiesFromBrowser.trim()
+      ? 'browser'
+      : 'none';
+
+  modes.add(preferred);
+  modes.add('none');
+  for (const mode of resolveCookieModes()) modes.add(mode);
+
+  return [...modes];
+}
+
 function cookiesModeIsAvailable(mode: YtDlpCookiesMode): boolean {
   if (mode === 'none') return true;
   if (mode === 'file') {
@@ -1045,15 +1061,18 @@ async function runGenericProviderDownloadWithFallbacks(
   const itemId = outputFileName;
   const batchId = context?.batchId;
   const startedAt = Date.now();
+  const cookieModes = resolveGenericCookieModes();
+  const primaryCookiesMode = cookieModes[0] ?? 'none';
 
   const attempts: Array<{
     strategyName: string;
     selector: string;
     hardened: boolean;
+    cookiesMode: YtDlpCookiesMode;
     extraHeaders?: Array<{ key: string; value: string }>;
   }> = [
-    { strategyName: 'fast_primary', selector, hardened: false },
-    { strategyName: 'selector_fallback', selector: selectorFallback, hardened: true }
+    { strategyName: 'fast_primary', selector, hardened: false, cookiesMode: primaryCookiesMode },
+    { strategyName: 'selector_fallback', selector: selectorFallback, hardened: true, cookiesMode: primaryCookiesMode }
   ];
 
   const refererAttempts = buildRefererFallbackHeaders(url);
@@ -1062,13 +1081,24 @@ async function runGenericProviderDownloadWithFallbacks(
       strategyName: `referer_fallback_${i + 1}`,
       selector: selectorFallback,
       hardened: true,
+      cookiesMode: primaryCookiesMode,
       extraHeaders: refererAttempts[i]
+    });
+  }
+  for (const mode of cookieModes) {
+    if (mode === primaryCookiesMode) continue;
+    attempts.push({
+      strategyName: `cookie_fallback_${mode}`,
+      selector: selectorFallback,
+      hardened: true,
+      cookiesMode: mode
     });
   }
 
   let lastErr: Error | null = null;
   let lastStderr = '';
   let lastCode: GenericProviderErrorCode = 'provider_unknown_failure';
+  let lastRetriable = true;
   let fallbackUsed = false;
 
   for (let i = 0; i < attempts.length; i++) {
@@ -1084,7 +1114,7 @@ async function runGenericProviderDownloadWithFallbacks(
         strategyName: a.strategyName,
         strategyIndex: i,
         hardened: a.hardened,
-        cookiesMode: config.ytDlpCookiesPath.trim() ? 'file' : 'none',
+        cookiesMode: a.cookiesMode,
         extraHeaders: a.extraHeaders
       });
       console.log(
@@ -1107,6 +1137,7 @@ async function runGenericProviderDownloadWithFallbacks(
       lastStderr = err instanceof YtDlpError ? err.stderr : lastErr.message;
       const cls = classifyGenericProviderError(lastStderr);
       lastCode = cls.code;
+      lastRetriable = cls.retriable;
       console.warn(
         JSON.stringify({
           msg: 'provider_download_attempt_failed',
@@ -1122,7 +1153,10 @@ async function runGenericProviderDownloadWithFallbacks(
         })
       );
       if (!cls.retriable) break;
-      const backoff = Math.min(750 * Math.pow(2, i), 4000);
+      const backoff =
+        cls.code === 'provider_rate_limited'
+          ? Math.min(4000 * Math.pow(2, i), 45000)
+          : Math.min(750 * Math.pow(2, i), 4000);
       await sleep(backoff);
     }
   }
@@ -1135,11 +1169,13 @@ async function runGenericProviderDownloadWithFallbacks(
       batchId: batchId ?? null,
       url,
       error_category: lastCode,
+      retriable: lastRetriable,
+      final_outcome: lastRetriable ? 'transient_failure' : 'permanent_failure',
       stderr_summary: lastStderr.slice(0, 400),
       duration_ms: Date.now() - startedAt
     })
   );
-  recordProviderFailure(healthProvider, lastCode, { permanent: true });
+  recordProviderFailure(healthProvider, lastCode, { permanent: !lastRetriable });
   throw new Error(`${lastCode}: ${lastStderr.slice(0, 500) || lastErr?.message || 'download failed'}`);
 }
 
