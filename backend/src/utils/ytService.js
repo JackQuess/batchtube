@@ -9,6 +9,7 @@ const { spawn } = require('child_process');
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { setTimeout: delay } = require('timers/promises');
 
 /**
  * Find yt-dlp binary path
@@ -56,6 +57,16 @@ function findYtDlpBinary() {
 }
 
 const YTDLP_BINARY = findYtDlpBinary();
+const COOKIE_TMP_PATH = '/tmp/yt-cookies.txt';
+const COOKIE_MIN_SIZE_BYTES = 1000;
+const COOKIE_FETCH_TIMEOUT_MS = 3000;
+const COOKIE_CACHE_MS = 60 * 1000;
+
+let cookieState = {
+  lastSuccessAt: 0,
+  valid: false
+};
+let cookieFetchInFlight = null;
 
 function isYoutubeUrl(url) {
   try {
@@ -73,9 +84,24 @@ function isFragmentedStreamingUrl(url) {
   return u.includes('.m3u8') || u.includes('.mpd');
 }
 
-function pushCookiesIfConfigured(argList) {
-  // Force absolute cookie path in container for consistent behavior.
-  argList.push('--cookies', '/app/cookies/cookies.txt');
+function hasValidCookieFile(filePath) {
+  if (!filePath) {
+    return false;
+  }
+  try {
+    const stat = fs.statSync(filePath);
+    return stat.isFile() && stat.size > COOKIE_MIN_SIZE_BYTES;
+  } catch (_) {
+    return false;
+  }
+}
+
+function pushCookiesIfConfigured(argList, cookiePath) {
+  const fallbackPath = process.env.YT_DLP_COOKIES_FILE;
+  const selectedPath = cookiePath || (hasValidCookieFile(fallbackPath) ? fallbackPath : null);
+  if (selectedPath) {
+    argList.push('--cookies', selectedPath);
+  }
 }
 
 function pushUltraFastDownloaderArgs(argList) {
@@ -97,7 +123,6 @@ function buildFragmentedStreamArgs({ url, format, quality, outputPath }) {
     '-o',
     outputPath
   ];
-  pushCookiesIfConfigured(base);
   pushUltraFastDownloaderArgs(base);
   pushUltraFastDownloaderArgs(base);
   pushUltraFastDownloaderArgs(base);
@@ -182,8 +207,6 @@ function buildYoutubeArgsFast({ url, format, quality, outputPath }) {
     outputPath
   ];
 
-  pushCookiesIfConfigured(base);
-
   if (format === 'mp3') {
     return [
       ...base,
@@ -240,7 +263,6 @@ function buildGenericArgs({ url, format, quality, outputPath }) {
     '-o',
     outputPath
   ];
-  pushCookiesIfConfigured(base);
 
   if (format === 'mp3') {
     return [
@@ -273,6 +295,97 @@ function buildGenericArgs({ url, format, quality, outputPath }) {
   ];
 }
 
+async function fetchCookie({ forceRefresh = false } = {}) {
+  const startedAt = Date.now();
+  const cookiesUrl = String(process.env.YT_DLP_COOKIES_URL || '').trim();
+  let success = false;
+  let cookiePath = null;
+
+  try {
+    if (!cookiesUrl) {
+      return { success: false, durationMs: Date.now() - startedAt, cookiePath: null };
+    }
+
+    const freshCache =
+      !forceRefresh &&
+      cookieState.valid &&
+      Date.now() - cookieState.lastSuccessAt < COOKIE_CACHE_MS &&
+      hasValidCookieFile(COOKIE_TMP_PATH);
+
+    if (freshCache) {
+      success = true;
+      cookiePath = COOKIE_TMP_PATH;
+      return { success, durationMs: Date.now() - startedAt, cookiePath };
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), COOKIE_FETCH_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(cookiesUrl, {
+        method: 'GET',
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        throw new Error(`cookie_fetch_http_${response.status}`);
+      }
+
+      const buffer = Buffer.from(await response.arrayBuffer());
+      if (buffer.length <= COOKIE_MIN_SIZE_BYTES) {
+        throw new Error('cookie_file_too_small');
+      }
+
+      fs.writeFileSync(COOKIE_TMP_PATH, buffer);
+      success = true;
+      cookiePath = COOKIE_TMP_PATH;
+      cookieState.lastSuccessAt = Date.now();
+      cookieState.valid = true;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  } catch (_) {
+    cookieState.valid = false;
+  }
+
+  return {
+    success,
+    durationMs: Date.now() - startedAt,
+    cookiePath
+  };
+}
+
+async function getCookiePathForDownload({ forceRefresh = false } = {}) {
+  const fallbackPath = process.env.YT_DLP_COOKIES_FILE;
+  if (!process.env.YT_DLP_COOKIES_URL) {
+    return hasValidCookieFile(fallbackPath) ? fallbackPath : null;
+  }
+
+  if (!cookieFetchInFlight || forceRefresh) {
+    cookieFetchInFlight = fetchCookie({ forceRefresh }).finally(async () => {
+      await delay(0);
+      cookieFetchInFlight = null;
+    });
+  }
+
+  const result = await cookieFetchInFlight;
+  const usedInDownload = !!result.cookiePath;
+  console.log(
+    JSON.stringify({
+      msg: 'cookie_fetch',
+      success: result.success,
+      duration_ms: result.durationMs,
+      used_in_download: usedInDownload
+    })
+  );
+
+  if (usedInDownload) {
+    return result.cookiePath;
+  }
+
+  return hasValidCookieFile(fallbackPath) ? fallbackPath : null;
+}
+
 /**
  * Download with yt-dlp
  * @param {Object} params
@@ -292,7 +405,7 @@ function downloadWithYtDlp({ url, format, quality = '1080p', outputPath, onProgr
   const fragmented = !youtube && isFragmentedStreamingUrl(url);
   const providerKind = youtube ? 'youtube' : fragmented ? 'fragmented_stream' : 'generic';
 
-  const fastArgs = youtube
+  const fastArgsBase = youtube
     ? buildYoutubeArgsFast({ url, format, quality, outputPath })
     : fragmented
       ? buildFragmentedStreamArgs({ url, format, quality, outputPath })
@@ -335,8 +448,11 @@ function downloadWithYtDlp({ url, format, quality = '1080p', outputPath, onProgr
     console.log(`[YTService] Using yt-dlp binary: ${YTDLP_BINARY}`);
   }
 
-  function runOnce(args, { fastPath, attempt, totalAttempts }) {
+  async function runOnce(baseArgs, { fastPath, attempt, totalAttempts, forceCookieRefresh = false }) {
     const startedAt = Date.now();
+    const cookiePath = await getCookiePathForDownload({ forceRefresh: forceCookieRefresh });
+    const args = [...baseArgs];
+    pushCookiesIfConfigured(args, cookiePath);
 
     return new Promise((resolve, reject) => {
       const child = spawn(YTDLP_BINARY, args, {
@@ -454,7 +570,7 @@ function downloadWithYtDlp({ url, format, quality = '1080p', outputPath, onProgr
   }
 
   // FAST PATH: minimal retries, aggressive selectors
-  return runOnce(fastArgs, { fastPath: true, attempt: 1, totalAttempts: 1 }).catch(async (fastError) => {
+  return runOnce(fastArgsBase, { fastPath: true, attempt: 1, totalAttempts: 1 }).catch(async (fastError) => {
     if (!youtube) {
       throw fastError;
     }
@@ -472,23 +588,17 @@ function downloadWithYtDlp({ url, format, quality = '1080p', outputPath, onProgr
     if (classification.code === 'transient_network_failure') {
       safeAttempts.push({
         label: 'transient_retry',
-        args: fastArgs
+        args: fastArgsBase
       });
     }
 
     // SAFE PATH: auth/age/login issues → retry once with cookies if available
     if (classification.needsCookies) {
-      const cookiesFile = process.env.YT_DLP_COOKIES_FILE;
-      if (cookiesFile && fs.existsSync(cookiesFile)) {
-        const withCookies = [...fastArgs];
-        if (!withCookies.includes('--cookies')) {
-          withCookies.push('--cookies', cookiesFile);
-        }
-        safeAttempts.push({
-          label: 'cookie_retry',
-          args: withCookies
-        });
-      }
+      safeAttempts.push({
+        label: 'cookie_retry',
+        args: fastArgsBase,
+        forceCookieRefresh: true
+      });
     }
 
     // SAFE PATH: for 4K/video, fall back to a slightly less aggressive selector (cap at 1080p)
@@ -529,7 +639,8 @@ function downloadWithYtDlp({ url, format, quality = '1080p', outputPath, onProgr
         await runOnce(attemptInfo.args, {
           fastPath: false,
           attempt: attemptIndex,
-          totalAttempts: safeAttempts.length
+          totalAttempts: safeAttempts.length,
+          forceCookieRefresh: !!attemptInfo.forceCookieRefresh
         });
         return;
       } catch (err) {
