@@ -40,5 +40,6 @@ export function getYoutubeFormatSelectors(format: DownloadFormat, quality: Downl
   if (format === 'mp3') return [''];
   const primary = format === 'mp4' ? QUALITY_SELECTORS_MP4_QUICKTIME[quality] : QUALITY_SELECTORS[quality];
   const fallback = format === 'mp4' ? YOUTUBE_VIDEO_FORMAT_FALLBACK_MP4 : YOUTUBE_VIDEO_FORMAT_FALLBACK;
-  return [...new Set([primary, ...fallback])];
+  // Final fallback: empty selector means "do not pass -f", letting yt-dlp pick defaults.
+  return [...new Set([primary, ...fallback, ''])];
 }
