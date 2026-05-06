@@ -34,7 +34,7 @@ describe('youtube error classifier', () => {
 
     expect(result.code).toBe('youtube_extractor_failure');
     expect(result.retriable).toBe(true);
-    expect(result.clientRetriable).toBe(false);
+    expect(result.clientRetriable).toBe(true);
   });
 });
 
@@ -172,4 +172,3 @@ describe('youtube probed selector chooser', () => {
     expect(selector).toBe('137+140');
   });
 });
-

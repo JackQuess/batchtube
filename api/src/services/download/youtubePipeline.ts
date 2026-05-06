@@ -10,7 +10,7 @@ import {
 } from './helpers.js';
 import { ensureYtDlpVersionLogged, runYtDlp } from './ytdlpRunner.js';
 import { YtDlpError } from './types.js';
-import type { DownloadContext, DownloadFormat, DownloadQuality } from './types.js';
+import type { DownloadContext, DownloadFormat, DownloadQuality, YoutubeErrorCode } from './types.js';
 import { ensureFreshCookies } from '../cookieRefresh.js';
 import {
   youtubeDefaultStrategy,
@@ -88,7 +88,7 @@ export async function runYoutubeDownloadWithFallbacks(
 
   let attempts = 0;
   let lastStderr = '';
-  let lastCode = 'youtube_unknown';
+  let lastCode: YoutubeErrorCode = 'youtube_unknown';
   let lastExitCode: number | null = null;
   const startedAt = Date.now();
 
@@ -105,7 +105,7 @@ export async function runYoutubeDownloadWithFallbacks(
         strategyIndex: attempts - 1,
         attempt: attempts,
         itemId,
-        batchId,
+        batchId: batchId ?? undefined,
         provider: 'youtube',
         cookiesMode,
         hardened: strategy.hardened,
