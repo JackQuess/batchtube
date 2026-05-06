@@ -63,6 +63,8 @@ export function planYoutubeNextAttempts(input: {
   if (classification.clientRetriable && failedAttempt.clientStrategyIndex === 0) {
     push({
       ...failedAttempt,
+      selector: '',
+      selectorIndex: 0,
       hardened: true,
       clientStrategyIndex: 1,
       strategyName: `${failedAttempt.strategyName}_alt_client_1`
@@ -70,6 +72,8 @@ export function planYoutubeNextAttempts(input: {
     if (YOUTUBE_CLIENT_STRATEGIES.length > 2) {
       push({
         ...failedAttempt,
+        selector: '',
+        selectorIndex: 0,
         hardened: true,
         clientStrategyIndex: 2,
         strategyName: `${failedAttempt.strategyName}_alt_client_2`
@@ -81,6 +85,8 @@ export function planYoutubeNextAttempts(input: {
     for (const cookieMode of availableCookieModes) {
       push({
         ...failedAttempt,
+        selector: '',
+        selectorIndex: 0,
         cookiesMode: cookieMode,
         hardened: true,
         clientStrategyIndex: 0,

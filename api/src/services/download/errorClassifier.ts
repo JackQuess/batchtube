@@ -64,7 +64,8 @@ export function classifyYoutubeError(stderr: string): YoutubeErrorClassification
     s.includes('requested format is not') ||
     s.includes('no video formats found')
   ) {
-    return { code: 'youtube_extractor_failure', retriable: true, authError: false, clientRetriable: false };
+    // Format availability can differ by client profile; keep client fallback enabled.
+    return { code: 'youtube_extractor_failure', retriable: true, authError: false, clientRetriable: true };
   }
 
   if (
