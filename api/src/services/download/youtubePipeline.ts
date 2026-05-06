@@ -25,6 +25,7 @@ import {
 import { ensureYtDlpVersionLogged, runYtDlp } from './ytdlpRunner.js';
 import { YtDlpError } from './types.js';
 import type { DownloadContext, DownloadFormat, DownloadQuality, YoutubeAttempt, YtDlpProbePayload } from './types.js';
+import { ensureFreshCookies } from '../cookieRefresh.js';
 
 async function probeYoutubeFormats(
   url: string,
@@ -103,10 +104,78 @@ export async function runYoutubeDownloadWithFallbacks(
 ): Promise<{ filePath: string; mimeType: string; ext: string }> {
   await ensureYtDlpVersionLogged();
 
+  // Cookie init/refresh MUST complete before we plan attempts.
+  // Otherwise resolveCookieModes() will see no file and we will never enqueue cookie attempts.
+  const cookiePath = config.ytDlpCookiesPath?.trim() || '';
+  const cookieUrl =
+    (process.env.COOKIES_INIT_URL?.trim() || process.env.YT_DLP_COOKIES_URL?.trim() || '') || null;
+  if (cookiePath) {
+    const startedAt = Date.now();
+    console.log(
+      JSON.stringify({
+        msg: 'youtube_cookies_warmup_start',
+        itemId: outputFileName,
+        batchId: context?.batchId ?? null,
+        cookie_path: cookiePath,
+        cookie_url: cookieUrl,
+        cookie_url_source: process.env.COOKIES_INIT_URL?.trim() ? 'COOKIES_INIT_URL' : process.env.YT_DLP_COOKIES_URL?.trim() ? 'YT_DLP_COOKIES_URL' : null
+      })
+    );
+    try {
+      await ensureFreshCookies();
+    } catch (e) {
+      console.warn(
+        JSON.stringify({
+          msg: 'youtube_cookies_warmup_failed',
+          itemId: outputFileName,
+          batchId: context?.batchId ?? null,
+          cookie_path: cookiePath,
+          cookie_url: cookieUrl,
+          error: e instanceof Error ? e.message : String(e)
+        })
+      );
+    }
+    let exists = false;
+    let bytes: number | null = null;
+    let firstLine: string | null = null;
+    try {
+      if (fs.existsSync(cookiePath)) {
+        exists = true;
+        bytes = fs.statSync(cookiePath).size;
+        const raw = fs.readFileSync(cookiePath, 'utf8');
+        const first = (raw.split(/\r?\n/)[0] ?? '').trim();
+        firstLine = first ? (first.length > 200 ? `${first.slice(0, 200)}…` : first) : null;
+      }
+    } catch {
+      /* ignore */
+    }
+    console.log(
+      JSON.stringify({
+        msg: 'youtube_cookies_warmup_done',
+        itemId: outputFileName,
+        batchId: context?.batchId ?? null,
+        cookie_path: cookiePath,
+        cookie_file_exists: exists,
+        cookie_file_bytes: bytes,
+        cookie_file_first_line: firstLine,
+        duration_ms: Date.now() - startedAt
+      })
+    );
+  }
+
   const itemId = outputFileName;
   const batchId = context?.batchId;
   const formatSelectors = getYoutubeFormatSelectors(format, quality);
   const cookieModes = resolveCookieModes();
+  console.log(
+    JSON.stringify({
+      msg: 'youtube_cookie_modes_resolved',
+      itemId,
+      batchId: batchId ?? null,
+      configured_cookie_path: config.ytDlpCookiesPath?.trim() || null,
+      available_cookie_modes: cookieModes
+    })
+  );
   const initialAttempt: YoutubeAttempt = {
     selector: formatSelectors[0] ?? '',
     selectorIndex: 0,

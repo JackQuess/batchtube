@@ -104,6 +104,26 @@ export function runYtDlp(
   if (options?.itemId) {
     const fileCookiesPath = config.ytDlpCookiesPath.trim();
     const safeArgs = args.map((arg) => (fileCookiesPath && arg === fileCookiesPath ? '<cookies-file>' : arg));
+
+    const cookiesFlagIndex = args.findIndex((a) => a === '--cookies');
+    const cookiesArgValue = cookiesFlagIndex >= 0 ? args[cookiesFlagIndex + 1] ?? null : null;
+    const hasCookiesFlag = cookiesFlagIndex >= 0 && Boolean(cookiesArgValue);
+    let cookiesFileExists: boolean | null = null;
+    let cookiesFileBytes: number | null = null;
+    let cookiesFileFirstLine: string | null = null;
+    if (cookiesMode === 'file' && fileCookiesPath) {
+      try {
+        cookiesFileExists = fs.existsSync(fileCookiesPath);
+        if (cookiesFileExists) {
+          cookiesFileBytes = fs.statSync(fileCookiesPath).size;
+          const raw = fs.readFileSync(fileCookiesPath, 'utf8');
+          const first = (raw.split(/\r?\n/)[0] ?? '').trim();
+          cookiesFileFirstLine = first ? (first.length > 200 ? `${first.slice(0, 200)}…` : first) : null;
+        }
+      } catch {
+        cookiesFileExists = false;
+      }
+    }
     logYoutube('youtube_ytdlp_attempt_start', {
       provider: options.provider ?? 'youtube',
       itemId: options.itemId,
@@ -113,6 +133,12 @@ export function runYtDlp(
       strategy: options.strategyName ?? null,
       ytdlp_mode: options.hardened ? 'safe' : 'fast',
       cookies_mode: cookiesMode,
+      cookies_file_path: cookiesMode === 'file' ? (fileCookiesPath || null) : null,
+      cookies_file_exists: cookiesFileExists,
+      cookies_file_bytes: cookiesFileBytes,
+      cookies_file_first_line: cookiesFileFirstLine,
+      ytdlp_args_has_cookies: hasCookiesFlag,
+      ytdlp_args_cookies_value: cookiesMode === 'file' && cookiesArgValue ? '<cookies-file>' : cookiesArgValue,
       strategyIndex: options.strategyIndex ?? null,
       ytdlpArgs: safeArgs
     });

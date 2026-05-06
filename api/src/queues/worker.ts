@@ -231,6 +231,7 @@ export async function processItem(job: Job<ItemJob>) {
     }
 
     try {
+      await awaitCookieWarmupIfNeeded({ batchId, itemId });
       const downloadOpts = toDownloadOptions(batchOptions, provider);
       const result = await downloadWithYtDlp(item.original_url, downloadOpts, item.id, provider, { batchId });
       const { buffer: content } = readDownloadAndCleanup(result);
@@ -499,6 +500,7 @@ export async function processBatch(job: Job<BatchJob>) {
   for (const item of items) {
     try {
       const provider = item.provider ?? detectProvider(item.original_url);
+      await awaitCookieWarmupIfNeeded({ batchId, itemId: item.id });
       await prisma.batchItem.update({
         where: { id: item.id },
         data: {
@@ -742,9 +744,39 @@ async function runCookieRefresh() {
   }
 }
 
-runCookieRefresh();
+let cookieWarmupPromise: Promise<void> | null = null;
+cookieWarmupPromise = runCookieRefresh();
 const COOKIE_CHECK_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
 setInterval(() => runCookieRefresh(), COOKIE_CHECK_INTERVAL_MS);
+
+async function awaitCookieWarmupIfNeeded(context: { batchId?: string; itemId?: string } = {}) {
+  if (!cookieWarmupPromise) return;
+  const cookiePath = config.ytDlpCookiesPath?.trim() || '';
+  if (!cookiePath) return;
+
+  const startedAt = Date.now();
+  console.log(
+    JSON.stringify({
+      msg: 'cookie_warmup_barrier_wait',
+      batchId: context.batchId ?? null,
+      itemId: context.itemId ?? null,
+      cookie_path: cookiePath
+    })
+  );
+  try {
+    await cookieWarmupPromise;
+  } finally {
+    console.log(
+      JSON.stringify({
+        msg: 'cookie_warmup_barrier_done',
+        batchId: context.batchId ?? null,
+        itemId: context.itemId ?? null,
+        cookie_path: cookiePath,
+        duration_ms: Date.now() - startedAt
+      })
+    );
+  }
+}
 
 // Retry connection on DNS/network errors (e.g. Railway redis.railway.internal EAI_AGAIN)
 export function redisRetryStrategy(times: number): number {
