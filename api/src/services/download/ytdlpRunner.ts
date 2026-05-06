@@ -108,6 +108,9 @@ export function runYtDlp(
     const cookiesFlagIndex = args.findIndex((a) => a === '--cookies');
     const cookiesArgValue = cookiesFlagIndex >= 0 ? args[cookiesFlagIndex + 1] ?? null : null;
     const hasCookiesFlag = cookiesFlagIndex >= 0 && Boolean(cookiesArgValue);
+    const formatFlagIndex = args.findIndex((a) => a === '-f');
+    const formatArgValue = formatFlagIndex >= 0 ? args[formatFlagIndex + 1] ?? null : null;
+    const hasFormatFlag = formatFlagIndex >= 0 && Boolean(formatArgValue);
     let cookiesFileExists: boolean | null = null;
     let cookiesFileBytes: number | null = null;
     let cookiesFileFirstLine: string | null = null;
@@ -137,6 +140,8 @@ export function runYtDlp(
       cookies_file_exists: cookiesFileExists,
       cookies_file_bytes: cookiesFileBytes,
       cookies_file_first_line: cookiesFileFirstLine,
+      selected_format: qualityOrSelector || null,
+      yt_dlp_args_has_format: hasFormatFlag,
       ytdlp_args_has_cookies: hasCookiesFlag,
       ytdlp_args_cookies_value: cookiesMode === 'file' && cookiesArgValue ? '<cookies-file>' : cookiesArgValue,
       strategyIndex: options.strategyIndex ?? null,

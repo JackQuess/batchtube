@@ -29,17 +29,19 @@ export const YOUTUBE_USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 
 export const YOUTUBE_VIDEO_FORMAT_FALLBACK = ['bestvideo+bestaudio/best', 'best', 'bestaudio'];
+// Required production fallback chain for MP4. Last entry '' means no -f argument.
 export const YOUTUBE_VIDEO_FORMAT_FALLBACK_MP4 = [
-  'bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]',
-  'bestvideo[vcodec^=avc1]+bestaudio/best',
-  'bestvideo+bestaudio/best',
-  'best'
-];
+  'bv*[ext=mp4][vcodec^=avc1]+ba[ext=m4a]/b[ext=mp4]/best',
+  'bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/best',
+  'bv*+ba/best',
+  'best',
+  '18',
+  ''
+] as const;
 
 export function getYoutubeFormatSelectors(format: DownloadFormat, quality: DownloadQuality): string[] {
   if (format === 'mp3') return [''];
-  const primary = format === 'mp4' ? QUALITY_SELECTORS_MP4_QUICKTIME[quality] : QUALITY_SELECTORS[quality];
-  const fallback = format === 'mp4' ? YOUTUBE_VIDEO_FORMAT_FALLBACK_MP4 : YOUTUBE_VIDEO_FORMAT_FALLBACK;
-  // Final fallback: empty selector means "do not pass -f", letting yt-dlp pick defaults.
-  return [...new Set([primary, ...fallback, ''])];
+  if (format === 'mp4') return [...YOUTUBE_VIDEO_FORMAT_FALLBACK_MP4];
+  const primary = QUALITY_SELECTORS[quality];
+  return [...new Set([primary, ...YOUTUBE_VIDEO_FORMAT_FALLBACK])];
 }

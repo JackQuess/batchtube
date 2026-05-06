@@ -195,6 +195,7 @@ export async function runYoutubeDownloadWithFallbacks(
   const startedAt = Date.now();
   let dynamicProbeQueued = false;
   let unconstrainedFormatFallbackQueued = false;
+  const lastFormatFallbackIndex = Math.max(0, formatSelectors.length - 1);
 
   while (queue.length > 0 && attempts < config.ytDlpYoutubeMaxAttempts) {
     const attempt = queue.shift();
@@ -239,9 +240,20 @@ export async function runYoutubeDownloadWithFallbacks(
         url,
         attempt: attempts,
         strategy: attempt.strategyName,
+        format_fallback_index: attempt.selectorIndex < 0 ? lastFormatFallbackIndex : attempt.selectorIndex,
+        selected_format: attempt.selector || null,
         ytdlp_mode: attempt.hardened ? 'safe' : 'fast',
         cookies_mode: attempt.cookiesMode,
         duration_ms: durationMs
+      });
+      logYoutube('final_format_success', {
+        provider: 'youtube',
+        itemId,
+        batchId: batchId ?? null,
+        url,
+        format_fallback_index: attempt.selectorIndex < 0 ? lastFormatFallbackIndex : attempt.selectorIndex,
+        selected_format: attempt.selector || null,
+        strategy: attempt.strategyName
       });
       logYoutube('youtube_download_pipeline_succeeded', {
         provider: 'youtube',
@@ -267,6 +279,8 @@ export async function runYoutubeDownloadWithFallbacks(
         url,
         attempt: attempts,
         strategy: attempt.strategyName,
+        format_fallback_index: attempt.selectorIndex < 0 ? lastFormatFallbackIndex : attempt.selectorIndex,
+        selected_format: attempt.selector || null,
         ytdlp_mode: attempt.hardened ? 'safe' : 'fast',
         cookies_mode: attempt.cookiesMode,
         error_category: lastClassification.code,
@@ -275,10 +289,36 @@ export async function runYoutubeDownloadWithFallbacks(
       });
 
       const loweredStderr = lastStderr.toLowerCase();
+      const formatErrorDetected =
+        loweredStderr.includes('requested format is not available') || loweredStderr.includes('no video formats found');
+
+      if (format !== 'mp3' && formatErrorDetected) {
+        logYoutube('format_error_detected', {
+          provider: 'youtube',
+          itemId,
+          batchId: batchId ?? null,
+          url,
+          attempt: attempts,
+          strategy: attempt.strategyName,
+          format_fallback_index: attempt.selectorIndex < 0 ? lastFormatFallbackIndex : attempt.selectorIndex,
+          selected_format: attempt.selector || null
+        });
+        const nextIndex = attempt.selectorIndex + 1;
+        if (nextIndex < formatSelectors.length) {
+          queue.unshift({
+            ...attempt,
+            selectorIndex: nextIndex,
+            hardened: true,
+            strategyName: `format_fallback_${nextIndex}`
+          });
+          continue;
+        }
+      }
+
       if (
         !dynamicProbeQueued &&
         format !== 'mp3' &&
-        (loweredStderr.includes('requested format is not available') || loweredStderr.includes('no video formats found'))
+        formatErrorDetected
       ) {
         try {
           const dynamicSelector = await probeYoutubeFormats(url, outputFileName, attempt, context);
@@ -310,7 +350,7 @@ export async function runYoutubeDownloadWithFallbacks(
       if (
         !unconstrainedFormatFallbackQueued &&
         format !== 'mp3' &&
-        (loweredStderr.includes('requested format is not available') || loweredStderr.includes('no video formats found'))
+        formatErrorDetected
       ) {
         unconstrainedFormatFallbackQueued = true;
         queue.unshift({
