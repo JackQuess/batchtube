@@ -194,6 +194,7 @@ export async function runYoutubeDownloadWithFallbacks(
   let lastError: Error | null = null;
   const startedAt = Date.now();
   let dynamicProbeQueued = false;
+  let unconstrainedFormatFallbackQueued = false;
 
   while (queue.length > 0 && attempts < config.ytDlpYoutubeMaxAttempts) {
     const attempt = queue.shift();
@@ -304,6 +305,22 @@ export async function runYoutubeDownloadWithFallbacks(
             })
           );
         }
+      }
+
+      if (
+        !unconstrainedFormatFallbackQueued &&
+        format !== 'mp3' &&
+        (loweredStderr.includes('requested format is not available') || loweredStderr.includes('no video formats found'))
+      ) {
+        unconstrainedFormatFallbackQueued = true;
+        queue.unshift({
+          ...attempt,
+          selector: '',
+          // -1 ensures run loop resolves selector to '' (no -f), so yt-dlp picks defaults.
+          selectorIndex: -1,
+          hardened: true,
+          strategyName: 'format_unconstrained_fallback'
+        });
       }
 
       if (isYoutubePermanentCode(lastClassification.code)) break;

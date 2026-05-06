@@ -10,7 +10,6 @@ export function buildYtDlpArgs(input: BuildYtDlpArgsInput): string[] {
     '--no-warnings',
     '-o',
     outputTemplate,
-    '--no-check-certificate',
     '--socket-timeout',
     String(config.ytDlpSocketTimeoutSec),
     '--retries',
@@ -20,6 +19,13 @@ export function buildYtDlpArgs(input: BuildYtDlpArgsInput): string[] {
     '--file-access-retries',
     '2'
   ];
+
+  if (config.ytDlpInsecureNoCheckCertificate) {
+    args.push('--no-check-certificates');
+  }
+  if (config.ytDlpForceIpv4) {
+    args.push('-4');
+  }
 
   if (options?.hardened) {
     args.push('--extractor-retries', String(config.ytDlpExtractorRetriesSafe));
@@ -61,7 +67,10 @@ export function buildYtDlpArgs(input: BuildYtDlpArgsInput): string[] {
   } else if (format === 'jpg') {
     args.push('-f', qualityOrSelector || 'best');
   } else {
-    args.push('-f', qualityOrSelector);
+    // Last-resort fallback: when selector is intentionally empty, let yt-dlp pick default format.
+    if (qualityOrSelector.trim()) {
+      args.push('-f', qualityOrSelector);
+    }
     if (format === 'mp4') args.push('--merge-output-format', 'mp4');
     if (format === 'mkv') args.push('--merge-output-format', 'mkv');
   }

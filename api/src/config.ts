@@ -70,6 +70,10 @@ export const config = {
   ytDlpTimeoutMs: Number(process.env.YT_DLP_TIMEOUT_MS ?? 300000),
   /** yt-dlp socket timeout in seconds. */
   ytDlpSocketTimeoutSec: Number(process.env.YT_DLP_SOCKET_TIMEOUT_SEC ?? 20),
+  /** If true, append --no-check-certificates to yt-dlp args. */
+  ytDlpInsecureNoCheckCertificate: String(process.env.YTDLP_INSECURE_NO_CHECK_CERTIFICATE ?? 'false') === 'true',
+  /** If true, force yt-dlp to use IPv4 (-4). */
+  ytDlpForceIpv4: String(process.env.YTDLP_FORCE_IPV4 ?? 'false') === 'true',
   /** Fast-mode yt-dlp retries (first attempt path). */
   ytDlpRetriesFast: Number(process.env.YT_DLP_RETRIES_FAST ?? 1),
   /** Safe-mode yt-dlp retries (fallback path). */
