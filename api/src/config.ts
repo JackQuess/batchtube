@@ -74,6 +74,12 @@ export const config = {
   ytDlpInsecureNoCheckCertificate: String(process.env.YTDLP_INSECURE_NO_CHECK_CERTIFICATE ?? 'false') === 'true',
   /** If true, force yt-dlp to use IPv4 (-4). */
   ytDlpForceIpv4: String(process.env.YTDLP_FORCE_IPV4 ?? 'false') === 'true',
+  /** Optional yt-dlp proxy URL, passed as --proxy. */
+  ytDlpProxy: process.env.YTDLP_PROXY ?? '',
+  /** Optional yt-dlp extractor args override. */
+  ytDlpExtractorArgsOverride: process.env.YTDLP_EXTRACTOR_ARGS ?? '',
+  /** Optional yt-dlp format override tried before YouTube strategy order. */
+  ytDlpFormatOverride: process.env.YTDLP_FORMAT_OVERRIDE ?? '',
   /** Fast-mode yt-dlp retries (first attempt path). */
   ytDlpRetriesFast: Number(process.env.YT_DLP_RETRIES_FAST ?? 1),
   /** Safe-mode yt-dlp retries (fallback path). */

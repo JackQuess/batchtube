@@ -11,11 +11,14 @@ export function buildYtDlpArgs(input: BuildYtDlpArgsInput): string[] {
     '-o',
     outputTemplate,
     '--socket-timeout',
-    String(config.ytDlpSocketTimeoutSec),
+    String(options?.socketTimeoutSecOverride ?? config.ytDlpSocketTimeoutSec),
     '--retries',
-    String(options?.hardened ? config.ytDlpRetriesSafe : config.ytDlpRetriesFast),
+    String(options?.retriesOverride ?? (options?.hardened ? config.ytDlpRetriesSafe : config.ytDlpRetriesFast)),
     '--fragment-retries',
-    String(options?.hardened ? config.ytDlpFragmentRetriesSafe : config.ytDlpFragmentRetriesFast),
+    String(
+      options?.fragmentRetriesOverride ??
+        (options?.hardened ? config.ytDlpFragmentRetriesSafe : config.ytDlpFragmentRetriesFast)
+    ),
     '--file-access-retries',
     '2'
   ];
@@ -25,6 +28,9 @@ export function buildYtDlpArgs(input: BuildYtDlpArgsInput): string[] {
   }
   if (config.ytDlpForceIpv4) {
     args.push('-4');
+  }
+  if (options?.proxyUrl?.trim()) {
+    args.push('--proxy', options.proxyUrl.trim());
   }
 
   if (options?.hardened) {
@@ -71,8 +77,10 @@ export function buildYtDlpArgs(input: BuildYtDlpArgsInput): string[] {
     if (qualityOrSelector.trim()) {
       args.push('-f', qualityOrSelector);
     }
-    if (format === 'mp4') args.push('--merge-output-format', 'mp4');
-    if (format === 'mkv') args.push('--merge-output-format', 'mkv');
+    if (!options?.disableMergeOutput) {
+      if (format === 'mp4') args.push('--merge-output-format', 'mp4');
+      if (format === 'mkv') args.push('--merge-output-format', 'mkv');
+    }
   }
 
   if (options?.sleepRequestsSec != null && options.sleepRequestsSec > 0) {

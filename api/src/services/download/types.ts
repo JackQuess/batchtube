@@ -30,6 +30,7 @@ export interface DownloadContext {
 /** Optional options for runYtDlp (YouTube: extractor args + diagnostics). */
 export interface RunYtDlpOptions {
   extractorArgs?: string;
+  proxyUrl?: string;
   extraHeaders?: Array<{ key: string; value: string }>;
   strategyName?: string;
   strategyIndex?: number;
@@ -44,6 +45,14 @@ export interface RunYtDlpOptions {
   sleepRequestsSec?: number;
   /** Override -N concurrent fragments (default from config by hardened mode). */
   concurrentFragmentsOverride?: number;
+  /** Explicit retries override for specialized pipelines. */
+  retriesOverride?: number;
+  /** Explicit fragment retries override for specialized pipelines. */
+  fragmentRetriesOverride?: number;
+  /** Explicit socket timeout override (seconds). */
+  socketTimeoutSecOverride?: number;
+  /** When true, do not append --merge-output-format for mp4/mkv. */
+  disableMergeOutput?: boolean;
 }
 
 export type YoutubeErrorCode =
